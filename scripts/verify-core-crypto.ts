@@ -19,6 +19,9 @@ import {
   wrapNoteKey,
   wrapNoteKeyWithRecToken,
   recTokenHash,
+  wrapNoteKeyDual,
+  unwrapNoteKeyDual,
+  normalizePin,
 } from '../src/client/note-crypto.ts';
 import { makeKeyStore } from '../src/client/keys.ts';
 import type { NoteCryptoConfig } from '../src/client/note-crypto.ts';
@@ -161,6 +164,59 @@ await A('guest cipher 不以 jr1b. 開頭', !cipherGuest.startsWith('jr1b.'));
 await A('bound cipher 不以 jr1g. 開頭', !cipherBound.startsWith('jr1g.'));
 await A('無 held key 的 bound 解密 → null',
   (await decryptNote(TACET, makeHeldKey(), cipherBound, 'noteId:n1', { current: () => identityA })) === null);
+
+// ── 6. 雙因子合鑰（jr2w.，2026-09-09 PIN 第二因子） ─────────────────────────
+
+console.log('\n[6] 雙因子合鑰 KEK2（jr2w.）');
+const TACET2: NoteCryptoConfig = { ...TACET, wrapDual: 'jr2w.', pinSaltPrefix: 'tacet-note-pin1:' };
+const passD = 'dual-factor-passphrase-42';
+const pinD = '2580ab';
+const dual = await wrapNoteKeyDual(TACET2, noteKey, passD, pinD);
+await A('wrapped2 前綴 jr2w.', dual.wrapped.startsWith('jr2w.'));
+await A('dual salt1 = 16B hex', /^[0-9a-f]{32}$/.test(dual.salt));
+const unwrapped2 = await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, dual.salt);
+await A('dual unwrap 等值 noteKey（extractable 再 export）',
+  unwrapped2 !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrapped2))) ===
+  hex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey))));
+await A('錯 PIN → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, '999999', dual.salt)) === null);
+await A('錯 pass → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, 'wrong-passphrase', pinD, dual.salt)) === null);
+await A('缺 PIN → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, '', dual.salt)) === null);
+await A('錯 pass 與錯 PIN 回傳同形（皆 null 不拋）',
+  (await unwrapNoteKeyDual(TACET2, dual.wrapped, 'wrong', 'bad!!', dual.salt)) === null);
+await A('jr1w unwrapNoteKey 拒收 jr2w 字串', (await unwrapNoteKey(TACET2, dual.wrapped, passD, dual.salt)) === null);
+await A('dual unwrapNoteKeyDual 拒收 jr1w 字串', (await unwrapNoteKeyDual(TACET2, wrapped, pass, pinD, dual.salt)) === null);
+await A('既有 jr1w 包裹不受 dual 並存影響', (await unwrapNoteKey(TACET2, wrapped, pass, salt)) !== null);
+
+// payload 竄改 → 一律 null（自描述完整性：pinSalt/hksalt/iv/ct 任一區）
+function unb64(text: string): Uint8Array {
+  const bin = atob(text);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+const payload2 = unb64(dual.wrapped.slice('jr2w.'.length));
+const tamperedAt = async (idx: number): Promise<boolean> => {
+  const copy = payload2.slice();
+  copy[idx] ^= 0x01;
+  let bin = '';
+  for (let i = 0; i < copy.byteLength; i++) bin += String.fromCharCode(copy[i]);
+  const tampered = 'jr2w.' + btoa(bin);
+  return (await unwrapNoteKeyDual(TACET2, tampered, passD, pinD, dual.salt)) === null;
+};
+await A('payload 竄改 pinSalt 區 → null', await tamperedAt(3));
+await A('payload 竄改 hksalt 區 → null', await tamperedAt(20));
+await A('payload 竄改 iv 區 → null', await tamperedAt(36));
+await A('payload 竄改 ct 尾 → null', await tamperedAt(payload2.length - 1));
+
+// PIN 正規化（NFKC → trim → lowercase）：wrap/unwrap 同一正規化路徑
+await A('PIN 大小寫不敏感', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, '2580AB', dual.salt)) !== null);
+await A('PIN 兩端空白容忍', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, ' 2580ab ', dual.salt)) !== null);
+await A('PIN 全形 NFKC 等價', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, '２５８０ＡＢ', dual.salt)) !== null);
+const dualNorm = await wrapNoteKeyDual(TACET2, noteKey, passD, ' ２５８０Ab ');
+await A('wrap 端同一正規化（正規化後等價 unwrap）',
+  (await unwrapNoteKeyDual(TACET2, dualNorm.wrapped, passD, '2580ab', dualNorm.salt)) !== null);
+await A('normalizePin 契約', normalizePin(' ２５８０Ab ') === '2580ab');
+await A('未配置 wrapDual 拒絕 dual 包裹', (await unwrapNoteKeyDual(TACET, dual.wrapped, passD, pinD, '')) === null);
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 

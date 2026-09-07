@@ -14,9 +14,9 @@
  *   本核心以 identityCallback 抽象兩種模型，schema 欄位名由各 fork 自訂。
  */
 
-import { corsResponse } from './cors';
-import { sha256Hex, generateSessionToken } from './hash';
-import { checkRate, type RateWindow } from './ratelimit';
+import { corsResponse } from './cors.ts';
+import { sha256Hex, generateSessionToken } from './hash.ts';
+import { checkRate, type RateWindow } from './ratelimit.ts';
 import type { Env } from './env';
 
 // ── 格式驗證（自 noteCrypt.ts 抽出；前綴由 config 注入） ─────────────────────
@@ -67,8 +67,10 @@ export function isCipherFor(text: string | null | undefined, c: CipherFormats): 
   return text.startsWith(c.cipherPrefixes[0]) || text.startsWith(c.cipherPrefixes[1]);
 }
 
-export function validWrappedKey(v: unknown, wrapPrefix: string): string | null {
-  const re = new RegExp(`^${wrapPrefix.replace('.', '\\.')}[A-Za-z0-9+/]+={0,2}$`);
+export function validWrappedKey(v: unknown, wrapPrefix: string | string[]): string | null {
+  const prefixes = Array.isArray(wrapPrefix) ? wrapPrefix : [wrapPrefix];
+  const escaped = prefixes.map(p => p.replace('.', '\\.'));
+  const re = new RegExp(`^(${escaped.join('|')})[A-Za-z0-9+/]+={0,2}$`);
   return typeof v === 'string' && v.length <= 200 && re.test(v) ? v : null;
 }
 
@@ -81,7 +83,7 @@ export function validSalt(v: unknown): string | null {
 }
 
 /** 綁定/復原共用的金鑰包裹欄組：wrapped 與 salt 必須成對，缺一整組放棄。 */
-export function pickKeyPackage(body: any, wrapPrefix: string): { wrapped: string | null; salt: string | null } {
+export function pickKeyPackage(body: any, wrapPrefix: string | string[]): { wrapped: string | null; salt: string | null } {
   const wrapped = validWrappedKey(body?.note_wrapped ?? body?.wrapped, wrapPrefix);
   const salt = validSalt(body?.note_salt ?? body?.salt);
   return { wrapped: wrapped && salt ? wrapped : null, salt: wrapped && salt ? salt : null };

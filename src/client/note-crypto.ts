@@ -33,11 +33,16 @@ export interface NoteCryptoConfig {
   cipherBound: string;
   /** 金鑰包裹前綴，如 'snw1.'。 */
   wrap: string;
+  /** 雙因子合鑰包裹前綴（jr2w.，PIN 第二因子）。未配置 = dual API 拒絕（兄弟 fork 行為不變）。 */
+  wrapDual?: string;
+  /** 雙因子 pin 段 PBKDF2 salt 前綴，如 'tacet-note-pin1:'（pinSalt 內嵌 payload 後拼接）。 */
+  pinSaltPrefix?: string;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: import('./keys').KeyStore;
 }
 
 export const PBKDF2_ITERATIONS = 600_000; // OWASP 2023 建議值
+export const PIN_PBKDF2_ITERATIONS = 2_000_000; // 雙因子 pin 段（設計 v2：6 位數字也要扛離線爆破）
 export const IV_LEN = 12;
 
 const HEX32_RE = /^[0-9a-f]{32}$/; // 16-byte salt hex
@@ -90,6 +95,90 @@ async function deriveKek(password: string, salt: Uint8Array): Promise<CryptoKey>
     false,
     ['encrypt', 'decrypt'],
   );
+}
+
+// ── 雙因子合鑰（jr2w.，PIN 第二因子；2026-09-09 定案 v2） ────────────────────
+//
+// KEK2 = HKDF-SHA256( ikm = PBKDF2(pass, salt1, 600k)[32B] ‖ PBKDF2(pin, pinSaltPrefix‖pinSalt, 2M)[32B],
+//                     salt = pinSalt（同 16B，公開非秘密）, info = 'journal-kek2-v1:' + wrapDual, L=32 )
+// payload = pinSalt[16B] ‖ iv[12B] ‖ AES-GCM(KEK2, hex(noteKey), aad='notekey2')
+// wrapped2 = 'jr2w.' + b64(payload) —— pinSalt 內嵌自描述：unwrap 不需 identity/salt 參數。
+// 兩段 PBKDF2 bits 不落地（用完即棄）；KEK2 import 當下 nonextractable；
+// 輸出 noteKey 一律 extractable=true（鐵律 4）。
+
+/** PIN 正規化契約：NFKC → trim → lowercase（不分大小寫；正規化後內含空白由強度檢拒絕）。 */
+export function normalizePin(pin: string): string {
+  return pin.normalize('NFKC').trim().toLowerCase();
+}
+
+async function derivePbkdf2Bits(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+  const keyMat = await crypto.subtle.importKey('raw', new TextEncoder().encode(password) as BufferSource, 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' }, keyMat, 256);
+  return new Uint8Array(bits);
+}
+
+async function deriveKek2(cfg: NoteCryptoConfig, passphrase: string, pin: string, salt1: Uint8Array, pinSalt: Uint8Array): Promise<CryptoKey> {
+  const passBits = await derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS);
+  const pinBits = await derivePbkdf2Bits(pin, new TextEncoder().encode(cfg.pinSaltPrefix + toHex(pinSalt)), PIN_PBKDF2_ITERATIONS);
+  const ikm = new Uint8Array(passBits.byteLength + pinBits.byteLength);
+  ikm.set(passBits, 0);
+  ikm.set(pinBits, passBits.byteLength);
+  const hkdfBase = await crypto.subtle.importKey('raw', ikm as BufferSource, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: pinSalt as BufferSource, info: new TextEncoder().encode('journal-kek2-v1:' + cfg.wrapDual) as BufferSource },
+    hkdfBase,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+const DUAL_SALT_LEN = 16;
+const DUAL_IV_LEN = 12;
+
+/** 雙因子包裹：payload = pinSalt[16] ‖ iv[12] ‖ GCM(KEK2, hex(noteKey))；salt1 隨機由呼叫端存 users.salt。 */
+export async function wrapNoteKeyDual(cfg: NoteCryptoConfig, noteKey: CryptoKey, passphrase: string, pin: string): Promise<{ wrapped: string; salt: string }> {
+  if (!cfg.wrapDual || !cfg.pinSaltPrefix) throw new Error('ERR_DUAL_NOT_CONFIGURED');
+  const pinNorm = normalizePin(pin);
+  if (!pinNorm) throw new Error('ERR_DUAL_NOT_CONFIGURED');
+  const salt1 = crypto.getRandomValues(new Uint8Array(16));
+  const pinSalt = crypto.getRandomValues(new Uint8Array(DUAL_SALT_LEN));
+  const kek2 = await deriveKek2(cfg, passphrase, pinNorm, salt1, pinSalt);
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
+  const rawHex = toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('notekey2') as BufferSource },
+    kek2,
+    new TextEncoder().encode(rawHex) as BufferSource,
+  ));
+  const payload = new Uint8Array(DUAL_SALT_LEN + iv.byteLength + ct.byteLength);
+  payload.set(pinSalt, 0);
+  payload.set(iv, DUAL_SALT_LEN);
+  payload.set(ct, DUAL_SALT_LEN + iv.byteLength);
+  return { wrapped: cfg.wrapDual + b64(payload), salt: toHex(salt1) };
+}
+
+/** 雙因子解包：pinSalt 內嵌自描述，salt1 取自 login 回應（與 jr1w 同形）；任何不符回 null，不拋。 */
+export async function unwrapNoteKeyDual(cfg: NoteCryptoConfig, wrapped: string, passphrase: string, pin: string, salt1Hex: string): Promise<CryptoKey | null> {
+  try {
+    if (!cfg.wrapDual || !cfg.pinSaltPrefix) return null;
+    if (!wrapped.startsWith(cfg.wrapDual)) return null;
+    const salt1 = hexToBytes(salt1Hex);
+    if (salt1.length !== 16) return null;
+    const payload = unb64(wrapped.slice(cfg.wrapDual.length));
+    // 嚴格長度：pinSalt(16) + iv(12) + ct(hex(noteKey) 64B + GCM tag 16B) = 108B 固定
+    if (payload.length !== DUAL_SALT_LEN + DUAL_IV_LEN + 80) return null;
+    const pinSalt = payload.slice(0, DUAL_SALT_LEN);
+    const ivPrefixedCt = payload.slice(DUAL_SALT_LEN); // decryptWithKey 契約：payload = iv[12] ‖ ct
+    const pinNorm = normalizePin(pin);
+    if (!pinNorm) return null;
+    const kek2 = await deriveKek2(cfg, passphrase, pinNorm, salt1, pinSalt);
+    const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');
+    if (!rawHex) return null;
+    return importAesGcm(hexToBytes(rawHex), true); // extractable=true：要能再包裹（鐵律）
+  } catch {
+    return null;
+  }
 }
 
 // ── 對稱核心：encrypt / decrypt（AAD 由呼叫端指定） ──────────────────────────
