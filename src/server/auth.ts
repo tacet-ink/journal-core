@@ -15,7 +15,7 @@
  */
 
 import { corsResponse } from './cors';
-import { sha256Hex, generateSessionToken, timingSafeEq } from './hash';
+import { sha256Hex, generateSessionToken } from './hash';
 import { checkRate, type RateWindow } from './ratelimit';
 import type { Env } from './env';
 
