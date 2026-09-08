@@ -23,6 +23,18 @@ import {
   unwrapNoteKeyDual,
   normalizePin,
 } from '../src/client/note-crypto.ts';
+import {
+  verifyArgonKat,
+  wrapNoteKey3,
+  unwrapNoteKey3,
+  wrapNoteKeyDual3,
+  unwrapNoteKeyDual3,
+  ARGON_MEMORY_KIB,
+  ARGON_ITERATIONS,
+  ARGON_PARALLELISM,
+  ARGON_TAG_LEN,
+  type Argon3Config,
+} from '../src/client/argon2.ts';
 import { makeKeyStore } from '../src/client/keys.ts';
 import type { NoteCryptoConfig } from '../src/client/note-crypto.ts';
 
@@ -217,6 +229,71 @@ await A('wrap 端同一正規化（正規化後等價 unwrap）',
   (await unwrapNoteKeyDual(TACET2, dualNorm.wrapped, passD, '2580ab', dualNorm.salt)) !== null);
 await A('normalizePin 契約', normalizePin(' ２５８０Ab ') === '2580ab');
 await A('未配置 wrapDual 拒絕 dual 包裹', (await unwrapNoteKeyDual(TACET, dual.wrapped, passD, pinD, '')) === null);
+
+// ── 7. Argon2id 包裹（jr3w./jr3d.，2026-09-14 安全路線第 2 步） ───────────────
+//
+// 離線 oracle 中和：login 回應的 wrapped+salt 是戰利品，PBKDF2 對 GPU 友善，
+// Argon2id 記憶體困難（64MiB）使每猜成本上升 1-2 個數量級。遷移契約 = 成功 unwrap
+// 後客戶端靜默 re-wrap，舊前綴照解（下面有並存斷言）。
+
+console.log('\n[7] Argon2id 包裹（jr3w./jr3d.）');
+const TACET3: Argon3Config = { wrap3: 'jr3w.', wrapDual3: 'jr3d.', pinSalt3Prefix: 'tacet-note-pin3:' };
+await A('RFC 9106 無 secret/ad 標準向量（當前載體正確性）', await verifyArgonKat());
+await A('Argon 參數契約 m=64MiB t=3 p=1 tag=32',
+  ARGON_MEMORY_KIB === 65536 && ARGON_ITERATIONS === 3 && ARGON_PARALLELISM === 1 && ARGON_TAG_LEN === 32);
+
+const w3 = await wrapNoteKey3(TACET3, noteKey, pass);
+await A('wrapped 前綴 jr3w.', w3.wrapped.startsWith('jr3w.'));
+await A('jr3w salt = 16B hex', /^[0-9a-f]{32}$/.test(w3.salt));
+const unwrapped3 = await unwrapNoteKey3(TACET3, w3.wrapped, pass, w3.salt);
+await A('jr3w unwrap 等值 noteKey（extractable 再 export）',
+  unwrapped3 !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrapped3))) === origRaw);
+await A('jr3w 錯 pass → null', (await unwrapNoteKey3(TACET3, w3.wrapped, 'wrong-passphrase', w3.salt)) === null);
+await A('jr3w 錯 salt → null', (await unwrapNoteKey3(TACET3, w3.wrapped, pass, 'ab'.repeat(16))) === null);
+await A('jr3w unwrap 拒收 jr1w 字串', (await unwrapNoteKey3(TACET3, wrapped, pass, salt)) === null);
+await A('jr1w unwrapNoteKey 拒收 jr3w 字串', (await unwrapNoteKey(TACET2, w3.wrapped, pass, w3.salt)) === null);
+await A('既有 jr1w 包裹照解（遷移契約：舊前綴不解散）', (await unwrapNoteKey(TACET2, wrapped, pass, salt)) !== null);
+// jr3w payload 竄改 → GCM 驗證失敗 → null
+const payload3 = unb64(w3.wrapped.slice('jr3w.'.length));
+const tampered3 = async (idx: number): Promise<boolean> => {
+  const copy = payload3.slice();
+  copy[idx] ^= 0x01;
+  let bin = '';
+  for (let i = 0; i < copy.byteLength; i++) bin += String.fromCharCode(copy[i]);
+  return (await unwrapNoteKey3(TACET3, 'jr3w.' + btoa(bin), pass, w3.salt)) === null;
+};
+await A('jr3w payload 竄改 iv 區 → null', await tampered3(3));
+await A('jr3w payload 竄改 ct 尾 → null', await tampered3(payload3.length - 1));
+
+// jr3d 雙因子（PIN 第二因子，Argon2id 版）
+const dual3 = await wrapNoteKeyDual3(TACET3, noteKey, passD, pinD);
+await A('dual3 前綴 jr3d.', dual3.wrapped.startsWith('jr3d.'));
+await A('dual3 salt1 = 16B hex', /^[0-9a-f]{32}$/.test(dual3.salt));
+const unwrappedD3 = await unwrapNoteKeyDual3(TACET3, dual3.wrapped, passD, pinD, dual3.salt);
+await A('dual3 unwrap 等值 noteKey（extractable 再 export）',
+  unwrappedD3 !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrappedD3))) === origRaw);
+await A('dual3 錯 PIN → null', (await unwrapNoteKeyDual3(TACET3, dual3.wrapped, passD, '999999', dual3.salt)) === null);
+await A('dual3 缺 PIN → null', (await unwrapNoteKeyDual3(TACET3, dual3.wrapped, passD, '', dual3.salt)) === null);
+await A('dual3 錯 pass → null', (await unwrapNoteKeyDual3(TACET3, dual3.wrapped, 'wrong-passphrase', pinD, dual3.salt)) === null);
+await A('dual3 PIN 大小寫不敏感', (await unwrapNoteKeyDual3(TACET3, dual3.wrapped, passD, '2580AB', dual3.salt)) !== null);
+await A('dual3 PIN 全形 NFKC 等價', (await unwrapNoteKeyDual3(TACET3, dual3.wrapped, passD, '２５８０ＡＢ', dual3.salt)) !== null);
+
+// 跨家族隔離：jr3d payload 餵 jr2w 路徑、jr2w 餵 jr3d、jr3w 餵 jr1w、單因子交叉，全部 null
+// （HKDF info 同名但 KDF bits 不同 → KEK2 值天然互斥；GCM tag 保證不會假成功）
+await A('jr3d payload 餵 jr2w 路徑 → null（家族隔離）',
+  (await unwrapNoteKeyDual(TACET2, dual3.wrapped, passD, pinD, dual3.salt)) === null);
+await A('jr2w payload 餵 jr3d 路徑 → null（家族隔離）',
+  (await unwrapNoteKeyDual3(TACET3, dual.wrapped, passD, pinD, dual.salt)) === null);
+await A('jr3w unwrap 拒收 jr3d 字串', (await unwrapNoteKey3(TACET3, dual3.wrapped, passD, dual3.salt)) === null);
+await A('jr3d unwrap 拒收 jr3w 字串', (await unwrapNoteKeyDual3(TACET3, w3.wrapped, pass, pinD, w3.salt)) === null);
+
+// 未配置拒絕（兄弟 fork 行為不變）
+const throwsJr3w = async (): Promise<boolean> => { try { await wrapNoteKey3({}, noteKey, pass); return false; } catch { return true; } };
+const throwsJr3d = async (): Promise<boolean> => { try { await wrapNoteKeyDual3({}, noteKey, pass, pinD); return false; } catch { return true; } };
+await A('未配置 wrap3 → wrapNoteKey3 拒絕', await throwsJr3w());
+await A('未配置 wrapDual3 → wrapNoteKeyDual3 拒絕', await throwsJr3d());
+await A('未配置 wrapDual3 → unwrap 拒收 jr3d',
+  (await unwrapNoteKeyDual3({ wrap3: 'jr3w.' }, dual3.wrapped, passD, pinD, dual3.salt)) === null);
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 

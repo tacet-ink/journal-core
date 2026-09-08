@@ -49,26 +49,26 @@ export const IV_LEN = 12;
 
 const HEX32_RE = /^[0-9a-f]{32}$/; // 16-byte salt hex
 
-// ── 基礎工具 ────────────────────────────────────────────────────────────────
+// ── 基礎工具（export 供 argon2.ts 等同檔模組複用；語意不變） ─────────────────
 
-function b64(bytes: Uint8Array): string {
+export function b64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
 
-function unb64(text: string): Uint8Array {
+export function unb64(text: string): Uint8Array {
   const binary = atob(text);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
 }
 
-function toHex(bytes: Uint8Array): string {
+export function toHex(bytes: Uint8Array): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function hexToBytes(hex: string): Uint8Array {
+export function hexToBytes(hex: string): Uint8Array {
   return new Uint8Array((hex.match(/.{2}/g) ?? []).map(h => parseInt(h, 16)));
 }
 
@@ -82,7 +82,7 @@ export function sha256HexExport(text: string): Promise<string> {
   return sha256Hex(text);
 }
 
-async function importAesGcm(raw: Uint8Array, extractable = false): Promise<CryptoKey> {
+export async function importAesGcm(raw: Uint8Array, extractable = false): Promise<CryptoKey> {
   // extractable 預設 false（最小權限）；唯一需要 true 的是 noteKey。
   return crypto.subtle.importKey('raw', raw as BufferSource, { name: 'AES-GCM' }, extractable, ['encrypt', 'decrypt']);
 }
@@ -190,7 +190,7 @@ export async function unwrapNoteKeyDual(cfg: NoteCryptoConfig, wrapped: string, 
 
 // ── 對稱核心：encrypt / decrypt（AAD 由呼叫端指定） ──────────────────────────
 
-async function encryptWithKey(key: CryptoKey, plaintext: string, aad: string): Promise<string> {
+export async function encryptWithKey(key: CryptoKey, plaintext: string, aad: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
   const ct = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(aad) as BufferSource },
@@ -203,7 +203,7 @@ async function encryptWithKey(key: CryptoKey, plaintext: string, aad: string): P
   return b64(out);
 }
 
-async function decryptWithKey(key: CryptoKey, payload: Uint8Array, aad: string): Promise<string | null> {
+export async function decryptWithKey(key: CryptoKey, payload: Uint8Array, aad: string): Promise<string | null> {
   try {
     const iv = payload.slice(0, IV_LEN);
     const ct = payload.slice(IV_LEN);
