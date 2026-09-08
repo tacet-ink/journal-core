@@ -37,6 +37,8 @@ export interface NoteCryptoConfig {
   wrapDual?: string;
   /** 雙因子 pin 段 PBKDF2 salt 前綴，如 'tacet-note-pin1:'（pinSalt 內嵌 payload 後拼接）。 */
   pinSaltPrefix?: string;
+  /** 分享包裹前綴（jrsw.，單篇分享連結 V1）。未配置 = share API 拒絕（兄弟 fork 行為不變）。 */
+  wrapShare?: string;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: import('./keys').KeyStore;
 }
@@ -73,6 +75,11 @@ function hexToBytes(hex: string): Uint8Array {
 async function sha256Hex(text: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return toHex(new Uint8Array(d));
+}
+
+/** SHA-256 hex（分享定位鍵雜湊等呼叫端雜湊用；與伺服器端 sha256Hex 同構）。 */
+export function sha256HexExport(text: string): Promise<string> {
+  return sha256Hex(text);
 }
 
 async function importAesGcm(raw: Uint8Array, extractable = false): Promise<CryptoKey> {
@@ -255,6 +262,39 @@ export async function unwrapNoteKey(cfg: NoteCryptoConfig, wrapped: string, pass
     const rawHex = await decryptWithKey(kek, unb64(wrapped.slice(cfg.wrap.length)), 'notekey');
     if (!rawHex) return null;
     return importAesGcm(hexToBytes(rawHex), true); // extractable=true：要能再包裹
+  } catch {
+    return null;
+  }
+}
+
+// ── 分享包裹（jrsw.，單篇分享連結 V1）────────────────────────────────────────
+//
+// KEK_share = PBKDF2(sharePass, salt 16B 隨機, 600k, SHA-256)（與 jr1w 同構），
+// payload = iv[12] ‖ AES-GCM(KEK_share, hex(noteKey), aad='notekey-share')，
+// wrapped = 'jrsw.' + b64(payload)。salt 由呼叫端存 D1（shares.salt）；
+// 分享密語永不過線（與 passphrase 同律）。AAD 用獨立字串，兩種包裹結構不可互換。
+
+/** 分享包裹：salt 隨機 16 bytes（hex 由呼叫端存 shares.salt）。 */
+export async function wrapNoteKeyShare(cfg: NoteCryptoConfig, noteKey: CryptoKey, sharePass: string): Promise<{ wrapped: string; salt: string }> {
+  if (!cfg.wrapShare) throw new Error('ERR_SHARE_NOT_CONFIGURED');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const kek = await deriveKek(sharePass, salt);
+  const payload = new Uint8Array(await crypto.subtle.exportKey('raw', noteKey));
+  const wrapped = cfg.wrapShare + await encryptWithKey(kek, toHex(payload), 'notekey-share');
+  return { wrapped, salt: toHex(salt) };
+}
+
+/** 分享解包：salt 取自 GET /shares/:hash 回應（與 jr1w 同形）；任何不符回 null，不拋。 */
+export async function unwrapNoteKeyShare(cfg: NoteCryptoConfig, wrapped: string, sharePass: string, saltHex: string): Promise<CryptoKey | null> {
+  try {
+    if (!cfg.wrapShare) return null;
+    if (!wrapped.startsWith(cfg.wrapShare)) return null;
+    const salt = hexToBytes(saltHex);
+    if (salt.length !== 16 || !HEX32_RE.test(saltHex)) return null;
+    const kek = await deriveKek(sharePass, salt);
+    const rawHex = await decryptWithKey(kek, unb64(wrapped.slice(cfg.wrapShare.length)), 'notekey-share');
+    if (!rawHex) return null;
+    return importAesGcm(hexToBytes(rawHex), true); // extractable=true：解出後要能解日記密文（鐵律）
   } catch {
     return null;
   }
