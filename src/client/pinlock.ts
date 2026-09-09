@@ -16,7 +16,7 @@
  */
 
 import {
-  b64, unb64, toHex, hexToBytes, encryptWithKey, decryptWithKey, importAesGcm, normalizePin,
+  b64, unb64, toHex, hexToBytes, decryptWithKey, importAesGcm, normalizePin,
 } from './note-crypto.ts';
 
 /** 雙因子 pin 段等級（2M）過重——鎖定閘要即時性，600k 與 jr1w. 同級。 */
