@@ -115,6 +115,8 @@ export interface AuthRow {
   wrapped: string | null;
   wrappedRec: string | null;
   recHash: string | null;
+  /** 訂閱方案（tacet：users.plan，'free'/'paid'）；兄弟 fork 無訂閱面時預設 'free'。 */
+  plan?: string;
 }
 
 export const AUTH_RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 10 };
