@@ -61,6 +61,8 @@ export interface Argon3Config {
   wrapDual3?: string;
   /** 雙因子 pin 段 Argon2id salt 前綴，如 'tacet-note-pin3:'（拼接 hex(pinSalt) 後整串當 salt）。 */
   pinSalt3Prefix?: string;
+  /** 分享包裹前綴（jr3s.，單篇分享連結 Argon2id 版）。未配置 = 分享 API 拒絕（兄弟 fork 行為不變）。 */
+  wrapShare3?: string;
 }
 
 interface HashWasmArgon2id {
@@ -278,6 +280,44 @@ export async function unwrapNoteKeyDual3(
     const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');
     if (!rawHex) return null;
     return importAesGcm(hexToBytes(rawHex), true); // extractable=true：要能再包裹（鐵律）
+  } catch {
+    return null;
+  }
+}
+
+// ── jr3s. 分享包裹（分享連結 V2，安全路線商用前清單；jrsw. 的 Argon2id 版） ───
+//
+// KEK_share = Argon2id(sharePass, salt, m=64MiB, t=3, p=1, tag=32B)（與 jr3w. 同級參數），
+// payload = iv[12] ‖ GCM(KEK_share, hex(noteKey), aad='notekey-share')（與 jrsw. 同構只換 KDF），
+// wrapped = 'jr3s.' + b64(payload)，嚴格 92B；salt 由呼叫端存 shares.salt（與 jr1w./jr3w. 同形）。
+// AAD 沿用 'notekey-share'：兩代分享包裹結構同構，跨代誤用由 KDF 差異與前綴守衛雙層把關。
+// 帶內版本化：share KDF 升級 = 換新前綴（jrsw. → jr3s.），舊前綴語意不動；讀取端兩代並行，
+// 建立端只收 jr3s.（關閉弱 KDF 建立面）。
+// ⚠️ unwrap 輸出 noteKey 一律 extractable=true（要能解日記密文；鐵律 4）。
+
+/** jr3s. 包裹：salt 隨機 16 bytes（hex 由呼叫端存 shares.salt）。 */
+export async function wrapNoteKeyShare3(cfg: Argon3Config, noteKey: CryptoKey, sharePass: string): Promise<{ wrapped: string; salt: string }> {
+  if (!cfg.wrapShare3) throw new Error('ERR_JR3S_NOT_CONFIGURED');
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
+  const kek = await deriveKekArgon(sharePass, salt);
+  const rawHex = toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
+  const wrapped = cfg.wrapShare3 + await encryptWithKey(kek, rawHex, 'notekey-share');
+  return { wrapped, salt: toHex(salt) };
+}
+
+/** jr3s. 解包：salt 取自 GET /shares/:hash 回應（與 jr1w 同形）；任何不符回 null，不拋。 */
+export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sharePass: string, saltHex: string): Promise<CryptoKey | null> {
+  try {
+    if (!cfg.wrapShare3 || !wrapped.startsWith(cfg.wrapShare3)) return null;
+    const salt = hexToBytes(saltHex);
+    if (salt.length !== SALT_LEN || !/^[0-9a-f]{32}$/.test(saltHex)) return null;
+    const payload = unb64(wrapped.slice(cfg.wrapShare3.length));
+    // 嚴格長度：iv(12) + ct(hex(noteKey) 64B + GCM tag 16B) = 92B 固定（salt 在 shares.salt 不內嵌）
+    if (payload.length !== IV_LEN + 80) return null;
+    const kek = await deriveKekArgon(sharePass, salt);
+    const rawHex = await decryptWithKey(kek, payload, 'notekey-share');
+    if (!rawHex) return null;
+    return importAesGcm(hexToBytes(rawHex), true); // extractable=true：解出後要能解日記密文（鐵律）
   } catch {
     return null;
   }
