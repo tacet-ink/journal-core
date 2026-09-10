@@ -67,10 +67,10 @@ const TACET: NoteCryptoConfig = {
 
 let passed = 0;
 const failures: string[] = [];
-async function A(name: string, cond: boolean | Promise<boolean>): Promise<void> {
+async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): Promise<void> {
   const ok = cond instanceof Promise ? await cond : cond;
   if (ok) { passed++; console.log(`  ✓ ${name}`); }
-  else { failures.push(name); console.error(`  ✗ ${name}`); }
+  else { failures.push(name); console.error(`  ✗ ${name}${detail ? ' — ' + detail : ''}`); }
 }
 
 // ── 1. 基礎向量 ─────────────────────────────────────────────────────────────
@@ -294,6 +294,83 @@ await A('未配置 wrap3 → wrapNoteKey3 拒絕', await throwsJr3w());
 await A('未配置 wrapDual3 → wrapNoteKeyDual3 拒絕', await throwsJr3d());
 await A('未配置 wrapDual3 → unwrap 拒收 jr3d',
   (await unwrapNoteKeyDual3({ wrap3: 'jr3w.' }, dual3.wrapped, passD, pinD, dual3.salt)) === null);
+
+// ── 9. BIP39 復原套件契約（words↔hex64 轉寫層；線上契約 recToken hex64 不變） ──
+
+console.log('\n[9] BIP39 復原套件（24 詞 ⇄ entropy 32B ⇄ hex64）');
+const bip = await import('../src/client/bip39.ts');
+const wl = await import('../src/client/wordlist.ts');
+
+const kitWords = await bip.generateBip39Words();
+await A('24 詞', kitWords.length === 24);
+await A('全在詞表', kitWords.every(w => wl.wordlist.includes(w)));
+await A('詞表 2048 詞', wl.wordlist.length === 2048);
+await A('詞全小寫字母（轉寫容錯面）', wl.wordlist.every(w => /^[a-z]+$/.test(w)));
+
+const kitHex64 = await bip.wordsToRecToken(kitWords);
+await A('words→hex64 格式', kitHex64 !== null && /^[0-9a-f]{64}$/.test(kitHex64));
+await A('words→hex64 roundtrip（同詞同值）', (await bip.wordsToRecToken(kitWords)) === kitHex64);
+await A('不同套件不同 hex64', (await bip.wordsToRecToken(await bip.generateBip39Words())) !== kitHex64);
+
+// hex64 舊套件 ⇄ 詞轉換雙向（相容層：舊紙本照走現行鏈）
+const hexToWords = await bip.recTokenToWords(kitHex64!);
+await A('hex64→24 詞 roundtrip', hexToWords !== null && (await bip.wordsToRecToken(hexToWords)) === kitHex64);
+await A('舊 hex64（generateRecToken 產物）可轉詞',
+  (await bip.recTokenToWords(generateRecToken())) !== null);
+
+// normalize 容錯：大寫/全形空格/換行/多空白
+const messy = kitWords.map((w, i) => (i % 2 ? w.toUpperCase() : w)).join('　');
+await A('全形空格＋大寫容錯', (await bip.wordsToRecToken(messy)) === kitHex64);
+await A('換行＋多空白容錯', (await bip.wordsToRecToken(kitWords.join('\n  '))) === kitHex64);
+
+// 失敗面統一 null（不洩漏哪類錯）
+await A('23 詞 → null', (await bip.wordsToRecToken(kitWords.slice(0, 23).join(' '))) === null);
+await A('25 詞 → null', (await bip.wordsToRecToken([...kitWords, kitWords[0]].join(' '))) === null);
+await A('詞表外 → null', (await bip.wordsToRecToken(kitWords.slice(0, 23).concat('notaword').join(' '))) === null);
+
+// checksum 面：錯一詞（詞表內不同詞）→ 幾乎必被 checksum 抓；64 樣本全抓（理論 255/256，樣本容許 ≥63）
+const wlArr: readonly string[] = wl.wordlist;
+let checksumCaught = 0;
+for (let t = 0; t < 64; t++) {
+  const ws = [...(await bip.generateBip39Words())];
+  const idx = t % 24;
+  let alt = wlArr[(wlArr.indexOf(ws[idx]) + 1 + t) % 2048];
+  if (alt === ws[idx]) alt = wlArr[(wlArr.indexOf(ws[idx]) + 1) % 2048];
+  ws[idx] = alt;
+  if ((await bip.wordsToRecToken(ws.join(' '))) === null) checksumCaught++;
+}
+await A('錯一詞 64 樣本 ≥63 被抓（checksum 8-bit）', checksumCaught >= 63, `caught=${checksumCaught}/64`);
+
+// spot-check 抽驗索引
+const picks = bip.spotCheckIndexes();
+await A('抽驗 4 位置', picks.length === 4);
+await A('位置 0-23 不重複', new Set(picks).size === 4 && picks.every(p => p >= 0 && p <= 23));
+await A('抽驗索引排序（顯示穩定）', picks.every((p, i) => i === 0 || picks[i - 1] < p));
+
+// 參照實作對照（@scure/bip39 devDependencies，僅本閘用；產品碼零依賴）
+try {
+  const scureMod = await import('@scure/bip39');
+  const scureWl = (await import('@scure/bip39/wordlists/english.js')).wordlist;
+  const { entropyToMnemonic, mnemonicToEntropy } = scureMod;
+  let refOk = true;
+  for (let t = 0; t < 200; t++) {
+    const ent = crypto.getRandomValues(new Uint8Array(32));
+    const refWords: string[] = entropyToMnemonic(ent, scureWl).split(' ');
+    const ours = await bip.recTokenToWords(hex(new Uint8Array(ent)));
+    if (!ours || ours.join(' ') !== refWords.join(' ')) { refOk = false; break; }
+    if ((await bip.wordsToRecToken(refWords)) !== hex(new Uint8Array(mnemonicToEntropy(refWords.join(' '), scureWl)))) { refOk = false; break; }
+  }
+  await A('與 @scure/bip39 參照 200 組雙向一致', refOk);
+} catch {
+  await A('與 @scure/bip39 參照 200 組雙向一致', false, '參照套件未安裝（devDependencies @scure/bip39）');
+}
+
+// 與現行包裹鏈相容：words 造的 hex64 走 recTokenHash/wrapNoteKeyWithRecToken 原樣
+const kitHexAsToken = (await bip.wordsToRecToken(kitWords))!;
+const kitWrapped = await wrapNoteKeyWithRecToken(TACET, noteKey, kitHexAsToken, identityA);
+await A('words 派生 hex64 包裹前綴 jr1w.', kitWrapped.startsWith('jr1w.'));
+await A('words 派生 hex64 unwrap 救回 noteKey',
+  (await unwrapNoteKeyWithRecToken(TACET, kitWrapped, kitHexAsToken, identityA)) !== null);
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 
