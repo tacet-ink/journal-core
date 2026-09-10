@@ -71,7 +71,7 @@ function indexesToBytes(indexes: number[]): Uint8Array {
       carry &= (1 << bits) - 1;
     }
   }
-  return out; // 餘 3 bits = checksum 低位的補零，丟棄
+  return out; // 24 詞 = 264 bits = 33 bytes 整除，無餘位（11-bit 打包自洽）
 }
 
 /** 產生 24 詞套件（entropy 32B 隨機 → +8-bit checksum → 24 詞）。 */
