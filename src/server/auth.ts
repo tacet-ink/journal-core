@@ -3,7 +3,10 @@
  * 抽取自 sennight backend/src/routes/auth.ts（e2e 時代，prod 已驗證）。
  *
  * 不變量（勿破壞）：
- * - pass 明文永不過線：線上憑證送 PH1 = SHA-256(pass)，伺服器存 PH2 = SHA-256(PH1)
+ * - pass 明文永不過線：線上憑證送 PH1（雜湊形），伺服器存 PH2 = SHA-256(PH1)。
+ *   各 fork 的 PH1 形自定義：sennight/vestige = SHA-256(pass)；tacet 自 2026-09-10
+ *   起過渡為 Argon2id 派生（ph1+ph1_legacy 雙欄，見 tacet plans/PH1 v2）——本層只驗
+ *   hex64 形，不驗 PH1 派生方式（伺服器零知識，無從也無需區分形別）。
  * - hash-ladder 雙軌：舊式存 PH1 直比 → 命中即「順手升級」寫回 PH2
  * - 常數時間比較（timingSafeEq）防時序側信道
  * - 密語重設 = 舊憑證可能已洩漏 → 撤銷該身份全部 session
