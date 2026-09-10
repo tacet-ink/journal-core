@@ -33,6 +33,8 @@ import {
   ARGON_ITERATIONS,
   ARGON_PARALLELISM,
   ARGON_TAG_LEN,
+  derivePh1Argon,
+  PH1_V2_SALT,
   type Argon3Config,
 } from '../src/client/argon2.ts';
 import { makeKeyStore } from '../src/client/keys.ts';
@@ -294,6 +296,36 @@ await A('未配置 wrap3 → wrapNoteKey3 拒絕', await throwsJr3w());
 await A('未配置 wrapDual3 → wrapNoteKeyDual3 拒絕', await throwsJr3d());
 await A('未配置 wrapDual3 → unwrap 拒收 jr3d',
   (await unwrapNoteKeyDual3({ wrap3: 'jr3w.' }, dual3.wrapped, passD, pinD, dual3.salt)) === null);
+
+// ── 8. PH1 v2（登入憑證 Argon2id 派生，2026-09-10 安全路線）──────────────────
+//
+// 動機（安全路線第 4 步分析）：DB 全洩後 ph2 = sha256(ph1) 是離線爆破讀日記的最後一個
+// 快雜湊面——攻擊者拿候選密語重算 sha256(sha256(g)) 對 ph2 命中即 g 就是密語，
+// 再以 DB salt1 算 Argon2id(g, salt1) 解 wrapped＝日記全開。ph1 改 Argon2id 派生後
+// 每猜成本從 ~ns（SHA-256×2）升到 ~0.1-0.18s CPU＝×10⁴-10⁶。
+// 固定域鹽是被迫設計（per-user 鹽會摧毀 PH2 UNIQUE＝幽靈帳號機制基礎）；改參數 = 換鹽尾碼（v2/v3）重遷移。
+
+console.log('\n[8] PH1 v2（登入憑證 Argon2id 派生）');
+await A('RFC 9106 KAT 先行（載體正確性，本節所有 Argon 斷言的前提）', await verifyArgonKat());
+const ph1v2a = await derivePh1Argon('probe-determinism-pass-42');
+await A('ph1v2 確定性（同 pass 兩跑逐位元同）', ph1v2a === (await derivePh1Argon('probe-determinism-pass-42')));
+await A('ph1v2 hex64 形（validHash64 可收）', /^[0-9a-f]{64}$/.test(ph1v2a));
+// 與 legacy ph1（SHA-256 形）必然不同值＝雙查表兩鍵語意成立
+await A('ph1v2 ≠ legacy ph1（SHA-256 形）', ph1v2a !== (await ph1Of('probe-determinism-pass-42')));
+// 鹽用途隔離：PH1_V2_SALT 不等於任何包裹鹽前綴（固定鹽專用域，與 jr3w. per-user 隨機鹽分流）
+await A('PH1_V2_SALT = "tacet-ph1-v1"（12B 專用域，與包裹鹽前綴無重疊）',
+  PH1_V2_SALT === 'tacet-ph1-v1' && !PH1_V2_SALT.startsWith('tacet-note') && !PH1_V2_SALT.startsWith('tacet-pinlock'));
+// 不同 pass 零碰撞（抽 50 組，兩兩相異）
+{
+  const seen = new Set<string>();
+  for (let i = 0; i < 50; i++) seen.add(await derivePh1Argon(`collision-probe-${i}-random-${crypto.randomUUID()}`));
+  await A('不同 pass 零碰撞（50 組兩兩相異）', seen.size === 50, `unique=${seen.size}`);
+}
+// 參數常數同源（單一碼路：ph1 v2 沿 jr3w. 同一組 Argon 參數常數）
+await A('ph1v2 參數與 jr3w. 家族常數同源（m=64MiB t=3 p=1）',
+  ARGON_MEMORY_KIB === 65536 && ARGON_ITERATIONS === 3 && ARGON_PARALLELISM === 1 && ARGON_TAG_LEN === 32);
+// 錯誤密語 ≠ 正確密語輸出（形狀面 sanity：非恆等映射）
+await A('ph1v2 非恆等（pass ≠ 輸出）', ph1v2a !== 'probe-determinism-pass-42');
 
 // ── 9. BIP39 復原套件契約（words↔hex64 轉寫層；線上契約 recToken hex64 不變） ──
 

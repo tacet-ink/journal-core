@@ -38,6 +38,32 @@ import {
 export const ARGON_RFC9106_EXPECTED =
   '72d2a36fd5c266bcc96121b24937bc253338cdfcbd273713655748c54b4dd503';
 
+/**
+ * PH1 v2 固定域鹽（登入憑證 Argon2id 派生，2026-09-10 安全路線第 4 步）。
+ *
+ * 固定鹽是被迫設計：per-user 鹽會摧毀 PH2 UNIQUE（同一密語必須恒生同一 ph2，
+ * 幽靈帳號機制與「同密語不可開第二帳戶」都靠它）。帶內版本化：改參數 = 換鹽尾碼
+ * （v2/v3…）重遷移，禁原地改語意。實長 12B（RFC 9106 鹽最小 8B；Task 0 探針實證）。
+ */
+export const PH1_V2_SALT = 'tacet-ph1-v1';
+
+/**
+ * PH1 v2：登入憑證 = Argon2id(pass, 固定域鹽, m=64MiB, t=3, p=1) → hex64。
+ *
+ * 動機：DB 全洩後 ph2 = sha256(ph1) 是離線爆破讀日記的最後一個快雜湊面（候選密語
+ * 重算 sha256(sha256(g)) 對 ph2 命中即 g 是密語）。ph1 改 Argon2id 派生後每猜成本
+ * ×10⁴-10⁶。參數沿 jr3w. 同一組常數（單一碼路）；無載體即 throw（禁 fallback 鐵律）。
+ */
+export async function derivePh1Argon(passphrase: string): Promise<string> {
+  return toHex(await deriveArgon2id(
+    passphrase,
+    new TextEncoder().encode(PH1_V2_SALT),
+    ARGON_MEMORY_KIB,
+    ARGON_ITERATIONS,
+    ARGON_PARALLELISM,
+  ));
+}
+
 /** Argon2id 參數（jr3w./jr3d. pass 段；前綴即版本，參數寫死本模組）。 */
 export const ARGON_MEMORY_KIB = 65536; // 64 MiB（手機實測基準；瀏覽器 wasm ~180ms）
 export const ARGON_ITERATIONS = 3; // t
