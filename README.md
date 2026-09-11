@@ -65,11 +65,12 @@ npm run verify   # 102 斷言對真模組（禁鏡像）：roundtrip/AAD 防搬�
 
 ## 使用
 
-TypeScript 原始碼發行（exports 直指 .ts）：
+TypeScript 原始碼發行（exports 直指 .ts）。**注意**：Node 的 strip-types 不適用於
+node_modules 內的檔案，npm 安裝的消費者請走打包器；源碼 clone 可直接 node --experimental-strip-types。
 
-```sh
-# node 直接跑（Node 22+ strip-types）
-node --experimental-strip-types your-script.ts
+```ts
+import { makeKeyStore, makeHeldKey, generateNoteKey, encryptNote, decryptNote } from '@tacet-ink/journal-core';
+// 或子路徑：'@tacet-ink/journal-core/client/note-crypto'
 ```
 
 ```ts

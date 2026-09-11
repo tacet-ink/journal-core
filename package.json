@@ -1,6 +1,6 @@
 {
   "name": "@tacet-ink/journal-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zero-knowledge journal core — e2e crypto, passphrase-only auth, transport, ratelimit. The server never sees plaintext.",
   "type": "module",
   "main": "src/index.ts",
@@ -29,8 +29,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "verify": "node --experimental-strip-types scripts/verify-core-crypto.ts",
-    "postinstall": "echo 'zero runtime dependencies — devDependencies are gate-only (typescript / @scure/bip39 / workers types)'"
+    "verify": "node --experimental-strip-types scripts/verify-core-crypto.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260831.1",
