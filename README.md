@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/@tacet-ink/journal-core.svg)](https://www.npmjs.com/package/@tacet-ink/journal-core)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/node/v/%40tacet-ink%2Fjournal-core.svg)](./package.json)
+[![verify](https://img.shields.io/github/actions/workflow/status/tacet-ink/journal-core/verify.yml?branch=main&label=verify)](https://github.com/tacet-ink/journal-core/actions/workflows/verify.yml)
 
 零知識日記核心：端對端加密、密語即身份的 auth、傳輸與限流原語。
 伺服器看不到任何一個字：passphrase 永不過線，密鑰包裹與密文都在客戶端完成。
