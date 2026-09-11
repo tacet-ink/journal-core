@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # npm provenance (OIDC)
+  id-token: write   # npm Trusted Publishing (OIDC) — 取代長效 NPM_TOKEN
 
 jobs:
   publish:
@@ -19,8 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 26
-          registry-url: https://registry.npmjs.org/
+          node-version: 26   # npm >= 11.5.1（Trusted publishing 最低需求）
 
       - name: Install dependencies
         run: npm ci
@@ -28,7 +27,8 @@ jobs:
       - name: Verify crypto primitives
         run: npm run verify
 
-      - name: Publish with provenance
+      - name: Publish with provenance (OIDC trusted publishing)
         run: npm publish --access public --provenance
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # 無 NPM_TOKEN：npm CLI 自動偵測 Actions OIDC 環境換短效 token。
+        # 前置（npmjs.com）：package settings → Trusted Publisher → GitHub Actions，
+        # 填 user/repo/workflow filename(publish.yml)/environment(npm)。
