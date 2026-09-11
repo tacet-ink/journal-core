@@ -29,7 +29,7 @@ async function bumpRate(env: Env, w: RateWindow, ip: string): Promise<boolean> {
     ).bind(ip, now - w.windowMs, w.max).run();
     if ((upd.meta?.changes ?? 0) > 0) return true;
     // 無列或窗口過期：INSERT；主鍵競態（同 IP 併發首發）→ 輸家先試「作用中未超額」
-    // 計數 UPDATE（kimi MAJOR 修復：輸家直接掉到 reset 會把贏家的作用中視窗誤判成
+    // 計數 UPDATE（外部審查 MAJOR 修復：輸家直接掉到 reset 會把贏家的作用中視窗誤判成
     // 拒絕 → 空視窗併發首發 undercount 到只剩 1 次）。再 fallback 到重置式 UPDATE。
     const ins = await env.DB.prepare(
       `INSERT INTO ${w.table} (ip, window_start, count) VALUES (?, ?, 1)

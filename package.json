@@ -7,15 +7,30 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./client/note-crypto": "./src/client/note-crypto.ts",
+    "./client/keys": "./src/client/keys.ts",
+    "./client/argon2": "./src/client/argon2.ts",
+    "./client/pinlock": "./src/client/pinlock.ts",
+    "./client/bip39": "./src/client/bip39.ts",
+    "./client/wordlist": "./src/client/wordlist.ts",
     "./server/auth": "./src/server/auth.ts",
     "./server/ratelimit": "./src/server/ratelimit.ts",
     "./server/cors": "./src/server/cors.ts",
     "./server/hash": "./src/server/hash.ts",
-    "./client/note-crypto": "./src/client/note-crypto.ts"
+    "./server/env": "./src/server/env.ts"
+  },
+  "files": [
+    "src",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "verify": "node --experimental-strip-types scripts/verify-core-crypto.ts",
-    "test": "node --experimental-strip-types --test test/"
+    "postinstall": "echo 'zero runtime dependencies — devDependencies are gate-only (typescript / @scure/bip39 / workers types)'"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260831.1",

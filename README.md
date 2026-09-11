@@ -30,9 +30,9 @@
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
 | `src/server/auth.ts` | 零知識 auth 核心：PH1/PH2 hash-ladder、PH2 UNIQUE、session 撤銷、包裹欄組成對契約 |
 | `src/server/ratelimit.ts` | per-IP 滑動視窗限流（D1 計數，併發安全版） |
-| `src/server/cors.ts`／`hash.ts`／`env.ts` | 共用 CORS／雜湊工具／Worker Env 最小介面 |
+| `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
-## 前綴契約（九前綴家族）
+## 前綴契約（家族表：8 個資料前綴＋閘對照組 jr1g.）
 
 前綴是版本契約：payload 佈局與 KDF 由前綴界定，升級 = 新前綴。
 Tacet 部署實例（config 傳入）：
@@ -41,14 +41,14 @@ Tacet 部署實例（config 傳入）：
 | --- | --- | --- | --- |
 | `jr1u.` | guest 時代密文 | K_u = SHA-256(guestKdfPrefix ‖ identity) | AES-GCM |
 | `jr1b.` | 綁定時代密文 | 隨機 256-bit noteKey | AES-GCM，AAD 綁 noteId |
-| `jr1w.` | passphrase 包裹＋復原套件包裹 | PBKDF2-SHA256 600k | b64(iv[12] ‖ GCM(hex(noteKey))) |
-| `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B |
-| `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形 |
-| `jr3d.` | PIN 第二因子合鑰（Argon2id 版） | Argon2id(pass)＋Argon2id(pin) → HKDF-SHA256 | 同 jr2w. 形，108B |
+| `jr1w.` | passphrase 包裹＋復原套件包裹 | PBKDF2-SHA256 600k | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey` |
+| `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
+| `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形，AAD `notekey` |
+| `jr3d.` | PIN 第二因子合鑰（Argon2id 版） | Argon2id(pass)＋Argon2id(pin) → HKDF-SHA256 | 同 jr2w. 形，108B，AAD `notekey2` |
 | `jr3s.` | 單篇分享連結包裹 | Argon2id（同上參數） | 同 jr1w. 形，AAD `notekey-share` |
 | `jr1p.` | 本機 PIN 鎖定（開啟時鎖定） | PBKDF2-SHA256 600k（刻意不用 Argon2id：解鎖要即時） | 同 jr2w. 形，AAD `notekey-pinlock` |
 
-guest 密文前綴在閘對照組另驗 `jr1g.`（驗證品牌參數化本身）。
+guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌參數化本身；tacet 部署實例 guest 用 `jr1u.`）。
 跨前綴呼叫一律回 null（前綴守衛＋AAD＋長度把關），不拋、不降級。
 
 ## 驗證
@@ -88,7 +88,8 @@ const cfg = {
 };
 
 const held = makeHeldKey();
-const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'noteId:n1', identityProvider);
+const identity = { current: () => 'acct-xxxxxxxxxxxxxxxx' };
+const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'noteId:n1', identity);
 ```
 
 打包器（vite/esbuild）可直接 alias 到源碼目錄使用；Argon2id 瀏覽器載體需另裝
