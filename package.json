@@ -1,6 +1,6 @@
 {
   "name": "@tacet-ink/journal-core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Zero-knowledge journal core — e2e crypto, passphrase-only auth, transport, ratelimit. The server never sees plaintext.",
   "homepage": "https://tacet.ink",
   "repository": {
