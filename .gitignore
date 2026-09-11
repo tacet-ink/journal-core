@@ -1,0 +1,8 @@
+# vendored 閘參照依賴（@scure/bip39 對照、typescript）不入版控
+node_modules/
+package-lock.json
+
+# 環境與產物
+.env
+*.log
+dist/

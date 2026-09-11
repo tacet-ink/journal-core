@@ -1,21 +1,21 @@
 /**
- * note-crypto.ts — 自由書寫 e2e 加密，品牌參數化核心（2026-09-07 抽取）。
+ * note-crypto.ts — 自由書寫 e2e 加密，品牌參數化核心。
  *
- * 抽取自 sennight src/domain/noteCrypto.ts（37 斷言 verify-note-crypto.ts 母型）。
- * 兩 fork diff 已證實：除品牌前綴（sennight-/vestige-、sn1↔同一家族、KDF salt 前綴）
- * 與產品附加機制（vestige testaments）外，密碼學本體完全一致——本檔收編該本體。
+ * 血統：抽取自姊妹專案的日記加密模組（37 斷言驗證閘母型）；
+ * fork diff 已證實：除品牌前綴（guest KDF 前綴、密文前綴家族、KDF salt 前綴）
+ * 與產品附加機制外，密碼學本體在多個產品間完全一致——本檔收編該本體。
  *
  * 兩時代金鑰模型（不變量，勿破壞）：
  *   時代 1（未綁定 guest）：K_u = SHA-256(guestKdfPrefix ‖ identity) — 純客戶端派生，混淆級
  *   時代 2（綁定後）：隨機 256-bit noteKey；日常加解密只用 noteKey，passphrase 以
  *     KEK = PBKDF2(pass, salt, 600000, SHA-256) 包裹成 wrapped 上傳；復原套件 wrappedRec
  *     = 同款包裹在 KEK_rec = PBKDF2(recToken, salt = recSaltPrefix ‖ identity) 下。
- *     passphrase 從此不過線：線上憑證送 PH1 = SHA-256(pass)，伺服器存 PH2。
+ *     passphrase 從此不過線：線上憑證送 PH1（雜湊形，派生方式由各產品自定義），伺服器存 PH2。
  *
  * 前綴全部可配置（帶內版本化：升級 KDF 參數 = 換新前綴）。AAD 由呼叫端傳入——
- * sennight 綁 `lifeId:day`、vestige 留言綁 `tst:<lifeId>`、tacet 綁 `noteId`。
+ * 例如綁 `noteId`（跨列搬移必解密失敗）、`lifeId:day`（逐日日記）或留言綁 `tst:<lifeId>`。
  *
- * ⚠️ extractable 鐵律（2026-09-06 iOS 實機炸證）：所有要被 exportKey/wrap 的 key，
+ * ⚠️ extractable 鐵律：所有要被 exportKey/wrap 的 key，
  * import 當下就必須 extractable=true。noteKey 全部產生路徑（generate/unwrap×3）
  * 一律顯式 true；KEK/guest key 保持 nonextractable（只加解密、永不 export）。
  */
@@ -23,21 +23,21 @@
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
 export interface NoteCryptoConfig {
-  /** guest 時代 KDF 前綴，如 'sennight-note-u1'。 */
+  /** guest 時代 KDF 前綴，如 'journal-note-u1'。 */
   guestKdfPrefix: string;
-  /** 復原包裹 KDF salt 前綴，如 'sennight-note-rec1:'。 */
+  /** 復原包裹 KDF salt 前綴，如 'journal-note-rec1:'。 */
   recSaltPrefix: string;
-  /** 密文前綴：guest 時代，如 'sn1u.'。 */
+  /** 密文前綴：guest 時代，如 'jr1g.'。 */
   cipherGuest: string;
-  /** 密文前綴：綁定時代，如 'sn1b.'。 */
+  /** 密文前綴：綁定時代，如 'jr1b.'。 */
   cipherBound: string;
-  /** 金鑰包裹前綴，如 'snw1.'。 */
+  /** 金鑰包裹前綴，如 'jr1w.'。 */
   wrap: string;
-  /** 雙因子合鑰包裹前綴（jr2w.，PIN 第二因子）。未配置 = dual API 拒絕（兄弟 fork 行為不變）。 */
+  /** 雙因子合鑰包裹前綴（jr2w.，PIN 第二因子）。未配置 = dual API 拒絕（未配置行為不變）。 */
   wrapDual?: string;
-  /** 雙因子 pin 段 PBKDF2 salt 前綴，如 'tacet-note-pin1:'（pinSalt 內嵌 payload 後拼接）。 */
+  /** 雙因子 pin 段 PBKDF2 salt 前綴，如 'journal-note-pin1:'（pinSalt 內嵌 payload 後拼接）。 */
   pinSaltPrefix?: string;
-  /** 分享包裹前綴（jrsw.，單篇分享連結 V1）。未配置 = share API 拒絕（兄弟 fork 行為不變）。 */
+  /** 分享包裹前綴（jrsw.，單篇分享連結 V1）。未配置 = share API 拒絕（未配置行為不變）。 */
   wrapShare?: string;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: import('./keys').KeyStore;
@@ -381,7 +381,7 @@ export function makeHeldKey(): HeldKey {
 }
 
 export interface IdentityProvider {
-  /** 當前身份字串（sennight/vestige = soulKey；tacet = account_id 或空）。 */
+  /** 當前身份字串（guest 派生與本機包裹的命名空間，如 account_id）。 */
   current(): string;
 }
 

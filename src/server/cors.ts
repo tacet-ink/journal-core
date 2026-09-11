@@ -1,5 +1,5 @@
 /**
- * cors.ts — 共用 CORS 本體（sennight/vestige diff 證實兩 fork 完全一致，直取）。
+ * cors.ts — 共用 CORS 本體（多產品 diff 證實完全一致，直取）。
  */
 export const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',

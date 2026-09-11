@@ -4,7 +4,7 @@
  * 全綠輸出 CORE-CRYPTO-OK；任何失敗 exit 1。
  */
 
-// 對真模組（禁鏡像重寫金鑰邏輯——sennight 2026-09-06 教訓）
+// 對真模組（禁鏡像重寫金鑰邏輯——鏡像驗證抓不到真模組 bug 的生產教訓）
 import {
   makeHeldKey,
   PBKDF2_ITERATIONS,
@@ -54,7 +54,7 @@ async function sha(text: string): Promise<string> {
   return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(text))));
 }
 
-// ── tacet 設計 §1 前綴（jr1 家族）＋ sennight 對照組（sn1 家族） ──────────────
+// ── 日記應用前綴（jr1 家族）＋ 對照組（sn1 家族，驗證品牌參數化） ──────────────
 
 const store = makeKeyStore({ brand: 'tacet' });
 

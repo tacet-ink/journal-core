@@ -1,5 +1,5 @@
 /**
- * keys.ts — storage key 命名空間。各 fork 以 config 指定前綴（sennight_/vestige_/tacet_）。
+ * keys.ts — storage key 命名空間。各產品以 config 指定前綴（如 journal 的 <brand>_）。
  * 理由：fork diff 證實 noteCrypto 差異一半在 localStorage key 前綴——參數化收進 core。
  */
 

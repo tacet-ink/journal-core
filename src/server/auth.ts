@@ -1,18 +1,16 @@
 /**
  * auth.ts — 零知識伺服器端 auth 核心邏輯（品牌／schema 參數化）。
- * 抽取自 sennight backend/src/routes/auth.ts（e2e 時代，prod 已驗證）。
  *
  * 不變量（勿破壞）：
  * - pass 明文永不過線：線上憑證送 PH1（雜湊形），伺服器存 PH2 = SHA-256(PH1)。
- *   各 fork 的 PH1 形自定義：sennight/vestige = SHA-256(pass)；tacet 自 2026-09-10
- *   起過渡為 Argon2id 派生（ph1+ph1_legacy 雙欄，見 tacet plans/PH1 v2）——本層只驗
+ *   PH1 派生方式由各產品自定義（快雜湊或 Argon2id 派生皆可）——本層只驗
  *   hex64 形，不驗 PH1 派生方式（伺服器零知識，無從也無需區分形別）。
  * - hash-ladder 雙軌：舊式存 PH1 直比 → 命中即「順手升級」寫回 PH2
  * - 常數時間比較（timingSafeEq）防時序側信道
  * - 密語重設 = 舊憑證可能已洩漏 → 撤銷該身份全部 session
  * - 金鑰包裹欄組（wrapped+salt）缺一整組放棄；rec 包裹與種子 hash 必須成對出現
  *
- * 與 sennight 的結構差異（tacet 設計 §1/§13 已入型別）：
+ * 與單一產品設計的結構差異（identity 模型已入型別）：
  * - identity 由伺服器端生成（隨機 account_id），不由客戶端帶入 soulKey——
  *   本核心以 identityCallback 抽象兩種模型，schema 欄位名由各 fork 自訂。
  */
@@ -25,9 +23,9 @@ import type { Env } from './env';
 // ── 格式驗證（自 noteCrypt.ts 抽出；前綴由 config 注入） ─────────────────────
 
 export interface CipherFormats {
-  /** 密文前綴家族 regex 來源字串，如 '^sn1[ub]\\.' → '^jr1[gb]\\.'。 */
+  /** 密文前綴家族 regex 來源字串，如 '^jr1[gb]\.'。 */
   cipherPrefixes: [string, string];
-  /** 金鑰包裹前綴，如 'snw1.'。 */
+  /** 金鑰包裹前綴，如 'jr1w.'。 */
   wrapPrefix: string;
   /** 密文位元組上限（入庫原樣、禁截斷密文）。 */
   cipherMax: number;
@@ -45,7 +43,7 @@ function cipherRe(c: CipherFormats): RegExp {
 
 /**
  * 入庫前校正：前綴密文原樣入庫；超限密文／編碼丟棄（截斷必壞）、明文截到上限照收。
- * plainMax：明文相容層上限（sennight = 700 同密文；vestige = 120；tacet 無明文相容層可設 0）。
+ * plainMax：明文相容層上限（入庫原樣、禁截斷密文；無明文相容層的產品可設 0）。
  */
 export function makeInboundCipher(c: CipherFormats) {
   const RE = new RegExp(`^(${c.cipherPrefixes.map(p => p.replace('.', '\\.')).join('|')})[A-Za-z0-9+/]+={0,2}$`);
@@ -102,7 +100,7 @@ export interface KeyPackage {
 export interface AuthStore {
   /** 以 PH2 查身份（PH2 UNIQUE；tacet：隨機 account_id 在此建立）。 */
   findByIdentityQuery(ph2: string): Promise<AuthRow | null>;
-  /** 建立（tacet：生成隨機 account_id；sennight/vestige：guest 自動註冊語意）。 */
+  /** 建立（identity 由本層 identityCallback 決定：隨機 account_id 或客戶端帶入語意）。 */
   createUser(ph2: string): Promise<string>;
   getByUserKey(key: string): Promise<AuthRow | null>;
   getByRecHash(recHash: string): Promise<AuthRow | null>;

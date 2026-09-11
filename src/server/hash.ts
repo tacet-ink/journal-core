@@ -1,6 +1,6 @@
 /**
- * hash.ts — 品牌無關的雜湊／token 工具（自 sennight backend/src/lib/crypto.ts 抽取，兩 fork 完全一致已驗證）。
- * 產品專屬 obfuscate/deobfuscate 不入 core（sennight §八裁定：透明品牌，明文 JSON + TLS）。
+ * hash.ts — 品牌無關的雜湊／token 工具。
+ * 產品專屬 obfuscate/deobfuscate 不入 core（透明品牌裁定：明文 JSON + TLS）。
  */
 
 export async function sha256Hex(text: string): Promise<string> {
@@ -9,7 +9,7 @@ export async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** 相容別名：sennight/vestige 呼叫點用此名。 */
+/** 相容別名：姊妹產品呼叫點用此名。 */
 export const hashString = sha256Hex;
 
 /** 256-bit 隨機 session token（hex）。伺服器只存 SHA-256。 */
@@ -19,7 +19,7 @@ export function generateSessionToken(): string {
     .join('');
 }
 
-/** 常數時間字串比較（防時序側信道；自 sennight routes/auth.ts 抽出共用）。 */
+/** 常數時間字串比較（防時序側信道；多產品共用抽出）。 */
 export function timingSafeEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;

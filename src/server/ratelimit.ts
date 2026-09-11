@@ -1,10 +1,8 @@
 /**
  * ratelimit.ts — per-IP 滑動視窗限流（D1 計數，跨 isolate 有效；併發安全版）。
- * 來源：sennight backend/src/lib/ratelimit.ts（2026-09-06 單句化重構版——
- * vestige 仍是舊 SELECT→INSERT/UPDATE 競態版，本 core 版即為回植母型）。
  *
- * 教訓來源（sennight/perf-hygiene-d1）：
- * - in-memory Map 在多 isolate/多 colo 下無效（實測 24 發分散 SIN/MRS 全 200）
+ * 教訓來源（生產實證）：
+ * - in-memory Map 在多 isolate/多 colo 下無效（實測 24 發分散多機房全 200）
  * - 原單句 UPDATE 計數在併發下輕微超額 → 改單條件寫入鏈：INSERT 競態輸家先試
  *   「作用中未超額」計數 UPDATE（輸家直接掉到 reset 會把贏家的作用中視窗誤判成拒絕）
  * - fail-open 裁定：限流儲存故障時放行（保護面不可反噬主功能），只擋明確超額
