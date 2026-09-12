@@ -8,6 +8,8 @@ export {
   generateNoteKey,
   encryptNote,
   decryptNote,
+  encryptAttach,
+  decryptAttach,
   wrapNoteKey,
   unwrapNoteKey,
   wrapNoteKeyWithRecToken,
