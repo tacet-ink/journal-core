@@ -22,6 +22,8 @@ import {
   wrapNoteKeyDual,
   unwrapNoteKeyDual,
   normalizePin,
+  encryptAttach,
+  decryptAttach,
 } from '../src/client/note-crypto.ts';
 import {
   verifyArgonKat,
@@ -403,6 +405,26 @@ const kitWrapped = await wrapNoteKeyWithRecToken(TACET, noteKey, kitHexAsToken, 
 await A('words 派生 hex64 包裹前綴 jr1w.', kitWrapped.startsWith('jr1w.'));
 await A('words 派生 hex64 unwrap 救回 noteKey',
   (await unwrapNoteKeyWithRecToken(TACET, kitWrapped, kitHexAsToken, identityA)) !== null);
+
+// ── 10. 附件密文（jr1c.，image attachments；opt-in 未配置即拒） ───────────────
+
+console.log('\n[10] 附件密文（jr1c. cipherAttach opt-in）');
+const bareCfgAttach: NoteCryptoConfig = { ...TACET }; // 無 cipherAttach 欄
+let attachCfgThrow = '';
+try { await encryptAttach(bareCfgAttach, noteKey, '{"v":1}', 'jr1a:n1:a1'); } catch (e) { attachCfgThrow = (e as Error).message; }
+await A('未配置 cipherAttach → encryptAttach throw', attachCfgThrow === 'ERR_ATTACH_NOT_CONFIGURED', attachCfgThrow);
+
+const TACET_ATTACH: NoteCryptoConfig = { ...TACET, cipherAttach: 'jr1c.' };
+const attachAad = 'jr1a:note-abc:att-001';
+const attachPayload = JSON.stringify({ v: 1, kind: 'img', mime: 'image/jpeg', w: 2048, h: 1365, b64: b64(new Uint8Array(2048)) });
+const attachCt = await encryptAttach(TACET_ATTACH, noteKey, attachPayload, attachAad);
+await A('附件前綴 jr1c.', attachCt.startsWith('jr1c.'));
+await A('附件 roundtrip（顯式 noteKey）',
+  (await decryptAttach(TACET_ATTACH, noteKey, attachCt, attachAad)) === attachPayload);
+await A('附件 AAD 防搬移：錯 attachment_id → null',
+  (await decryptAttach(TACET_ATTACH, noteKey, attachCt, 'jr1a:note-abc:att-999')) === null);
+await A('附件錯鑰匙 → null',
+  (await decryptAttach(TACET_ATTACH, await generateNoteKey(), attachCt, attachAad)) === null);
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 

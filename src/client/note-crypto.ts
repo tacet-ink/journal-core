@@ -39,6 +39,8 @@ export interface NoteCryptoConfig {
   pinSaltPrefix?: string;
   /** 分享包裹前綴（jrsw.，單篇分享連結 V1）。未配置 = share API 拒絕（未配置行為不變）。 */
   wrapShare?: string;
+  /** 附件密文前綴（jr1c.，image attachments）。未配置 = attach API 拒絕（未配置行為不變）。 */
+  cipherAttach?: string;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: import('./keys').KeyStore;
 }
@@ -87,7 +89,7 @@ export async function importAesGcm(raw: Uint8Array, extractable = false): Promis
   return crypto.subtle.importKey('raw', raw as BufferSource, { name: 'AES-GCM' }, extractable, ['encrypt', 'decrypt']);
 }
 
-async function deriveGuestKey(cfg: NoteCryptoConfig, identity: string): Promise<CryptoKey> {
+export async function deriveGuestKey(cfg: NoteCryptoConfig, identity: string): Promise<CryptoKey> {
   const material = new TextEncoder().encode(cfg.guestKdfPrefix + identity);
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', material));
   return importAesGcm(digest);
@@ -215,6 +217,27 @@ export async function decryptWithKey(key: CryptoKey, payload: Uint8Array, aad: s
     return new TextDecoder().decode(plain);
   } catch {
     return null; // 錯誤金鑰 / AAD 不符 / 密文損壞 → 呼叫端回落降級句
+  }
+}
+
+// ── 附件密文（jr1c.，image attachments；金鑰由呼叫端決定） ────────────────────
+//
+// 附件用既有 noteKey（綁定後）或 guest key（Era 0 純本地），零新金鑰管理；
+// AAD 帶 'jr1a:<note_id>:<attachment_id>'（綁篇＋綁附件，跨列搬移必失敗）。
+// 前綴 cfg opt-in（未配置即拒）：兄弟 fork 不配置＝API 拒絕，行為不變。
+
+export async function encryptAttach(cfg: NoteCryptoConfig, key: CryptoKey, plaintext: string, aad: string): Promise<string> {
+  if (!cfg.cipherAttach) throw new Error('ERR_ATTACH_NOT_CONFIGURED');
+  return cfg.cipherAttach + await encryptWithKey(key, plaintext, aad);
+}
+
+export async function decryptAttach(cfg: NoteCryptoConfig, key: CryptoKey, cipher: string, aad: string): Promise<string | null> {
+  try {
+    if (!cfg.cipherAttach) return null;
+    if (!cipher.startsWith(cfg.cipherAttach)) return null;
+    return await decryptWithKey(key, unb64(cipher.slice(cfg.cipherAttach.length)), aad);
+  } catch {
+    return null;
   }
 }
 
