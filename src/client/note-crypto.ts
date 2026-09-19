@@ -27,8 +27,8 @@ export interface NoteCryptoConfig {
   guestKdfPrefix: string;
   /** 復原包裹 KDF salt 前綴，如 'journal-note-rec1:'。 */
   recSaltPrefix: string;
-  /** 密文前綴：guest 時代，如 'jr1g.'。 */
-  cipherGuest: string;
+  /** 密文前綴：guest 時代，如 'jr1g.'。未配置 = guest API 拒絕（未配置行為不變；2026-09-19 選配收編）。 */
+  cipherGuest?: string;
   /** 密文前綴：綁定時代，如 'jr1b.'。 */
   cipherBound: string;
   /** 金鑰包裹前綴，如 'jr1w.'。 */
@@ -41,6 +41,8 @@ export interface NoteCryptoConfig {
   wrapShare?: string;
   /** 附件密文前綴（jr1c.，image attachments）。未配置 = attach API 拒絕（未配置行為不變）。 */
   cipherAttach?: string;
+  /** 本機 IDB 密文前綴（jr1d.，notes store stored 形）。未配置 = local API 拒絕（未配置行為不變）。 */
+  cipherLocal?: string;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: import('./keys').KeyStore;
 }
@@ -241,6 +243,28 @@ export async function decryptAttach(cfg: NoteCryptoConfig, key: CryptoKey, ciphe
   }
 }
 
+// ── 本機 IDB 密文（jr1d.，notes store stored 形；金鑰由呼叫端決定） ──────────
+//
+// IDB 持久形密文：bound 態＝held noteKey、Era 0＝guest key（兩者皆由呼叫端注入；
+// 鑰匙狀態機在呼叫端 store 層，core 只承載前綴與對稱本體）。payload 自帶 {v:1,...}
+// 版本欄（呼叫端 JSON 面），前綴即可辨識；AAD 綁 note_id（呼叫端契約，跨列搬移必失敗）。
+// 前綴 cfg opt-in（未配置即拒）：兄弟 fork 不配置＝API 拒絕，行為不變。
+
+export async function encryptLocal(cfg: NoteCryptoConfig, key: CryptoKey, plaintext: string, aad: string): Promise<string> {
+  if (!cfg.cipherLocal) throw new Error('ERR_LOCAL_NOT_CONFIGURED');
+  return cfg.cipherLocal + await encryptWithKey(key, plaintext, aad);
+}
+
+export async function decryptLocal(cfg: NoteCryptoConfig, key: CryptoKey, cipher: string, aad: string): Promise<string | null> {
+  try {
+    if (!cfg.cipherLocal) return null;
+    if (!cipher.startsWith(cfg.cipherLocal)) return null;
+    return await decryptWithKey(key, unb64(cipher.slice(cfg.cipherLocal.length)), aad);
+  } catch {
+    return null;
+  }
+}
+
 // ── noteKey（時代 2）─────────────────────────────────────────────────────────
 
 /** 綁定當下生成：random 256-bit AES-GCM key。必須 extractable（包裹靠 exportKey）。 */
@@ -408,7 +432,8 @@ export interface IdentityProvider {
   current(): string;
 }
 
-/** 加密一則：綁定時代持有 noteKey → cipherBound；否則 guest key → cipherGuest。
+/** 加密一則：綁定時代持有 noteKey → cipherBound；否則 guest key → cipherGuest
+ *  （guest 前綴選配：未配置＝ERR_GUEST_NOT_CONFIGURED，bound 路徑不受牽連）。
  *  held 為空時先試本機包裹（reload / PWA 續存期免重打密語）。 */
 export async function encryptNote(
   cfg: NoteCryptoConfig,
@@ -424,11 +449,13 @@ export async function encryptNote(
   if (held.get()) {
     return cfg.cipherBound + await encryptWithKey(held.get()!, plaintext, aad);
   }
+  if (!cfg.cipherGuest) throw new Error('ERR_GUEST_NOT_CONFIGURED'); // guest 路徑選配：未配置即拒（bound 路徑不受牽連）
   const guest = await deriveGuestKey(cfg, idp.current());
   return cfg.cipherGuest + await encryptWithKey(guest, plaintext, aad);
 }
 
-/** 解密一則：按前綴選鑰匙；無前綴 = 舊版明文（相容層）原樣返回；失敗回 null。 */
+/** 解密一則：按前綴選鑰匙；無前綴 = 舊版明文（相容層）原樣返回（guest 前綴未配置時
+ *  不明字串一律 null＝guest 家族整面拒絕，跨前綴鐵律不降級）；失敗回 null。 */
 export async function decryptNote(
   cfg: NoteCryptoConfig,
   held: HeldKey,
@@ -437,12 +464,17 @@ export async function decryptNote(
   idp: IdentityProvider,
 ): Promise<string | null> {
   try {
-    const isGuest = cipher.startsWith(cfg.cipherGuest);
+    const guestPrefix = cfg.cipherGuest;
+    const isGuest = guestPrefix !== undefined && cipher.startsWith(guestPrefix);
     const isBound = cipher.startsWith(cfg.cipherBound);
-    if (!isGuest && !isBound) return cipher; // 舊版明文（相容層）：原樣顯示
+    if (!isGuest && !isBound) {
+      // 舊版明文（相容層）原樣返回；guest 前綴未配置＝guest 家族整面拒絕（不明字串
+      // 一律 null——跨前綴鐵律「回 null 不降級」，避免他家族殘列被當明文顯示）。
+      return guestPrefix === undefined ? null : cipher;
+    }
     if (isGuest) {
       const guest = await deriveGuestKey(cfg, idp.current());
-      return await decryptWithKey(guest, unb64(cipher.slice(cfg.cipherGuest.length)), aad);
+      return await decryptWithKey(guest, unb64(cipher.slice(guestPrefix!.length)), aad);
     }
     if (!held.get()) {
       const identity = idp.current();
