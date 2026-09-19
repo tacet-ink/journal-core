@@ -21,8 +21,9 @@
   前綴全部可配置，AAD（防搬移繫結）由呼叫端傳入。
 - **extractable 鐵律**：要被 exportKey/wrap 的 key（noteKey 全部產生路徑），
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
-- **opt-in 原語**：選配契約（wrapDual／wrapShare／pinLock）未配置即拒絕，
-  不配置的產品行為完全不受影響。
+- **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal）
+  未配置即拒絕，不配置的產品行為完全不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
+  解密面 guest 家族整面拒絕、不明字串不當明文顯示）。
 
 ## 模組
 
@@ -37,7 +38,7 @@
 | `src/server/ratelimit.ts` | per-IP 滑動視窗限流（D1 計數，併發安全版） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
-## 前綴契約（家族表：8 個資料前綴＋閘對照組 jr1g.）
+## 前綴契約（家族表：10 個資料前綴＋閘對照組 jr1g.）
 
 前綴是版本契約：payload 佈局與 KDF 由前綴界定，升級 = 新前綴。
 Tacet 部署實例（config 傳入）：
@@ -46,6 +47,8 @@ Tacet 部署實例（config 傳入）：
 | --- | --- | --- | --- |
 | `jr1u.` | guest 時代密文 | K_u = SHA-256(guestKdfPrefix ‖ identity) | AES-GCM |
 | `jr1b.` | 綁定時代密文 | 隨機 256-bit noteKey | AES-GCM，AAD 綁 noteId |
+| `jr1c.` | 附件密文（image attachments；選配） | 同筆記金鑰（noteKey／guest key 由呼叫端決定） | AES-GCM，AAD `jr1a:<noteId>:<attachId>` |
+| `jr1d.` | 本機 IDB stored 密文（notes store；選配） | 同筆記金鑰（呼叫端注入） | AES-GCM，AAD 綁 note_id，payload 自帶 `v` 欄 |
 | `jr1w.` | passphrase 包裹＋復原套件包裹 | PBKDF2-SHA256 600k | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey` |
 | `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
 | `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形，AAD `notekey` |
@@ -59,7 +62,7 @@ guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌
 ## 驗證
 
 ```sh
-npm run verify   # 102 斷言對真模組（禁鏡像）：roundtrip/AAD 防搬移/extractable/時代隔離/
+npm run verify   # 127 斷言對真模組（禁鏡像）：roundtrip/AAD 防搬移/extractable/時代隔離/
                  # 跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組
 ```
 
@@ -90,7 +93,7 @@ const cfg = {
   cipherBound: 'jr1b.',
   wrap: 'jr1w.',
   store: makeKeyStore({ brand: 'myapp' }),
-  // wrapDual / wrapShare / pinLock：選配，未配置即拒絕
+  // cipherGuest / wrapDual / wrapShare / pinLock / cipherAttach / cipherLocal：選配，未配置即拒絕
 };
 
 const held = makeHeldKey();

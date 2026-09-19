@@ -74,11 +74,38 @@ function indexesToBytes(indexes: number[]): Uint8Array {
   return out; // 24 詞 = 264 bits = 33 bytes 整除，無餘位（11-bit 打包自洽）
 }
 
-/** 產生 24 詞套件（entropy 32B 隨機 → +8-bit checksum → 24 詞）。 */
-export async function generateBip39Words(): Promise<string[]> {
-  const entropy = crypto.getRandomValues(new Uint8Array(32));
+/** 產生 24 詞套件（entropy 32B 隨機 → +8-bit checksum → 24 詞）。
+ *  entropyBytes 可注入（驗證閘固定種子樣本用；產品面不傳＝真隨機契約不變）。 */
+export async function generateBip39Words(entropyBytes?: Uint8Array): Promise<string[]> {
+  const entropy = entropyBytes ?? crypto.getRandomValues(new Uint8Array(32));
   const checksum = (await sha256(entropy))[0];
   return entropyToIndexes(entropy, checksum).map(idx => wordlist[idx]);
+}
+
+// ── 驗證閘固定種子樣本（flake 歸零；t_d1cf3846）──────────────────────────────
+//
+// 背景：checksum 統計面「錯一詞 64 樣本 ≥63 被抓」用真隨機取樣時，P(漏 ≥2)≈0.4%，
+// 偶發 62/64＝閘 flake（2026-09-19 session 實證）。治本是固定種子：xorshift32 以
+// 常數 seed 產生確定性位元組流（種子決定樣本集＝向量可重放、閘輸出逐輪恆定）。
+// 樣本集僅供驗證閘使用（checksum 是 BIP39 公開數學，非機密；產品面
+// generateBip39Words() 不帶參數＝crypto.getRandomValues 真隨機契約不變）。
+
+function xorshift32Bytes(seed: number, len: number): Uint8Array {
+  let s = seed >>> 0;
+  if (s === 0) s = 0x9e3779b9; // xorshift 全零態死鎖防護
+  const out = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    out[i] = s & 0xff;
+  }
+  return out;
+}
+
+/** 固定種子樣本集：seed 給定 → 32B 確定（xorshift32 常數種子流）。 */
+export function seededSampleBytes(seed: number): Uint8Array {
+  return xorshift32Bytes(seed, 32);
 }
 
 /** 24 詞 → recToken hex64。任何不符（字數/詞表外/checksum）回 null，不洩漏哪類錯。 */
