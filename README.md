@@ -22,8 +22,8 @@
 - **extractable 鐵律**：要被 exportKey/wrap 的 key（noteKey 全部產生路徑），
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
 - **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal）
-  未配置即拒絕，不配置的產品行為完全不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
-  解密面 guest 家族整面拒絕、不明字串不當明文顯示）。
+  未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
+  解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。
 
 ## 模組
 
