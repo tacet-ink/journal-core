@@ -464,7 +464,10 @@ export async function decryptNote(
   idp: IdentityProvider,
 ): Promise<string | null> {
   try {
-    const guestPrefix = cfg.cipherGuest;
+    // guest 前綴正規化（follow-up ②，t_44239f5f）：畸形配置 ''（空字串）會讓
+    // startsWith('') 恆真＝bound 列誤導 guest 分支回 null（解密面整列滅失）。
+    // falsy 一律收斂為 undefined，與加密面「未配置即拒」truthiness 對稱。
+    const guestPrefix = cfg.cipherGuest || undefined;
     const isGuest = guestPrefix !== undefined && cipher.startsWith(guestPrefix);
     const isBound = cipher.startsWith(cfg.cipherBound);
     if (!isGuest && !isBound) {
