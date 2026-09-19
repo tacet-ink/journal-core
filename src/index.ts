@@ -10,6 +10,8 @@ export {
   decryptNote,
   encryptAttach,
   decryptAttach,
+  encryptLocal,
+  decryptLocal,
   wrapNoteKey,
   unwrapNoteKey,
   wrapNoteKeyWithRecToken,

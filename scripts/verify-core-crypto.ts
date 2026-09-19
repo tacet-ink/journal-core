@@ -24,6 +24,8 @@ import {
   normalizePin,
   encryptAttach,
   decryptAttach,
+  encryptLocal,
+  decryptLocal,
 } from '../src/client/note-crypto.ts';
 import {
   verifyArgonKat,
@@ -362,18 +364,26 @@ await A('23 詞 → null', (await bip.wordsToRecToken(kitWords.slice(0, 23).join
 await A('25 詞 → null', (await bip.wordsToRecToken([...kitWords, kitWords[0]].join(' '))) === null);
 await A('詞表外 → null', (await bip.wordsToRecToken(kitWords.slice(0, 23).concat('notaword').join(' '))) === null);
 
-// checksum 面：錯一詞（詞表內不同詞）→ 幾乎必被 checksum 抓；64 樣本全抓（理論 255/256，樣本容許 ≥63）
+// checksum 面：錯一詞（詞表內不同詞）→ 幾乎必被 checksum 抓；固定種子 64 樣本全抓。
+// （t_d1cf3846：真隨機取樣時 P(漏 ≥2)≈0.4%＝偶發 62/64 flake 實證——改 xorshift 常數
+// 種子樣本集（bip39.seededSampleBytes），向量可重放、閘輸出逐輪恆定；種子窗 1..64
+// 經五窗 320 樣本探針驗證全抓後採用，非挑窗）
 const wlArr: readonly string[] = wl.wordlist;
 let checksumCaught = 0;
 for (let t = 0; t < 64; t++) {
-  const ws = [...(await bip.generateBip39Words())];
+  const ws = [...(await bip.generateBip39Words(bip.seededSampleBytes(1 + t)))];
   const idx = t % 24;
   let alt = wlArr[(wlArr.indexOf(ws[idx]) + 1 + t) % 2048];
   if (alt === ws[idx]) alt = wlArr[(wlArr.indexOf(ws[idx]) + 1) % 2048];
   ws[idx] = alt;
   if ((await bip.wordsToRecToken(ws.join(' '))) === null) checksumCaught++;
 }
-await A('錯一詞 64 樣本 ≥63 被抓（checksum 8-bit）', checksumCaught >= 63, `caught=${checksumCaught}/64`);
+await A('錯一詞固定種子 64 樣本全抓（checksum 8-bit；flake 歸零）', checksumCaught === 64, `caught=${checksumCaught}/64`);
+const detA = await bip.generateBip39Words(bip.seededSampleBytes(20260919));
+const detB = await bip.generateBip39Words(bip.seededSampleBytes(20260919));
+const detC = await bip.generateBip39Words(bip.seededSampleBytes(20260920));
+await A('種子樣本確定性（同 seed 逐字同詞、異 seed 異詞；產品面無參數真隨機不變）',
+  detA.join(' ') === detB.join(' ') && detA.join(' ') !== detC.join(' '));
 
 // spot-check 抽驗索引
 const picks = bip.spotCheckIndexes();
@@ -425,6 +435,76 @@ await A('附件 AAD 防搬移：錯 attachment_id → null',
   (await decryptAttach(TACET_ATTACH, noteKey, attachCt, 'jr1a:note-abc:att-999')) === null);
 await A('附件錯鑰匙 → null',
   (await decryptAttach(TACET_ATTACH, await generateNoteKey(), attachCt, attachAad)) === null);
+
+// ── 11. 本機 IDB 密文（jr1d. cipherLocal opt-in）＋ guest 選配拒絕面 ──────────
+
+console.log('\n[11] 本機 IDB 密文（jr1d. cipherLocal opt-in）＋ guest 選配');
+const bareCfgLocal: NoteCryptoConfig = { ...TACET }; // 無 cipherLocal 欄
+let localCfgThrow = '';
+try { await encryptLocal(bareCfgLocal, noteKey, '{}', 'jr1:n1'); } catch (e) { localCfgThrow = (e as Error).message; }
+await A('未配置 cipherLocal → encryptLocal throw', localCfgThrow === 'ERR_LOCAL_NOT_CONFIGURED', localCfgThrow);
+
+const TACET_LOCAL: NoteCryptoConfig = { ...TACET, cipherLocal: 'jr1d.' };
+const localAad = 'jr1:note-abc';
+const localPayload = JSON.stringify({ v: 1, text: '今天寫了一點東西。', title: '標題' });
+const localCt = await encryptLocal(TACET_LOCAL, noteKey, localPayload, localAad);
+await A('本機前綴 jr1d.', localCt.startsWith('jr1d.'));
+await A('本機 roundtrip（bound noteKey）', (await decryptLocal(TACET_LOCAL, noteKey, localCt, localAad)) === localPayload);
+await A('本機 AAD 防搬移：錯 note_id → null', (await decryptLocal(TACET_LOCAL, noteKey, localCt, 'jr1:note-zzz')) === null);
+await A('本機錯鑰匙 → null', (await decryptLocal(TACET_LOCAL, await generateNoteKey(), localCt, localAad)) === null);
+
+// Era 0 形：guest key（呼叫端派生注入，與 IDB store 層同構）
+const localGuest = await (async () => {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('tacet-note-u1' + identityA)));
+  return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+})();
+const localCtGuest = await encryptLocal(TACET_LOCAL, localGuest, localPayload, localAad);
+await A('本機 roundtrip（Era 0 guest key）', (await decryptLocal(TACET_LOCAL, localGuest, localCtGuest, localAad)) === localPayload);
+
+// 跨前綴隔離：jr1d. 非 jr1c./jr1b./jr1u.；他家族入口不吃本機密文
+await A('本機密文非附件/筆記前綴',
+  !localCt.startsWith('jr1c.') && !localCt.startsWith('jr1b.') && !localCt.startsWith('jr1u.'));
+await A('decryptAttach 拒收 jr1d.', (await decryptAttach(TACET_ATTACH, noteKey, localCt, localAad)) === null);
+await A('decryptLocal 拒收 jr1c.', (await decryptLocal(TACET_LOCAL, noteKey, attachCt, attachAad)) === null);
+await A('decryptNote 對未配置的 jr1d.＝未知前綴相容層原樣（不誤判不誤解）',
+  (await decryptNote({ ...TACET }, makeHeldKey(), localCt, localAad, { current: () => identityA })) === localCt);
+
+// payload 竄改 → GCM 驗證失敗 → null（iv 區 byte 3／ct 尾最後一位元組；索引以解碼後
+// 位元組面計——b64 字串索引會越界靜默 no-op＝假紅，閘毒化同族教訓）
+const tamperLocal = async (byteIdx: number): Promise<boolean> => {
+  const bin = atob(localCt.slice('jr1d.'.length));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (byteIdx < 0 || byteIdx >= bytes.length) return false; // 索引自守衛：越界即顯性失敗
+  bytes[byteIdx] ^= 0x01;
+  let out = '';
+  for (let i = 0; i < bytes.byteLength; i++) out += String.fromCharCode(bytes[i]);
+  return (await decryptLocal(TACET_LOCAL, noteKey, 'jr1d.' + btoa(out), localAad)) === null;
+};
+await A('本機 payload 竄改 iv 區 → null', await tamperLocal(3));
+await A('篡改索引越界＝顯性失敗（runner 自檢：靜默 no-op 即假紅）', await tamperLocal(-1) === false);
+await A('本機 payload 竄改 ct 尾 → null', await tamperLocal(59));
+
+// guest 選配未配置拒絕面（2026-09-19 收編：cipherGuest 轉選配；未配置即拒鐵律）
+const TACET_NOGUEST: NoteCryptoConfig = { ...TACET, cipherGuest: undefined };
+const guestThrowsMsg = async (): Promise<string | null> => {
+  try { await encryptNote(TACET_NOGUEST, makeHeldKey(), note, 'noteId:n1', { current: () => identityA }); return null; }
+  catch (e) { return (e as Error).message; }
+};
+await A('未配置 cipherGuest → encryptNote guest 路徑 throw ERR_GUEST_NOT_CONFIGURED',
+  (await guestThrowsMsg()) === 'ERR_GUEST_NOT_CONFIGURED');
+const heldBound = makeHeldKey();
+heldBound.set(noteKey);
+await A('未配置 guest 的 bound 加密不受牽連',
+  (await encryptNote(TACET_NOGUEST, heldBound, note, 'noteId:n1', { current: () => identityA })).startsWith('jr1b.'));
+await A('未配置 guest → decryptNote guest 密文 null',
+  (await decryptNote(TACET_NOGUEST, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === null);
+await A('未配置 guest → decryptNote 不明字串 null（guest 家族整面拒絕、不當明文顯示）',
+  (await decryptNote(TACET_NOGUEST, makeHeldKey(), 'jr9x.somestring', 'x', { current: () => identityA })) === null);
+await A('配置 guest → decryptNote 舊明文相容層原樣（既有契約不變）',
+  (await decryptNote(TACET, makeHeldKey(), '純舊明文', 'x', { current: () => identityA })) === '純舊明文');
+await A('既有 guest 配置 roundtrip 不受選配收編影響',
+  (await decryptNote(TACET, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === note);
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 
