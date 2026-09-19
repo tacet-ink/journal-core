@@ -506,6 +506,19 @@ await A('配置 guest → decryptNote 舊明文相容層原樣（既有契約不
 await A('既有 guest 配置 roundtrip 不受選配收編影響',
   (await decryptNote(TACET, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === note);
 
+// 畸形配置 ''（空字串）正規化面（follow-up ②，t_44239f5f）：空字串前綴＝startsWith('') 恆真，
+// bound 列會被誤導 guest 分支回 null。正規化後：加密面與未配置同拒、解密面 bound 照解、
+// guest 密文（他家族形）null——與「未配置」行為完全同構。
+const TACET_EMPTYGUEST: NoteCryptoConfig = { ...TACET, cipherGuest: '' };
+await A("畸形 guest 前綴 '' → encryptNote guest 路徑同 ERR_GUEST_NOT_CONFIGURED（truthiness 對稱）",
+  (await (async () => { try { await encryptNote(TACET_EMPTYGUEST, makeHeldKey(), note, 'noteId:n1', { current: () => identityA }); return null; } catch (e) { return (e as Error).message; } })()) === 'ERR_GUEST_NOT_CONFIGURED');
+await A("畸形 guest 前綴 '' → decryptNote bound 密文照解（不誤導 guest 分支回 null）",
+  (await decryptNote(TACET_EMPTYGUEST, heldBound, cipherBound, 'noteId:n1', { current: () => identityA })) === note);
+await A("畸形 guest 前綴 '' → decryptNote guest 密文 null（guest 家族整面拒絕）",
+  (await decryptNote(TACET_EMPTYGUEST, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === null);
+await A("畸形 guest 前綴 '' → decryptNote 舊明文相容層同「未配置」形（null，不當明文）",
+  (await decryptNote(TACET_EMPTYGUEST, makeHeldKey(), '純舊明文', 'x', { current: () => identityA })) === null);
+
 // ── 決議 ────────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} 斷言全綠` + (failures.length ? `；${failures.length} 失敗` : ''));
