@@ -8,24 +8,26 @@
 零知識日記核心：端對端加密、密語即身份的 auth、傳輸與限流原語。
 伺服器看不到任何一個字：passphrase 永不過線，密鑰包裹與密文都在客戶端完成。
 
+> **English**: Zero-knowledge journaling core — E2E-encrypted notes, passphrase-as-identity auth, transport & rate-limiting primitives. The server never sees a single word: the passphrase never crosses the wire, and all key wrapping and encryption happen client-side. See the [English summary](#english-summary) below.
+
 這是 [默·Tacet（tacet.ink）](https://tacet.ink) 的客戶端/伺服端核心原語層，
 從多個姊妹產品共用的密碼學本體抽取而成，以品牌前綴參數化（前綴契約見下表）。
 
-## 設計
+## 設計（Design）
 
 - **兩時代金鑰模型**：未綁定（guest）時代以 `K_u = SHA-256(guestKdfPrefix ‖ identity)`
   純客戶端派生（混淆級）；綁定後改用隨機 256-bit noteKey 加密，
   noteKey 再以 passphrase（KEK）與復原套件（KEK_rec）雙重包裹上傳。
   此後 passphrase 不再過線：線上只送 PH1（雜湊形），伺服器存 PH2 = SHA-256(PH1)。
 - **帶內版本化**：升級 KDF 參數 = 換新前綴（舊前綴照解、原地改語意是禁手）。
-  前綴全部可配置，AAD（防搬移繫結）由呼叫端傳入。
+  前綴全部可配置，AAD（防搬移綁結）由呼叫端傳入。
 - **extractable 鐵律**：要被 exportKey/wrap 的 key（noteKey 全部產生路徑），
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
 - **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal）
   未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
   解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。
 
-## 模組
+## 模組（Modules）
 
 | 模組 | 內容 |
 | --- | --- |
@@ -59,7 +61,7 @@ Tacet 部署實例（config 傳入）：
 guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌參數化本身；tacet 部署實例 guest 用 `jr1u.`）。
 跨前綴呼叫一律回 null（前綴守衛＋AAD＋長度把關），不拋、不降級。
 
-## 驗證
+## 驗證（Verification）
 
 ```sh
 npm run verify   # 127 斷言對真模組（禁鏡像）：roundtrip/AAD 防搬移/extractable/時代隔離/
@@ -71,7 +73,7 @@ npm run verify   # 127 斷言對真模組（禁鏡像）：roundtrip/AAD 防搬�
   RFC 9106 標準向量逐位元一致；無載體即 throw（禁 fallback 鐵律）。
 - BIP39 原語自製零依賴，與 @scure/bip39 參照 200 組雙向對照（僅 entropy↔words 轉寫層，禁用其 seed 派生）。
 
-## 使用
+## 使用（Usage）
 
 TypeScript 原始碼發行（exports 直指 .ts）。**注意**：Node 的 strip-types 不適用於
 node_modules 內的檔案，npm 安裝的消費者請走打包器；源碼 clone 可直接 node --experimental-strip-types。
@@ -114,3 +116,56 @@ hash-wasm 並以 `setArgonLoader()` 注入（詳 `src/client/argon2.ts` 檔頭�
 ## 授權
 
 MIT。安全問題聯絡 tacetink.csd@gmail.com。
+
+## English Summary
+
+**What this is.** `@tacet-ink/journal-core` is the cryptographic and server-primitive layer powering
+[默·Tacet (tacet.ink)](https://tacet.ink), a zero-knowledge journal: the server stores only ciphertext
+and salted hashes, and never learns your passphrase or the content of any note.
+
+**Security model.**
+
+- **Two key eras.** Before binding an account, notes are encrypted with a client-derived key
+  `K_u = SHA-256(guestKdfPrefix ‖ identity)` (obfuscation-grade, not true E2E). After binding,
+  notes are encrypted with a random 256-bit noteKey. The noteKey is wrapped twice — with the
+  passphrase (KEK) and with a recovery package (KEK_rec) — before upload. From that point the
+  passphrase never crosses the wire: only PH1 (a client-side hash form) is transmitted, and the
+  server stores only `PH2 = SHA-256(PH1)`.
+- **In-band versioning.** Payload layout and KDF are defined by configurable cipher prefixes
+  (e.g. `jr1b.` for bound-era ciphertext, `jr3w.` for Argon2id-wrapped note keys). Upgrading KDF
+  parameters always means a new prefix; old prefixes keep decrypting forever (no in-place
+  semantic changes). Cross-prefix calls always return `null` — prefix guard + AAD + length
+  checks; they never throw or fall back.
+- **Tamper-evidence.** Every AES-GCM operation binds additional authenticated data (AAD) —
+  e.g. ciphertext is bound to its note id, so records cannot be shuffled between notes.
+- **Key hygiene.** Any key that must be exported/wrapped is imported with `extractable=true`;
+  KEK and guest keys are permanently non-extractable.
+
+**Opt-in primitives.** Optional contracts (`cipherGuest` / `wrapDual` / `wrapShare` / `pinLock` /
+`cipherAttach` / `cipherLocal`) are rejected unless explicitly configured, so forks that don't use
+a primitive are unaffected. Unknown or malformed strings never decrypt to plaintext.
+
+**Modules.** Client: two-era crypto (`note-crypto.ts`), Argon2id wrapping (`argon2.ts`, dual
+carrier: `node:crypto` ≥ Node 26 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
+(`pinlock.ts`), recovery-package BIP39 codec (`bip39.ts`, zero-dependency, cross-checked against
+@scure/bip39), brand-namespaced key storage (`keys.ts`). Server: zero-knowledge auth with a
+PH1/PH2 hash ladder and unique PH2 constraint (`auth.ts`), per-IP sliding-window rate limiting on
+D1 (`ratelimit.ts`), shared CORS/hash utilities.
+
+**Verification.** `npm run verify` runs 127 assertions against the real modules (no mocks):
+roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
+isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
+
+**Usage.** TypeScript source is published (exports point at `.ts`). If you install from npm you
+must bundle it (vite/esbuild etc.); Node's strip-types does not apply inside `node_modules`.
+See the code sample in the 使用 section above.
+
+**Honest limits.** The guest era is obfuscation-grade, not E2E. PH1 derivation is defined by each
+product (fast hash or Argon2id); this layer only validates its hex64 form. Product concerns
+(routing, quotas, subscriptions, GC, webhooks) live in the product forks. No third-party audit
+yet. A lost passphrase is unrecoverable by design — that is the price of server-side zero
+knowledge.
+
+## License
+
+MIT. Security contact: tacetink.csd@gmail.com.
