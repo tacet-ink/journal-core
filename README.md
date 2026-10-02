@@ -149,7 +149,7 @@ a primitive are unaffected. Unknown or malformed strings never decrypt to plaint
 carrier: `node:crypto` ≥ Node 26 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
 (`pinlock.ts`), recovery-package BIP39 codec (`bip39.ts`, zero-dependency, cross-checked against
 @scure/bip39), brand-namespaced key storage (`keys.ts`). Server: zero-knowledge auth with a
-PH1/PH2 hash ladder and unique PH2 constraint (`auth.ts`), per-IP sliding-window rate limiting on
+PH1/PH2 hash ladder and unique PH2 constraint (`auth.ts`), per-IP fixed-window rate limiting on
 D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
 **Verification.** `npm run verify` runs 127 assertions against the real modules (no mocks):
