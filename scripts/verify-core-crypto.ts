@@ -66,7 +66,7 @@ import {
   AUTH_RATE,
   type CipherFormats,
 } from '../src/server/auth.ts';
-import { checkRate, type RateWindow } from '../src/server/ratelimit.ts';
+import { checkRate, isRateAllowed, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
 import { generateSessionToken, timingSafeEq } from '../src/server/hash.ts';
 
 const enc = new TextEncoder();
@@ -595,50 +595,86 @@ await A("畸形 guest 前綴 '' → decryptNote 舊明文相容層同「未配�
 //         checkRate/timingSafeEq）＋ 本機鎖定全函式（pinlock jr1p.，目標 8） ──────────
 
 console.log('\n[12] 伺服器端原語（auth/ratelimit/hash）＋ 本機鎖定（pinlock）');
-// D1 fake：行為面探針（checkRate 併發安全寫入鏈全路徑，含 fail-open 分支）
-type FakeRow = { ip: string; window_start: number; count: number };
-const makeFakeD1 = (rows: Map<string, FakeRow>, failMode = false) => {
-  const prepare = (sql: string) => ({
-    bind: (..._params: unknown[]) => ({
-      run: async () => {
-        if (failMode) throw new Error('D1_DOWN');
-        const upd = sql.startsWith('UPDATE');
-        if (upd) {
-          const [ip, winStart, maxCount] = _params as [string, number, number];
-          const row = rows.get(ip);
-          const changes = row && row.window_start > winStart && row.count < maxCount ? (row.count++, 1) : 0;
-          return { meta: { changes } };
-        }
-        const ins = sql.startsWith('INSERT');
-        if (ins) {
-          const [ip, winStart] = _params as [string, number];
-          if (!rows.has(ip)) { rows.set(ip, { ip, window_start: winStart, count: 1 }); return { meta: { changes: 1 } }; }
-          return { meta: { changes: 0 } };
-        }
-        const rst = sql.startsWith('UPDATE') || sql.includes('window_start = ?');
-        if (rst) {
-          const [now, ip, winStart] = _params as [number, string, number];
-          const row = rows.get(ip);
-          if (row && row.window_start <= winStart) { row.window_start = now; row.count = 1; return { meta: { changes: 1 } }; }
-          return { meta: { changes: 0 } };
-        }
-        return { meta: { changes: 0 } };
-      },
-    }),
-  });
-  return { prepare } as unknown as D1Database;
+// ratelimit 行為面（t_b91ed07f）：真 node:sqlite 直載 UPSERT…RETURNING 單句對真實
+// SQLite 引擎全三態驗證（D1 同為 SQLite；D1 實測另有 wrangler dev 探針回帶 results——
+// 見卡 comments）。表名直插 SQL＝注入面驗證；放行判準 count<=max 單一真相。
+type RateRow = { ip: string; window_start: number; count: number };
+const makeRateDb = (): {
+  db: unknown;
+  allowed: (ip: string, windowStart: number, cutoff: number, max: number) => boolean;
+  row: (ip: string) => RateRow | undefined;
+  runRaw: (sql: string) => void;
+} => {
+  const { DatabaseSync } = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { DatabaseSync?: unknown } };
+  }).process?.getBuiltinModule?.('node:sqlite') ?? {};
+  if (!DatabaseSync) throw new Error('ERR_SQLITE_UNAVAILABLE');
+  const db = new (DatabaseSync as new (p: string) => {
+    exec: (s: string) => void;
+    prepare: (s: string) => { all: (...p: unknown[]) => Array<Record<string, unknown>>; get: (...p: unknown[]) => Record<string, unknown> | undefined };
+  })(':memory:');
+  db.exec('CREATE TABLE login_rate (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+  const bump = db.prepare(SQL_RATE_BUMP.replaceAll('{table}', 'login_rate'));
+  const sel = db.prepare('SELECT * FROM login_rate WHERE ip = ?');
+  return {
+    db,
+    allowed: (ip, windowStart, cutoff, max) =>
+      isRateAllowed((bump.all(ip, windowStart, cutoff)[0]?.n as number) ?? NaN, max),
+    row: (ip) => sel.get(ip) as RateRow | undefined,
+    runRaw: (sql) => db.exec(sql),
+  };
 };
 const RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 3 };
-
-const env12 = { DB: makeFakeD1(new Map()) };
-await A('checkRate：窗內首發 pass', await checkRate(env12, RATE, 'ip-1'));
-await A('checkRate：窗內第二次 pass', await checkRate(env12, RATE, 'ip-1'));
-await A('checkRate：窗內第三次 pass', await checkRate(env12, RATE, 'ip-1'));
-await A('checkRate：超 max（第 4 發）→ false', (await checkRate(env12, RATE, 'ip-1')) === false);
-await A('checkRate：其他 IP 不受影響', await checkRate(env12, RATE, 'ip-2'));
-const envF = { DB: makeFakeD1(new Map(), true) };
-await A('checkRate：D1 故障 fail-open 放行（2026-09-06 裁定）', await checkRate(envF, RATE, 'ip-fail'));
-
+await A('rate：窗內首發 pass（RETURNING n=1）', await (async () => {
+  const r = makeRateDb(); return r.allowed('ip-1', 1000, 900, RATE.max) === true && JSON.stringify(r.row('ip-1'))?.includes('"count":1');
+})());
+await A('rate：同 IP 三發連續 pass、第四發 reject（放行判準 count<=max）', await (async () => {
+  const r = makeRateDb();
+  const seq = [r.allowed('ip-1', 1000, 900, RATE.max), r.allowed('ip-1', 1000, 900, RATE.max), r.allowed('ip-1', 1000, 900, RATE.max), r.allowed('ip-1', 1000, 900, RATE.max)];
+  return seq[0] && seq[1] && seq[2] && seq[3] === false;
+})());
+await A('rate：併發首發不 undercount（原 INSERT/輸家競態面——單句原子後兩發計數 1→2）', await (async () => {
+  const r = makeRateDb();
+  r.allowed('ip-c', 1000, 900, RATE.max); r.allowed('ip-c', 1000, 900, RATE.max);
+  return r.row('ip-c')?.count === 2;
+})());
+await A('rate：窗口過期整窗重置（count 歸 1＋window_start 換新）', await (async () => {
+  const r = makeRateDb();
+  for (let i = 0; i < RATE.max + 2; i++) r.allowed('ip-w', 1000, 900, RATE.max);
+  r.allowed('ip-w', 2000000, 1940000, RATE.max); // 過期窗：window_start 1000 <= cutoff 1940000 → 重置
+  const row = r.row('ip-w');
+  return row?.count === 1 && row?.window_start === 2000000;
+})());
+await A('rate：同一發內過期重置＋立即放行（重置發回 n=1 不吃 max 帽）', await (async () => {
+  const r = makeRateDb();
+  for (let i = 0; i < RATE.max + 1; i++) r.allowed('ip-x', 3000000, 2940000, RATE.max); // 已滿窗
+  return r.allowed('ip-x', 4000000, 3940000, RATE.max) === true; // 過期後首發放行
+})());
+await A('rate：count 不封頂（超額發照實累計 5、6——審計可見非靜默吞）', await (async () => {
+  const r = makeRateDb();
+  for (let i = 0; i < 6; i++) r.allowed('ip-m', 1000, 900, RATE.max);
+  return r.row('ip-m')?.count === 6;
+})());
+await A('rate：checkRate 呼叫端形（env.DB.prepare→bind→run；D1 results 回帶）fail-open', await (async () => {
+  const calls: string[] = [];
+  const env12 = { DB: {
+    prepare: (sql: string) => ({
+      bind: (..._p: unknown[]) => ({ run: async () => { calls.push(sql.slice(0, 30)); throw new Error('D1_DOWN'); } }),
+    }),
+  } };
+  const ok = await checkRate(env12 as unknown as Parameters<typeof checkRate>[0], RATE, 'ip-fail');
+  return ok === true && calls.length === 1 && calls[0].startsWith('INSERT INTO');
+})());
+await A('rate：表名注入拒絕（直插 SQL 面）', await (async () => {
+  try { await checkRate({ DB: { prepare: () => { throw new Error('SHOULD_NOT_PREPARE'); } } } as unknown as Parameters<typeof checkRate>[0], { table: 'x; DROP TABLE users--', windowMs: 1000, max: 3 }, 'ip'); return false; }
+  catch (e) { return String((e as Error).message).startsWith('ERR_RATE_TABLE_NAME'); }
+})());
+await A('rate：表名 \w 合法（字母數字底線）', await (async () => {
+  try { await checkRate({ DB: { prepare: () => { throw new Error('D1_DOWN_FAILOPEN'); } } } as unknown as Parameters<typeof checkRate>[0], { table: 'login_rate_2', windowMs: 1000, max: 3 }, 'ip'); return true; }
+  catch (e) { return String((e as Error).message).startsWith('ERR_RATE_TABLE_NAME') === false && String((e as Error).message).includes('D1_DOWN_FAILOPEN'); }
+})());
+await A('rate：SQL_RATE_BUMP 常數形（UPSERT…RETURNING…count AS n；{table} 佔位）',
+  /^INSERT INTO \{table\} \(ip, window_start, count\) VALUES \(\?1, \?2, 1\)\n\s+ON CONFLICT\(ip\) DO UPDATE SET\n\s+count\s+= CASE WHEN window_start <= \?3 THEN 1 ELSE count \+ 1 END,\n\s+window_start = CASE WHEN window_start <= \?3 THEN \?2 ELSE window_start END\n\s+RETURNING count AS n$/.test(SQL_RATE_BUMP));
 await A('AUTH_RATE 契約（60s 窗 max 10）', AUTH_RATE.windowMs === 60_000 && AUTH_RATE.max === 10);
 const sessA = generateSessionToken();
 const sessB = generateSessionToken();

@@ -37,7 +37,7 @@
 | `src/client/bip39.ts` | 復原套件 24 詞 ⇄ hex64 轉寫層（BIP39，零依賴自製） |
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
 | `src/server/auth.ts` | 零知識 auth 核心：PH1/PH2 hash-ladder、PH2 UNIQUE、session 撤銷、包裹欄組成對契約 |
-| `src/server/ratelimit.ts` | per-IP 滑動視窗限流（D1 計數，併發安全版） |
+| `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
 ## 前綴契約（家族表：10 個資料前綴＋閘對照組 jr1g.）
