@@ -12,14 +12,22 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # actions/checkout v4.2.2（SHA 釘選——供應鏈裁定 t_b91ed07f：密碼學套件 repo
+      # 的 CI 不吃浮動 tag）
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-node@v4
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 26
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify crypto primitives (127 assertions)
+      - name: Typecheck
+        run: npm run typecheck
+
+      # 斷言數以腳本實際輸出為準（219 → 卡批次後實值見 AGENTS.md；npm run verify
+      # 自帶「N 斷言全綠」尾行——此 step 名不寫死數字免漂移）
+      - name: Verify crypto primitives
         run: npm run verify
