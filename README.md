@@ -70,7 +70,7 @@ npm run verify   # 219 斷言對真模組（禁鏡像；t_7710c766 收口＋鍛�
 ```
 
 - 產品碼**零執行時依賴**（WebCrypto 原語）；devDependencies 僅閘用（typescript、@scure/bip39 對照、workers types）。
-- Argon2id 雙載體：node 走 `node:crypto`（Node 26+ 原生）、瀏覽器走 hash-wasm（wasm 內嵌），
+- Argon2id 雙載體：node 走 `node:crypto`（Node 24.7+ 原生）、瀏覽器走 hash-wasm（wasm 內嵌），
   RFC 9106 標準向量逐位元一致；無載體即 throw（禁 fallback 鐵律）。
 - BIP39 原語自製零依賴，與 @scure/bip39 參照 200 組雙向對照（僅 entropy↔words 轉寫層，禁用其 seed 派生）。
 
@@ -165,7 +165,7 @@ and salted hashes, and never learns your passphrase or the content of any note.
 a primitive are unaffected. Unknown or malformed strings never decrypt to plaintext.
 
 **Modules.** Client: two-era crypto (`note-crypto.ts`), Argon2id wrapping (`argon2.ts`, dual
-carrier: `node:crypto` ≥ Node 26 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
+carrier: `node:crypto` ≥ Node 24.7 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
 (`pinlock.ts`), recovery-package BIP39 codec (`bip39.ts`, zero-dependency, cross-checked against
 @scure/bip39), brand-namespaced key storage (`keys.ts`). Server: zero-knowledge auth with a
 PH1/PH2 hash ladder and unique PH2 constraint (`auth.ts`), per-IP fixed-window rate limiting on
