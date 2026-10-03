@@ -29,9 +29,9 @@
  * ⚠️ wrappedRec（復原套件）維持 jr1w.：recToken 是 256-bit 實體因子，KDF 強度無意義，不動。
  */
 
-import { IV_LEN, normalizePin } from './note-crypto.ts';
+import { normalizePin } from './note-crypto.ts';
 import {
-  b64, unb64, toHex, hexToBytes, encryptWithKey, decryptWithKey, importAesGcm,
+  b64, unb64, toHex, hexToBytes, decryptWithKey, importAesGcm, openNoteKey, sealNoteKey,
 } from './note-crypto.ts';
 
 /** RFC 9106 無 secret/ad 標準向量（Argon2id v=0x13, t=3, m=32, p=4, T=32, pwd=32B 0x01, salt=16B 0x00）。 */
@@ -54,10 +54,12 @@ export const PH1_V2_SALT = 'tacet-ph1-v1';
  * 重算 sha256(sha256(g)) 對 ph2 命中即 g 是密語）。ph1 改 Argon2id 派生後每猜成本
  * ×10⁴-10⁶。參數沿 jr3w. 同一組常數（單一碼路）；無載體即 throw（禁 fallback 鐵律）。
  */
-export async function derivePh1Argon(passphrase: string): Promise<string> {
+export async function derivePh1Argon(passphrase: string, saltArg?: Uint8Array): Promise<string> {
+  // PH1 鹽可注入（t_7710c766 目標 4）：預設 PH1_V2_SALT 舊值＝tacet 零行為變更；
+  // 其他產品可自選鹽但 per-product 恆固定（PH2 UNIQUE 約束——per-user 鹽會摧毀它）。
   return toHex(await deriveArgon2id(
     passphrase,
-    new TextEncoder().encode(PH1_V2_SALT),
+    saltArg ?? new TextEncoder().encode(PH1_V2_SALT),
     ARGON_MEMORY_KIB,
     ARGON_ITERATIONS,
     ARGON_PARALLELISM,
@@ -195,24 +197,20 @@ export async function wrapNoteKey3(cfg: Argon3Config, noteKey: CryptoKey, passph
   if (!cfg.wrap3) throw new Error('ERR_JR3W_NOT_CONFIGURED');
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const kek = await deriveKekArgon(passphrase, salt);
-  const rawHex = toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
-  const wrapped = cfg.wrap3 + await encryptWithKey(kek, rawHex, 'notekey');
+  const wrapped = await sealNoteKey(cfg.wrap3, noteKey, kek, 'notekey');
   return { wrapped, salt: toHex(salt) };
 }
 
-/** jr3w. 解包：任何不符（前綴/salt 形/長度/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 4）。 */
+/** jr3w. 解包：任何不符（前綴/salt 形/長度/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 4）。
+ *  收口 openNoteKey（t_7710c766）：嚴格 92B＋rawHex 形＋hex fail-closed 全在共用核心；本函式只做
+ *  家族守衛（wrap3 未配置回 null）、salt1 hex-形檢查與 KEK 派生——payload 形是鹽外置家族（iv‖ct）。 */
 export async function unwrapNoteKey3(cfg: Argon3Config, wrapped: string, passphrase: string, saltHex: string): Promise<CryptoKey | null> {
   try {
-    if (!cfg.wrap3 || !wrapped.startsWith(cfg.wrap3)) return null;
+    if (!cfg.wrap3) return null;
     const salt = hexToBytes(saltHex);
     if (salt.length !== SALT_LEN || !/^[0-9a-f]{32}$/.test(saltHex)) return null;
-    const payload = unb64(wrapped.slice(cfg.wrap3.length));
-    // 嚴格長度：iv(12) + ct(hex(noteKey) 64B + GCM tag 16B) = 92B 固定（salt 在 users.salt 不內嵌）
-    if (payload.length !== IV_LEN + 80) return null;
     const kek = await deriveKekArgon(passphrase, salt);
-    const rawHex = await decryptWithKey(kek, payload, 'notekey');
-    if (!rawHex) return null;
-    return importAesGcm(hexToBytes(rawHex), true);
+    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap3);
   } catch {
     return null;
   }
@@ -256,24 +254,18 @@ async function deriveKek2Argon(
 }
 
 /** jr3d. 包裹：payload = pinSalt[16] ‖ iv[12] ‖ GCM(KEK2, hex(noteKey), aad='notekey2')；salt1 由呼叫端存 users.salt。 */
-export async function wrapNoteKeyDual3(
-  cfg: Argon3Config,
-  noteKey: CryptoKey,
-  passphrase: string,
-  pin: string,
-): Promise<{ wrapped: string; salt: string }> {
+export async function wrapNoteKeyDual3(cfg: Argon3Config, noteKey: CryptoKey, passphrase: string, pin: string): Promise<{ wrapped: string; salt: string }> {
   if (!cfg.wrapDual3 || !cfg.pinSalt3Prefix) throw new Error('ERR_JR3W_NOT_CONFIGURED');
   const pinNorm = normalizePin(pin);
-  if (!pinNorm) throw new Error('ERR_JR3W_NOT_CONFIGURED');
+  if (!pinNorm) throw new Error('ERR_PIN_EMPTY');
   const salt1 = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const pinSalt = crypto.getRandomValues(new Uint8Array(DUAL_SALT_LEN));
   const kek2 = await deriveKek2Argon(cfg, passphrase, pinNorm, salt1, pinSalt);
   const iv = crypto.getRandomValues(new Uint8Array(DUAL_IV_LEN));
-  const rawHex = toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
   const ct = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('notekey2') as BufferSource },
     kek2,
-    new TextEncoder().encode(rawHex) as BufferSource,
+    new TextEncoder().encode(toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)))) as BufferSource,
   ));
   const payload = new Uint8Array(DUAL_SALT_LEN + DUAL_IV_LEN + ct.byteLength);
   payload.set(pinSalt, 0);
@@ -282,7 +274,9 @@ export async function wrapNoteKeyDual3(
   return { wrapped: cfg.wrapDual3 + b64(payload), salt: toHex(salt1) };
 }
 
-/** jr3d. 解包：pinSalt 內嵌自描述，salt1 取自 login 回應；任何不符回 null，不拋。 */
+/** jr3d. 解包：pinSalt 內嵌自描述，salt1 取自 login 回應；任何不符回 null，不拋。
+ *  t_7710c766：嚴格檢查與全家族收口 openNoteKey 一本體——payload 嚴格 108B（pinSalt 16
+ *  ＋ iv 12＋ct 80）＋ decryptWithKey 後 rawHex hex 形檢查（hexToBytes fail-closed）。 */
 export async function unwrapNoteKeyDual3(
   cfg: Argon3Config,
   wrapped: string,
@@ -296,7 +290,7 @@ export async function unwrapNoteKeyDual3(
     const salt1 = hexToBytes(salt1Hex);
     if (salt1.length !== SALT_LEN || !/^[0-9a-f]{32}$/.test(salt1Hex)) return null;
     const payload = unb64(wrapped.slice(cfg.wrapDual3.length));
-    // 嚴格長度：pinSalt(16) + iv(12) + ct(hex(noteKey) 64B + GCM tag 16B) = 108B 固定
+    // 嚴格長度：pinSalt(16) + iv(12) + ct(hex 字串 64B + GCM tag 16B) = 108B 固定
     if (payload.length !== DUAL_SALT_LEN + DUAL_IV_LEN + 80) return null;
     const pinSalt = payload.slice(0, DUAL_SALT_LEN);
     const ivPrefixedCt = payload.slice(DUAL_SALT_LEN); // decryptWithKey 契約：payload = iv[12] ‖ ct
@@ -304,7 +298,7 @@ export async function unwrapNoteKeyDual3(
     if (!pinNorm) return null;
     const kek2 = await deriveKek2Argon(cfg, passphrase, pinNorm, salt1, pinSalt);
     const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');
-    if (!rawHex) return null;
+    if (!rawHex || rawHex.length !== 64 || !/^[0-9a-f]+$/.test(rawHex)) return null;
     return importAesGcm(hexToBytes(rawHex), true); // extractable=true：要能再包裹（鐵律）
   } catch {
     return null;
@@ -326,24 +320,20 @@ export async function wrapNoteKeyShare3(cfg: Argon3Config, noteKey: CryptoKey, s
   if (!cfg.wrapShare3) throw new Error('ERR_JR3S_NOT_CONFIGURED');
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const kek = await deriveKekArgon(sharePass, salt);
-  const rawHex = toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
-  const wrapped = cfg.wrapShare3 + await encryptWithKey(kek, rawHex, 'notekey-share');
+  const wrapped = await sealNoteKey(cfg.wrapShare3, noteKey, kek, 'notekey-share');
   return { wrapped, salt: toHex(salt) };
 }
 
-/** jr3s. 解包：salt 取自 GET /shares/:hash 回應（與 jr1w 同形）；任何不符回 null，不拋。 */
+/** jr3s. 解包：salt 取自 GET /shares/:hash 回應（與 jr1w 同形）；任何不符回 null，不拋。
+ *  收口 openNoteKey（t_7710c766）：鹽外置家族（payload 嚴格 92B＋rawHex 形＋hex fail-closed
+ *  全在共用核心）；本函式只做家族守衛、salt hex-形檢查與 KEK 派生。 */
 export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sharePass: string, saltHex: string): Promise<CryptoKey | null> {
   try {
-    if (!cfg.wrapShare3 || !wrapped.startsWith(cfg.wrapShare3)) return null;
+    if (!cfg.wrapShare3) return null;
     const salt = hexToBytes(saltHex);
     if (salt.length !== SALT_LEN || !/^[0-9a-f]{32}$/.test(saltHex)) return null;
-    const payload = unb64(wrapped.slice(cfg.wrapShare3.length));
-    // 嚴格長度：iv(12) + ct(hex(noteKey) 64B + GCM tag 16B) = 92B 固定（salt 在 shares.salt 不內嵌）
-    if (payload.length !== IV_LEN + 80) return null;
     const kek = await deriveKekArgon(sharePass, salt);
-    const rawHex = await decryptWithKey(kek, payload, 'notekey-share');
-    if (!rawHex) return null;
-    return importAesGcm(hexToBytes(rawHex), true); // extractable=true：解出後要能解日記密文（鐵律）
+    return await openNoteKey(wrapped, kek, 'notekey-share', cfg.wrapShare3);
   } catch {
     return null;
   }
