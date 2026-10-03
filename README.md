@@ -64,8 +64,9 @@ guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 127 斷言對真模組（禁鏡像）：roundtrip/AAD 防搬移/extractable/時代隔離/
-                 # 跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組
+npm run verify   # 215 斷言對真模組（禁鏡像；t_7710c766 收口＋鍛造/自洽向量）：roundtrip/AAD 防搬移/
+                 # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
+                 # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
 ```
 
 - 產品碼**零執行時依賴**（WebCrypto 原語）；devDependencies 僅閘用（typescript、@scure/bip39 對照、workers types）。
@@ -87,6 +88,7 @@ import { makeKeyStore, makeHeldKey, generateNoteKey, encryptNote, decryptNote } 
 import { generateNoteKey, encryptNote, decryptNote, makeHeldKey,
          wrapNoteKey, unwrapNoteKey } from '@tacet-ink/journal-core/client/note-crypto';
 import { makeKeyStore } from '@tacet-ink/journal-core/client/keys';
+import { derivePh1Argon } from '@tacet-ink/journal-core/client/argon2';
 
 const cfg = {
   guestKdfPrefix: 'myapp-note-u1',
@@ -102,6 +104,23 @@ const held = makeHeldKey();
 const identity = { current: () => 'acct-xxxxxxxxxxxxxxxx' };
 const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'noteId:n1', identity);
 ```
+
+PH1 派生（登入憑證）：`derivePh1Argon(pass, saltArg?)` 預設鹽 `PH1_V2_SALT`
+（`'tacet-ph1-v1'`，Tacet 實例）。其他產品可自選**固定域鹽**傳入 `saltArg`——
+鹽一經選定即 per-product 恆固定（PH2 UNIQUE 約束：同一密語必須恆生同一 PH2；
+per-user 鹽會摧毀幽靈帳号機制）。改鹽＝帶內版本化換鹽尾碼重遷移，禁原地改語意。
+
+### 例外契約（錯誤碼語意）
+
+- 空 identity（guest 派生）：加密面拋 `ERR_NO_IDENTITY`、解密面回 `null`
+  （K_u = SHA-256(prefix ‖ '') 會靜默產出「空帳號金鑰」＝誤配炸彈，兩面皆 fail-closed）。
+- 空 PIN（`wrapNoteKeyDual`/`wrapNoteKeyDual3`）：拋 `ERR_PIN_EMPTY`——與
+  「功能未配置」（`ERR_DUAL_NOT_CONFIGURED`/`ERR_JR3W_NOT_CONFIGURED`）語意分離。
+- `hexToBytes` fail-closed：非法 hex（奇數長度/非 hex 字元/空字串）拋 `ERR_BAD_HEX`，
+  不再 parseInt 靜默歸零（假金鑰生產器）。unwrap 家族的 try/catch 承接＝跨前綴鐵律
+  （回 null 不拋）不變。
+- `PinLockConfig`：解包輸出的 noteKey 恆 `extractable=true`（鐵律，非可調選項）——
+  config 只帶三個前綴欄（pinLock/pinLockSaltPrefix/pinLockAad），缺任一即拒。
 
 打包器（vite/esbuild）可直接 alias 到源碼目錄使用；Argon2id 瀏覽器載體需另裝
 hash-wasm 並以 `setArgonLoader()` 注入（詳 `src/client/argon2.ts` 檔頭）。
@@ -152,7 +171,7 @@ carrier: `node:crypto` ≥ Node 26 / hash-wasm in browsers, RFC 9106 test vector
 PH1/PH2 hash ladder and unique PH2 constraint (`auth.ts`), per-IP fixed-window rate limiting on
 D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 127 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 215 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
