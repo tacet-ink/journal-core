@@ -14,10 +14,15 @@ import {
   generateNoteKey,
   generateRecToken,
   storeLocalWrap,
+  clearLocalWrap,
+  buildBindPayload,
+  openNoteKey,
   unwrapNoteKey,
   unwrapNoteKeyWithRecToken,
   wrapNoteKey,
   wrapNoteKeyWithRecToken,
+  wrapNoteKeyShare,
+  unwrapNoteKeyShare,
   recTokenHash,
   wrapNoteKeyDual,
   unwrapNoteKeyDual,
@@ -26,6 +31,9 @@ import {
   decryptAttach,
   encryptLocal,
   decryptLocal,
+  hexToBytes,
+  encryptWithKey,
+  decryptWithKey,
 } from '../src/client/note-crypto.ts';
 import {
   verifyArgonKat,
@@ -43,6 +51,23 @@ import {
 } from '../src/client/argon2.ts';
 import { makeKeyStore } from '../src/client/keys.ts';
 import type { NoteCryptoConfig } from '../src/client/note-crypto.ts';
+import {
+  wrapNoteKeyPinLock,
+  unwrapNoteKeyPinLock,
+  type PinLockConfig,
+} from '../src/client/pinlock.ts';
+import {
+  makeInboundCipher,
+  isCipherFor,
+  validWrappedKey,
+  validHash64,
+  validSalt,
+  pickKeyPackage,
+  AUTH_RATE,
+  type CipherFormats,
+} from '../src/server/auth.ts';
+import { checkRate, type RateWindow } from '../src/server/ratelimit.ts';
+import { generateSessionToken, timingSafeEq } from '../src/server/hash.ts';
 
 const enc = new TextEncoder();
 
@@ -438,7 +463,38 @@ await A('附件錯鑰匙 → null',
 
 // ── 11. 本機 IDB 密文（jr1d. cipherLocal opt-in）＋ guest 選配拒絕面 ──────────
 
-console.log('\n[11] 本機 IDB 密文（jr1d. cipherLocal opt-in）＋ guest 選配');
+console.log('\n[11] 本機 IDB 密文（jr1d. cipherLocal opt-in）＋ guest 選配拒絕面');
+// 分享包裹（jrsw.，wrapShare 選配）＋ jr3s. roundtrip（t_7710c766 目標 8：閘本有 roundtrip 斷言缺席）
+const TACET_SHARE: NoteCryptoConfig = { ...TACET, wrapShare: 'jrsw.' };
+const shareWrapped = await wrapNoteKeyShare(TACET_SHARE, noteKey, 'share-pass-42');
+await A('分享包裹前綴 jrsw.', shareWrapped.wrapped.startsWith('jrsw.'));
+await A('分享 salt = 16B hex', /^[0-9a-f]{32}$/.test(shareWrapped.salt));
+const shareUnwrapped = await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped, 'share-pass-42', shareWrapped.salt);
+await A('jrsw unwrap 等值 noteKey（extractable 再 export）',
+  shareUnwrapped !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', shareUnwrapped))) === origRaw);
+await A('分享錯密語 → null', (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped, 'wrong-share-pass', shareWrapped.salt)) === null);
+await A('分享錯 salt → null', (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped, 'share-pass-42', 'zz'.repeat(16))) === null);
+await A('分享 malformed salt（zz 字元）→ null（t_7710c766：salt1 hex 形檢查）',
+  (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped, 'share-pass-42', '0'.repeat(31) + 'z')) === null);
+await A('分享 payload 長度不符 → null',
+  (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped.slice(0, -3) + 'abc', 'share-pass-42', shareWrapped.salt)) === null);
+await A('未配置 wrapShare → 分享解包 null（opt-in 拒絕面）',
+  (await unwrapNoteKeyShare(TACET, shareWrapped.wrapped, 'share-pass-42', shareWrapped.salt)) === null);
+await A('本機包裹 roundtrip 經 loadLocalWrap 通路（clearLocalWrap 在場面）',
+  (async () => { await storeLocalWrap(TACET, localIdentity, noteKey); return true; })());
+await A('clearLocalWrap 摘除本機包裹', (() => { clearLocalWrap(TACET, localIdentity); return TACET.store.get(TACET.store.noteKeyWrap(localIdentity)) === null; })());
+await A('buildBindPayload 四件套輸出面（wrapped/wrappedRec/recTokenHash 同 wrapNoteKey 直呼）',
+  (async () => {
+    const p = await buildBindPayload(TACET, noteKey, pass, recToken, identityA);
+    return p.wrapped.startsWith('jr1w.') && p.wrappedRec.startsWith('jr1w.') &&
+      /^[0-9a-f]{32}$/.test(p.salt) && /^[0-9a-f]{64}$/.test(p.recTokenHash);
+  })());
+await A('buildBindPayload unwrap 等值 noteKey（wrapped 面救得回）',
+  (async () => {
+    const p = await buildBindPayload(TACET, noteKey, pass, recToken, identityA);
+    const k = await unwrapNoteKey(TACET, p.wrapped, pass, p.salt);
+    return k !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) === origRaw;
+  })());
 const bareCfgLocal: NoteCryptoConfig = { ...TACET }; // 無 cipherLocal 欄
 let localCfgThrow = '';
 try { await encryptLocal(bareCfgLocal, noteKey, '{}', 'jr1:n1'); } catch (e) { localCfgThrow = (e as Error).message; }
@@ -506,6 +562,22 @@ await A('配置 guest → decryptNote 舊明文相容層原樣（既有契約不
 await A('既有 guest 配置 roundtrip 不受選配收編影響',
   (await decryptNote(TACET, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === note);
 
+// guest 空 identity 拒絕面（t_7710c766 目標 3）：K_u = SHA-256(prefix ‖ '') 靜默產出「空帳號金鑰」是誤配炸彈
+const TACET_GUESTOK: NoteCryptoConfig = { ...TACET }; // cipherGuest='jr1g.' 在場，專測 identity 面
+const emptyIdp = { current: () => '' };
+let emptyIdMsg: string | null = null;
+try { await encryptNote(TACET_GUESTOK, makeHeldKey(), note, 'noteId:n1', emptyIdp); } catch (e) { emptyIdMsg = (e as Error).message; }
+await A("guest 加密面空 identity → throw ERR_NO_IDENTITY（falsy 一體：空字串/undefined/null）",
+  emptyIdMsg === 'ERR_NO_IDENTITY');
+// 空白 '  ' 是 truthy：K_u 照派生＝加密面照常（呼叫端責任面）；誠實界線＝「非 falsy 不擋」的行為證據
+let wsCipher = '';
+try { wsCipher = await encryptNote(TACET_GUESTOK, makeHeldKey(), note, 'noteId:n1', { current: () => '  ' }); } catch { /* 不該發生 */ }
+await A('guest 空白 identity 是 truthy → 照派生不擋（非 falsy 不拒的誠實界線；行為面）', wsCipher.startsWith('jr1g.'));
+await A('guest 解密面空 identity → null（對稱面 fail-closed）',
+  (await decryptNote(TACET_GUESTOK, makeHeldKey(), cipherGuest, 'noteId:n1', emptyIdp)) === null);
+await A('guest 空 identity 的既有 roundtrip 恆正常（identity 在場零新拒絕面）',
+  (await decryptNote(TACET_GUESTOK, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === note);
+
 // 畸形配置 ''（空字串）正規化面（follow-up ②，t_44239f5f）：空字串前綴＝startsWith('') 恆真，
 // bound 列會被誤導 guest 分支回 null。正規化後：加密面與未配置同拒、解密面 bound 照解、
 // guest 密文（他家族形）null——與「未配置」行為完全同構。
@@ -518,6 +590,262 @@ await A("畸形 guest 前綴 '' → decryptNote guest 密文 null（guest 家族
   (await decryptNote(TACET_EMPTYGUEST, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === null);
 await A("畸形 guest 前綴 '' → decryptNote 舊明文相容層同「未配置」形（null，不當明文）",
   (await decryptNote(TACET_EMPTYGUEST, makeHeldKey(), '純舊明文', 'x', { current: () => identityA })) === null);
+
+// ── 12. 伺服器端原語（t_7710c766 目標 8：makeInboundCipher/validWrappedKey/pickKeyPackage/
+//         checkRate/timingSafeEq）＋ 本機鎖定全函式（pinlock jr1p.，目標 8） ──────────
+
+console.log('\n[12] 伺服器端原語（auth/ratelimit/hash）＋ 本機鎖定（pinlock）');
+// D1 fake：行為面探針（checkRate 併發安全寫入鏈全路徑，含 fail-open 分支）
+type FakeRow = { ip: string; window_start: number; count: number };
+const makeFakeD1 = (rows: Map<string, FakeRow>, failMode = false) => {
+  const prepare = (sql: string) => ({
+    bind: (..._params: unknown[]) => ({
+      run: async () => {
+        if (failMode) throw new Error('D1_DOWN');
+        const upd = sql.startsWith('UPDATE');
+        if (upd) {
+          const [ip, winStart, maxCount] = _params as [string, number, number];
+          const row = rows.get(ip);
+          const changes = row && row.window_start > winStart && row.count < maxCount ? (row.count++, 1) : 0;
+          return { meta: { changes } };
+        }
+        const ins = sql.startsWith('INSERT');
+        if (ins) {
+          const [ip, winStart] = _params as [string, number];
+          if (!rows.has(ip)) { rows.set(ip, { ip, window_start: winStart, count: 1 }); return { meta: { changes: 1 } }; }
+          return { meta: { changes: 0 } };
+        }
+        const rst = sql.startsWith('UPDATE') || sql.includes('window_start = ?');
+        if (rst) {
+          const [now, ip, winStart] = _params as [number, string, number];
+          const row = rows.get(ip);
+          if (row && row.window_start <= winStart) { row.window_start = now; row.count = 1; return { meta: { changes: 1 } }; }
+          return { meta: { changes: 0 } };
+        }
+        return { meta: { changes: 0 } };
+      },
+    }),
+  });
+  return { prepare } as unknown as D1Database;
+};
+const RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 3 };
+
+const env12 = { DB: makeFakeD1(new Map()) };
+await A('checkRate：窗內首發 pass', await checkRate(env12, RATE, 'ip-1'));
+await A('checkRate：窗內第二次 pass', await checkRate(env12, RATE, 'ip-1'));
+await A('checkRate：窗內第三次 pass', await checkRate(env12, RATE, 'ip-1'));
+await A('checkRate：超 max（第 4 發）→ false', (await checkRate(env12, RATE, 'ip-1')) === false);
+await A('checkRate：其他 IP 不受影響', await checkRate(env12, RATE, 'ip-2'));
+const envF = { DB: makeFakeD1(new Map(), true) };
+await A('checkRate：D1 故障 fail-open 放行（2026-09-06 裁定）', await checkRate(envF, RATE, 'ip-fail'));
+
+await A('AUTH_RATE 契約（60s 窗 max 10）', AUTH_RATE.windowMs === 60_000 && AUTH_RATE.max === 10);
+const sessA = generateSessionToken();
+const sessB = generateSessionToken();
+await A('generateSessionToken hex64', /^[0-9a-f]{64}$/.test(sessA));
+await A('generateSessionToken 兩次相異', sessA !== sessB);
+await A('timingSafeEq 等值 true', timingSafeEq(sessA, sessA));
+await A('timingSafeEq 異值 false', timingSafeEq(sessA, sessB) === false);
+await A('timingSafeEq 長度異 false', timingSafeEq(sessA, sessA.slice(0, 32)) === false);
+await A('timingSafeEq 空串等值', timingSafeEq('', ''));
+await A('timingSafeEq 空串異值 false', !timingSafeEq('', 'x'));
+
+const formats: CipherFormats = { cipherPrefixes: ['jr1u.', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 5000 };
+const inbound = makeInboundCipher(formats);
+await A('inboundCipher：前綴密文原樣入庫', inbound('jr1b.' + b64(new Uint8Array(32))) === 'jr1b.' + b64(new Uint8Array(32)));
+await A('inboundCipher：超限密文丟棄（截斷必壞）', inbound('jr1b.' + b64(new Uint8Array(4000))) === null);
+await A('inboundCipher：超限明文截到上限照收', inbound('字'.repeat(7000))?.length === 5000);
+await A('inboundCipher：b64 慣例照收', inbound(b64(new Uint8Array(64))) !== null);
+await A('inboundCipher：控制字元垃圾丟棄', inbound('bad\x00junk') === null);
+await A('inboundCipher：真明文照收', inbound('純明文') === '純明文');
+await A('inboundCipher：非字串 null', inbound(42) === null);
+await A('isCipherFor：家族前綴 true／非家族 false',
+  isCipherFor('jr1b.abc', formats) && isCipherFor('jr1u.abc', formats) && !isCipherFor('jr2x.abc', formats));
+await A('validWrappedKey：合法包裹 true／超長 null／非法前綴 null',
+  validWrappedKey('jr1w.' + b64(new Uint8Array(32)), 'jr1w.') !== null &&
+  validWrappedKey('jr1w.' + b64(new Uint8Array(300)), 'jr1w.') === null &&
+  validWrappedKey('jr9x.' + b64(new Uint8Array(32)), 'jr1w.') === null);
+await A('validHash64／validSalt 形狀', validHash64('a'.repeat(64)) !== null && validHash64('zz') === null && validSalt('a'.repeat(32)) !== null && validSalt('zz') === null);
+const pkgOk = pickKeyPackage({ wrapped: 'jr1w.' + b64(new Uint8Array(32)), salt: 'a'.repeat(32) }, 'jr1w.');
+await A('pickKeyPackage：成對成立', pkgOk.wrapped !== null && pkgOk.salt !== null);
+await A('pickKeyPackage：缺 salt 整組放棄',
+  (() => { const p = pickKeyPackage({ wrapped: 'jr1w.' + b64(new Uint8Array(32)) }, 'jr1w.'); return p.wrapped === null && p.salt === null; })());
+await A('pickKeyPackage：缺 wrapped 整組放棄',
+  (() => { const p = pickKeyPackage({ salt: 'a'.repeat(32) }, 'jr1w.'); return p.wrapped === null && p.salt === null; })());
+await A('pickKeyPackage：錯前綴整組放棄',
+  (() => { const p = pickKeyPackage({ wrapped: 'jr9x.' + b64(new Uint8Array(32)), salt: 'a'.repeat(32) }, 'jr1w.'); return p.wrapped === null; })());
+
+// 本機鎖定（jr1p.）：全函式 roundtrip＋嚴格檢查面（t_7710c766：pinlock 閘本有斷言缺席）
+const PINLOCK: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'tacet-pinlock-v1:', pinLockAad: 'notekey-pinlock' };
+const pinWrapped = await wrapNoteKeyPinLock(PINLOCK, noteKey, '2580ab');
+await A('jr1p 包裹前綴 jr1p.', pinWrapped.startsWith('jr1p.'));
+const pinUnwrapped = await unwrapNoteKeyPinLock(PINLOCK, pinWrapped, '2580ab');
+await A('jr1p unwrap 等值 noteKey（extractable 再 export）',
+  pinUnwrapped !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', pinUnwrapped))) === origRaw);
+await A('jr1p 錯 PIN → null', (await unwrapNoteKeyPinLock(PINLOCK, pinWrapped, '999999')) === null);
+await A('jr1p 空 PIN unwrap → null（解包面誠實拒絕）', (await unwrapNoteKeyPinLock(PINLOCK, pinWrapped, '  ')) === null);
+await A('jr1p PIN 大小寫/空白正規化等價', (await unwrapNoteKeyPinLock(PINLOCK, pinWrapped, ' ２５８０ＡＢ ')) !== null);
+await A('jr1p 空_PIN wrap 拒絕形', await (async () => {
+  try { await wrapNoteKeyPinLock(PINLOCK, noteKey, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PINLOCK_EMPTY'; }
+})());
+await A('jr1p 未配置 cfg → wrap 拒絕（opt-in 律）', await (async () => {
+  try { await wrapNoteKeyPinLock({}, noteKey, '2580ab'); return false; } catch { return true; }
+})());
+await A('jr1p 未配置 cfg → unwrap null',
+  (await unwrapNoteKeyPinLock({ pinLock: 'jr1p.' }, pinWrapped, '2580ab')) === null);
+await A('jr1p payload 竄改 pinSalt 區 → null（自描述完整性）', await (async () => {
+  const bytes = unb64(pinWrapped.slice('jr1p.'.length)); bytes[3] ^= 0x01;
+  return (await unwrapNoteKeyPinLock(PINLOCK, 'jr1p.' + b64(bytes), '2580ab')) === null;
+})());
+await A('jr1p payload 竄改 ct 尾 → null', await (async () => {
+  const bytes = unb64(pinWrapped.slice('jr1p.'.length)); bytes[bytes.length - 1] ^= 0x01;
+  return (await unwrapNoteKeyPinLock(PINLOCK, 'jr1p.' + b64(bytes), '2580ab')) === null;
+})());
+await A('jr1p 跨家族：jr1w. 字串餵 pinlock → null',
+  (await unwrapNoteKeyPinLock(PINLOCK, wrapped, '2580ab')) === null);
+await A('jr1p 跨家族：jr1p. 字串餵 jr1w unwrap → null',
+  (await unwrapNoteKey(TACET2, pinWrapped, pass, salt)) === null);
+
+// ── 13. 新契約面（t_7710c766：hex fail-closed／salt hex 形收口／PH1 鹽注入／錯誤碼語意分離） ──
+
+console.log('\n[13] unwrap 驗證統一新契約（fail-closed ＋ 語意分離）');
+// hexToBytes fail-closed（目標 #2；note-crypto 與 bip39 同步——bip39 面是 HEX64_RE 前置自守）
+await A('hexToBytes 合法輸出不變（舊碼同值；新向量）', hexToBytes('00ff10').join(',') === '0,255,16');
+await A('hexToBytes 大小寫正規化（新行為，舊碼同值）', (() => { const a = Array.from(hexToBytes('AB')); const b = Array.from(hexToBytes('ab')); return a.length === b.length && a.every((v, i) => v === b[i]); })());
+await A("hexToBytes 非法字元 'zz' → throw ERR_BAD_HEX", await (async () => {
+  try { hexToBytes('zz'); return false; } catch (e) { return (e as Error).message === 'ERR_BAD_HEX'; }
+})());
+await A('hexToBytes 奇數長度 → throw', await (async () => {
+  try { hexToBytes('abc'); return false; } catch (e) { return (e as Error).message === 'ERR_BAD_HEX'; }
+})());
+await A('hexToBytes 空字串 → throw', await (async () => {
+  try { hexToBytes(''); return false; } catch (e) { return (e as Error).message === 'ERR_BAD_HEX'; }
+})());
+await A(`hexToBytes 全形正規化（'${'ｆｆ'}'）→ Bytes [255] 等值`, (() => { try { return Array.from(hexToBytes('ｆｆ')).join(',') === '255'; } catch { return false; } })());
+await A(`hexToBytes 全形數字（'２ｆ'）→ Bytes 等值（NFKC 窗殲滅——round 1 MINOR-4：parse 原始串 NaN 歸零殘形）`, (() => { try { return Array.from(hexToBytes('２ｆ')).join(',') === '47'; } catch { return false; } })());
+await A('bip39 hexToBytes 同步（HEX64_RE 自守前提下的舊向量不變）', (await bip.recTokenToWords('ab'.repeat(32)))?.length === 24);
+await A('unwrap：鹽 hex 非法字元 → 假錯誤誘餌面 null（原碼靜默歸零會錯誤炸出成功路徑）',
+  (await unwrapNoteKey(TACET2, dual.wrapped, passD, 'a'.repeat(31) + 'z')) === null);
+await A('unwrapNoteKeyDual：salt1 hex 非法字元 ' + 'z' + ' → null（鹽內嵌族 own 檢查照舊——收口本體=鹽外置族）',
+  (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31) + 'z')) === null);
+await A('unwrapNoteKeyDual：salt1 hex 奇數長 → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31))) === null);
+await A('unwrapNoteKey3：salt hex 形檢查照舊（既有契約不變）',
+  (await unwrapNoteKey3(TACET3, w3.wrapped, pass, 'a'.repeat(31) + 'z')) === null);
+// 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
+// 舊碼（無 rawHex 長度/形檢）下 32-hex 假 noteKey 與 'zz' 前綴零化 hex 皆 NON-NULL＝假金鑰生產器。
+const craftKek = (async (): Promise<CryptoKey> => {
+  // deriveKek 鏡像（未匯出）：PBKDF2-SHA256(pass, salt, 600k) → AES-GCM-256。
+  const keyMat = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: hexToBytes(salt) as BufferSource, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+})();
+// 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
+// 舊碼（無 rawHex 長度/形檢）下 'zz' 前綴零化 hex 非 null＝假金鑰生產器。
+// round 1 審查 MAJOR-1 校正：鍛造 encrypt 必帶 additionalData('notekey')＝與 decryptWithKey
+// 同 AAD——缺 AAD 的鍛造 GCM 層恆拒＝rawHex 形檢從未執行（斷言空轉）。
+// craftKek 鏡像真 deriveKek（同 pass 同 salt 同 600k）＝鍛造鏈與真 unwrap 同 KEK：
+// 有效形鍛造真解開（NON-NULL 自證鏈活）、畸形形由各檢查點拒——機制面直接可觀察。
+const F_AAD: BufferSource = enc.encode('notekey');
+await A('MAJOR-1 機制面：帶 AAD 鍛造 ct 可解回 rawHex（形檢層可達＝斷言活）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
+  return (await decryptWithKey(kekC, new Uint8Array([...ivC, ...ctC]), 'notekey')) === 'zz' + 'a'.repeat(62);
+})());
+await A('MAJOR-1 空轉形：同 payload 無 AAD 鍛造 → decryptWithKey null（GCM 層恆拒＝round 1 空轉病理）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
+  return (await decryptWithKey(kekC, new Uint8Array([...ivC, ...ctC]), 'notekey')) === null;
+})());
+await A('鍛造有效形 92B payload（64-hex 假 noteKey）→ NON-NULL（鍛造鏈自證：真解到 importAesGcm＝假金鑰真產出）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('ab'.repeat(32)) as BufferSource));
+  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
+  const k = await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt);
+  if (k === null) return false;
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', k));
+  return raw.length === 32 && raw.every((b: number) => b === 0xab);
+})());
+await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex HEX_RE 形檢查；帶 AAD 真解後形檢拒）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
+  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
+  return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
+})());
+// 短 payload 鍛造（60B：iv+ct(hex32假 noteKey)）→ null：openNoteKey 嚴格長度檢的可觀察承載
+//（僅 hexToBytes fail-closed 擋不住「合法 hex 的假 32B 金鑰」——長度檢獨立承載）。
+await A('鍛造 60B payload（合法 hex 32B 假 noteKey，帶 AAD）→ null（openNoteKey 嚴格 92B 長度檢先行）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('ab'.repeat(16)) as BufferSource));
+  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
+  return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
+})());
+await A('encryptWithKey 產物餵 unwrap（長度恆不符 60B）→ null（短 payload 鍛造面對照）', await (async () => {
+  const kekC = await craftKek;
+  const short = await encryptWithKey(kekC, 'ab'.repeat(16), 'notekey'); // iv12+ct48 = 60B ≠ 92B
+  return (await unwrapNoteKey(TACET, 'jr1w.' + short, pass, salt)) === null;
+})());
+// guest 空 identity 自洽密文面（P5 的行為承載）：手工以 K_u(prefix‖'') 造密文——
+// 舊碼（守衛缺席）下 deriveGuestKey('')＝同一把「空帳號金鑰」→ 解開＝NON-NULL 假相；
+// 新契約下解密面守衛先擋＝null。這是解密面守衛唯一真咬的行為向量。
+await A('guest 空 identity 自洽密文 → decryptNote null（「空帳號金鑰」整族拒絕＝解密面守衛承載）', await (async () => {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('tacet-note-u1')));
+  const kuEmpty = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  const cipherEmpty = 'jr1g.' + await encryptWithKey(kuEmpty, note, 'noteId:n1');
+  return (await decryptNote(TACET_GUESTOK, makeHeldKey(), cipherEmpty, 'noteId:n1', emptyIdp)) === null;
+})());
+// 錯誤碼語意分離（目標 6）：空 PIN ≠ 未配置；jr3d 兩 case 同碼分流
+await A('wrapNoteKeyDual 空 PIN → ERR_PIN_EMPTY（非 NOT_CONFIGURED）', await (async () => {
+  try { await wrapNoteKeyDual(TACET2, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
+})());
+await A('wrapNoteKeyDual 空 PIN 全形空白正規化後 → ERR_PIN_EMPTY', await (async () => {
+  try { await wrapNoteKeyDual(TACET2, noteKey, passD, '　'); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
+})());
+await A('wrapNoteKeyDual 未配置 wrapDual → ERR_DUAL_NOT_CONFIGURED（契約不變）', await (async () => {
+  try { await wrapNoteKeyDual(TACET, noteKey, passD, pinD); return false; } catch (e) { return (e as Error).message === 'ERR_DUAL_NOT_CONFIGURED'; }
+})());
+await A('wrapNoteKeyDual3 空 PIN → ERR_PIN_EMPTY（t_7710c766：兩 case 同碼分流）', await (async () => {
+  try { await wrapNoteKeyDual3(TACET3, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
+})());
+await A('wrapNoteKeyDual3 未配置 wrapDual3 → ERR_JR3W_NOT_CONFIGURED（契約不變）', await (async () => {
+  try { await wrapNoteKeyDual3({}, noteKey, passD, pinD); return false; } catch (e) { return (e as Error).message === 'ERR_JR3W_NOT_CONFIGURED'; }
+})());
+// PH1 鹽注入（目標 4）：預設舊值零行為變更
+await A('derivePh1Argon 預設鹽零行為變更（同 pass 同值）',
+  (await derivePh1Argon('probe-determinism-pass-42')) === ph1v2a);
+async function srcOf(rel: string): Promise<string> {
+  // node 內建模組動態存取（structured type，零 node types 依賴——argon2.ts getBuiltinModule 母型同構；
+  // TS2591 types 帽下 import('node:fs') 靜態/動態皆炸＝此繞法）
+  const fs = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { readFileSync?: (p: string, enc: string) => string } | undefined };
+  }).process?.getBuiltinModule?.('node:fs');
+  if (!fs?.readFileSync) throw new Error('ERR_FS_UNAVAILABLE');
+  return fs.readFileSync(new URL(rel, import.meta.url).pathname, 'utf8');
+}
+await A('derivePh1Argon 預設分支源碼面 = encode(PH1_V2_SALT)（鹽預設單一真相錨；同-pass 同值斷言對預設值漂移無承載力）',
+  /saltArg \?\? new TextEncoder\(\)\.encode\(PH1_V2_SALT\)/.test(await srcOf('../src/client/argon2.ts')));
+await A('derivePh1Argon 自選鹽 → 不同派生值', (await derivePh1Argon('probe-determinism-pass-42', new Uint8Array(12))) !== ph1v2a);
+await A('derivePh1Argon 自選鹽 hex64 形', /^[0-9a-f]{64}$/.test(await derivePh1Argon('x', new Uint8Array(12))));
+await A('PH1_V2_SALT re-export 在場（index barrel；其他產品可見可注入同源鹽）', PH1_V2_SALT === 'tacet-ph1-v1');
+// index barrel 新匯出（目標 5）：clearLocalWrap/buildBindPayload（review「缺匯出」條誤差已校正＝本卡以閘承載）
+await A('index barrel 匯出 clearLocalWrap/buildBindPayload', await (async () => {
+  const src = await import('../src/index.ts');
+  return typeof src.clearLocalWrap === 'function' && typeof src.buildBindPayload === 'function';
+})());
+// PinLockConfig 死欄退場（t_7710c766）：型別面真齒＝excess-property 探針（round 1 審查 MINOR-3：
+// 舊形 typeof cfg==='object' 恆真空轉）——dead 欄復活（毒化輪補回 noteKeyExtractable）即 TS2353 紅；
+// 本面綠態＝core+tacet 摘欄後編譯綠。@ts-expect-error 只入毒化形（pristine 待位錯誤＝TS2578 自擋）。
+const _cfgProbe: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'p:', pinLockAad: 'notekey-pinlock' };
+// 壞 b64 面向量（openNoteKey 誠實契約「任何不符恆回 null 不拋」的可觀察承載——round 1 MINOR-5）：
+await A('鍛造壞 base64 面字符 → unwrapNoteKey null（openNoteKey unb64 拋點吞收＝不拋契約）',
+  (await unwrapNoteKey(TACET, 'jr1w.' + '!!not-base64!!', pass, salt)) === null);
+await A('openNoteKey 直接呼叫：壞 base64 → null 不拋（本體吞收點）', await (async () => {
+  const kekC = await craftKek;
+  return (await openNoteKey('jr1w.' + '!!not-base64!!', kekC, 'notekey', 'jr1w.')) === null;
+})());
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 
