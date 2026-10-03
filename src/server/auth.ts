@@ -1,18 +1,25 @@
 /**
  * auth.ts — 零知識伺服器端 auth 核心邏輯（品牌／schema 參數化）。
  *
- * 不變量（勿破壞）：
+ * 本檔實作的契約：
  * - pass 明文永不過線：線上憑證送 PH1（雜湊形），伺服器存 PH2 = SHA-256(PH1)。
  *   PH1 派生方式由各產品自定義（快雜湊或 Argon2id 派生皆可）——本層只驗
  *   hex64 形，不驗 PH1 派生方式（伺服器零知識，無從也無需區分形別）。
- * - hash-ladder 雙軌：舊式存 PH1 直比 → 命中即「順手升級」寫回 PH2
- * - 常數時間比較（timingSafeEq）防時序側信道
- * - 密語重設 = 舊憑證可能已洩漏 → 撤銷該身份全部 session
- * - 金鑰包裹欄組（wrapped+salt）缺一整組放棄；rec 包裹與種子 hash 必須成對出現
+ * - 入庫前密文／包裹格式驗證（inboundCipher／isCipherFor／validWrappedKey／
+ *   pickKeyPackage 等，前綴由 config 注入）。
+ * - /auth/login 核心動線（loginRouteCore）：rate-limit 閘 → PH1 驗形 →
+ *   PH2 → store 查詢／建號 → session token 簽發（30 天）。
  *
- * 與單一產品設計的結構差異（identity 模型已入型別）：
- * - identity 由伺服器端生成（隨機 account_id），不由客戶端帶入 soulKey——
- *   本核心以 identityCallback 抽象兩種模型，schema 欄位名由各 fork 自訂。
+ * 呼叫端（fork）職責——本檔只定義介面，機制在呼叫端實作：
+ * - identity 生成：AuthStore.createUser 由各 fork 自決（隨機 account_id 或
+ *   客戶端帶入語意皆可）；PH2 UNIQUE 衝突（兩個同時首登同密語）是 store
+ *   責任——tacet 參考實作：UNIQUE 失敗重查既有列回 userKey（非 5xx）。
+ * - hash-ladder 雙軌（舊式 PH1 直比 → 升級寫回 PH2）與密語重設後的 session
+ *   撤銷時機：fork 呼叫端接線（revokeAllSessions 介面已備）。
+ * - 常數時間比較 timingSafeEq：./hash.ts 匯出（login 動線經 PH2 查詢不直比）。
+ *
+ * 不變量（勿破壞）：
+ * - 金鑰包裹欄組（wrapped+salt）缺一整組放棄；rec 包裹與種子 hash 必須成對出現
  */
 
 import { corsResponse } from './cors.ts';
@@ -23,11 +30,11 @@ import type { Env } from './env';
 // ── 格式驗證（自 noteCrypt.ts 抽出；前綴由 config 注入） ─────────────────────
 
 export interface CipherFormats {
-  /** 密文前綴家族 regex 來源字串，如 '^jr1[gb]\.'。 */
+  /** 密文前綴家族字面（startsWith 語意，非 regex 來源），如 'jr1b.'。 */
   cipherPrefixes: [string, string];
   /** 金鑰包裹前綴，如 'jr1w.'。 */
   wrapPrefix: string;
-  /** 密文位元組上限（入庫原樣、禁截斷密文）。 */
+  /** 密文上限：UTF-16 code unit 計數（.length 語意；非 UTF-8 bytes）。 */
   cipherMax: number;
 }
 
@@ -36,8 +43,14 @@ const BINARY_RE = /[\x00-\x08\x0e-\x1f]/;
 const HASH64_RE = /^[0-9a-f]{64}$/;
 const SALT32_RE = /^[0-9a-f]{32}$/;
 
-function cipherRe(c: CipherFormats): RegExp {
-  const escaped = c.cipherPrefixes.map(p => p.replace('.', '\\.'));
+/** regex 用字面跳脫：全字元掃描（.replace('.',) 只跳第一個點——前綴含第二個 . 即壞）。 */
+function escapeReLiteral(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** 前綴家族 → 密文形 regex（單一組裝點；cipherRe 死碼退場）。 */
+function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
+  const escaped = cipherPrefixes.map(p => escapeReLiteral(p));
   return new RegExp(`^(${escaped.join('|')})[A-Za-z0-9+/]+={0,2}$`);
 }
 
@@ -46,7 +59,7 @@ function cipherRe(c: CipherFormats): RegExp {
  * plainMax：明文相容層上限（入庫原樣、禁截斷密文；無明文相容層的產品可設 0）。
  */
 export function makeInboundCipher(c: CipherFormats) {
-  const RE = new RegExp(`^(${c.cipherPrefixes.map(p => p.replace('.', '\\.')).join('|')})[A-Za-z0-9+/]+={0,2}$`);
+  const RE = cipherPrefixRe(c.cipherPrefixes);
   return function inboundCipher(raw: unknown): string | null {
     if (typeof raw !== 'string') return null;
     const text = raw.trim();
@@ -70,8 +83,7 @@ export function isCipherFor(text: string | null | undefined, c: CipherFormats): 
 
 export function validWrappedKey(v: unknown, wrapPrefix: string | string[]): string | null {
   const prefixes = Array.isArray(wrapPrefix) ? wrapPrefix : [wrapPrefix];
-  const escaped = prefixes.map(p => p.replace('.', '\\.'));
-  const re = new RegExp(`^(${escaped.join('|')})[A-Za-z0-9+/]+={0,2}$`);
+  const re = cipherPrefixRe(prefixes);
   return typeof v === 'string' && v.length <= 200 && re.test(v) ? v : null;
 }
 
@@ -100,7 +112,7 @@ export interface KeyPackage {
 export interface AuthStore {
   /** 以 PH2 查身份（PH2 UNIQUE；tacet：隨機 account_id 在此建立）。 */
   findByIdentityQuery(ph2: string): Promise<AuthRow | null>;
-  /** 建立（identity 由本層 identityCallback 決定：隨機 account_id 或客戶端帶入語意）。 */
+  /** 建立（identity 生成由各 fork 自決——見檔頭「呼叫端職責」；PH2 UNIQUE 衝突亦是 store 責任）。 */
   createUser(ph2: string): Promise<string>;
   getByUserKey(key: string): Promise<AuthRow | null>;
   getByRecHash(recHash: string): Promise<AuthRow | null>;

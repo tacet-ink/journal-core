@@ -697,6 +697,16 @@ await A('inboundCipher：真明文照收', inbound('純明文') === '純明文')
 await A('inboundCipher：非字串 null', inbound(42) === null);
 await A('isCipherFor：家族前綴 true／非家族 false',
   isCipherFor('jr1b.abc', formats) && isCipherFor('jr1u.abc', formats) && !isCipherFor('jr2x.abc', formats));
+await A('makeInboundCipher regex 跳脫全字面（P2.5 行為面：舊碼 .replace 單點跳脫讓 c() 誤判密文——>max 丟棄 vs 明文截斷兩路分岔）',
+  (() => {
+    // 前綴字面含 regex 符號（可建構形——裸 '(' 形舊碼建構即 throw）：'a.b|c()'
+    const f: CipherFormats = { cipherPrefixes: ['a.b|c(' + String.fromCharCode(41), 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 500 };
+    const m = makeInboundCipher(f);
+    // 'c()' + 600 chars > max：舊碼 regex 的 c\(\) 誤分支咬住 → 密文丟棄 null；
+    // 正碼全字面跳脫 → 非家族前綴 → 明文截斷照收。
+    const probe = 'c()' + 'A'.repeat(600);
+    return m(probe) === probe.slice(0, 500) && m('a.b|c()Zm9v') === 'a.b|c()Zm9v';
+  })());
 await A('validWrappedKey：合法包裹 true／超長 null／非法前綴 null',
   validWrappedKey('jr1w.' + b64(new Uint8Array(32)), 'jr1w.') !== null &&
   validWrappedKey('jr1w.' + b64(new Uint8Array(300)), 'jr1w.') === null &&
