@@ -31,6 +31,7 @@ import {
   encryptLocal,
   decryptLocal,
   hexToBytes,
+  encryptWithKey,
 } from '../src/client/note-crypto.ts';
 import {
   verifyArgonKat,
@@ -747,6 +748,29 @@ await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex
   const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
   return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
 })());
+// 短 payload 鍛造（65B：iv+ct(hex32假 noteKey)）→ null：openNoteKey 嚴格長度檢的可觀察承載
+//（僅 hexToBytes fail-closed 擋不住「合法 hex 的假 32B 金鑰」——長度檢獨立承載）。
+await A('鍛造 65B payload（合法 hex 32B 假 noteKey）→ null（openNoteKey 嚴格長度檢；hex 檢獨立面）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('ab'.repeat(16)) as BufferSource));
+  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
+  return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
+})());
+await A('encryptWithKey 產物餵 unwrap（長度恆不符 60B）→ null（短 payload 鍛造面對照）', await (async () => {
+  const kekC = await craftKek;
+  const short = await encryptWithKey(kekC, 'ab'.repeat(16), 'notekey'); // iv12+ct48 = 60B ≠ 92B
+  return (await unwrapNoteKey(TACET, 'jr1w.' + short, pass, salt)) === null;
+})());
+// guest 空 identity 自洽密文面（P5 的行為承載）：手工以 K_u(prefix‖'') 造密文——
+// 舊碼（守衛缺席）下 deriveGuestKey('')＝同一把「空帳號金鑰」→ 解開＝NON-NULL 假相；
+// 新契約下解密面守衛先擋＝null。這是解密面守衛唯一真咬的行為向量。
+await A('guest 空 identity 自洽密文 → decryptNote null（「空帳號金鑰」整族拒絕＝解密面守衛承載）', await (async () => {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('tacet-note-u1')));
+  const kuEmpty = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  const cipherEmpty = 'jr1g.' + await encryptWithKey(kuEmpty, note, 'noteId:n1');
+  return (await decryptNote(TACET_GUESTOK, makeHeldKey(), cipherEmpty, 'noteId:n1', emptyIdp)) === null;
+})());
 // 錯誤碼語意分離（目標 6）：空 PIN ≠ 未配置；jr3d 兩 case 同碼分流
 await A('wrapNoteKeyDual 空 PIN → ERR_PIN_EMPTY（非 NOT_CONFIGURED）', await (async () => {
   try { await wrapNoteKeyDual(TACET2, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
@@ -766,6 +790,17 @@ await A('wrapNoteKeyDual3 未配置 wrapDual3 → ERR_JR3W_NOT_CONFIGURED（契�
 // PH1 鹽注入（目標 4）：預設舊值零行為變更
 await A('derivePh1Argon 預設鹽零行為變更（同 pass 同值）',
   (await derivePh1Argon('probe-determinism-pass-42')) === ph1v2a);
+async function srcOf(rel: string): Promise<string> {
+  // node 內建模組動態存取（structured type，零 node types 依賴——argon2.ts getBuiltinModule 母型同構；
+  // TS2591 types 帽下 import('node:fs') 靜態/動態皆炸＝此繞法）
+  const fs = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { readFileSync?: (p: string, enc: string) => string } | undefined };
+  }).process?.getBuiltinModule?.('node:fs');
+  if (!fs?.readFileSync) throw new Error('ERR_FS_UNAVAILABLE');
+  return fs.readFileSync(new URL(rel, import.meta.url).pathname, 'utf8');
+}
+await A('derivePh1Argon 預設分支源碼面 = encode(PH1_V2_SALT)（鹽預設單一真相錨；同-pass 同值斷言對預設值漂移無承載力）',
+  /saltArg \?\? new TextEncoder\(\)\.encode\(PH1_V2_SALT\)/.test(await srcOf('../src/client/argon2.ts')));
 await A('derivePh1Argon 自選鹽 → 不同派生值', (await derivePh1Argon('probe-determinism-pass-42', new Uint8Array(12))) !== ph1v2a);
 await A('derivePh1Argon 自選鹽 hex64 形', /^[0-9a-f]{64}$/.test(await derivePh1Argon('x', new Uint8Array(12))));
 await A('PH1_V2_SALT re-export 在場（index barrel；其他產品可見可注入同源鹽）', PH1_V2_SALT === 'tacet-ph1-v1');
