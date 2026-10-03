@@ -24,10 +24,12 @@ export const PINLOCK_ITERATIONS = 600_000;
 
 const SALT_LEN = 16;
 const IV_LEN = 12;
-/** pinSalt(16) + iv(12) + ct(hex(noteKey) 64B + GCM tag 16B) = 108B 固定。 */
+/** pinSalt(16) + iv(12) + ct(hex 字串 64B + GCM tag 16B) = 108B 固定。 */
 const PAYLOAD_LEN = SALT_LEN + IV_LEN + 80;
 
-/** 本機鎖定 cfg（各 fork config 注入；未配置 = API 拒絕，兄弟 fork 行為不變）。 */
+/** 本機鎖定 cfg（各 fork config 注入；未配置 = API 拒絕，兄弟 fork 行為不變）。
+ *  t_7710c766：noteKeyExtractable 必填死欄移除——解包輸出恆 extractable（鐵律 1，
+ *  要能再包裹／匯出）不是可調選項；tacet 消費端 TACET_PINLOCK 同步摘欄。 */
 export interface PinLockConfig {
   /** 本機鎖定包裹前綴，如 'jr1p.'. 未配置 = 拒絕。 */
   pinLock?: string;
@@ -35,8 +37,6 @@ export interface PinLockConfig {
   pinLockSaltPrefix?: string;
   /** AAD（鎖定包裹專用，與登入第二因子/分享包裹互斥）。未配置 = 拒絕。 */
   pinLockAad?: string;
-  /** 解包輸出的 noteKey（要能再包裹/匯出，鐵律 1）。 */
-  noteKeyExtractable: boolean;
 }
 
 /** KEK = PBKDF2-SHA256(pinNorm, pinLockSaltPrefix + hex(pinSalt), 600k) → AES-GCM key（nonextractable）。 */
@@ -63,7 +63,9 @@ async function deriveLockKek(pinNorm: string, pinSalt: Uint8Array, cfg: PinLockC
   );
 }
 
-/** jr1p. 包裹：payload = pinSalt[16] ‖ iv[12] ‖ GCM(KEK, hex(noteKey), aad)；全自描述（salt 內嵌）。 */
+/** jr1p. 包裹：payload = pinSalt[16] ‖ iv[12] ‖ GCM(KEK, hex(noteKey), aad)；全自描述（salt 內嵌）。
+ *  鹽內嵌家族（jr2w./jr3d./jr1p.）自帶三段組裝——sealNoteKey 是鹽外置家族形（iv‖ct），
+ *  內嵌鹽的 pinSalt 前綴不在其契約內（t_7710c766 毒化輪回歸實證：亂收口＝unwrap 恆 null）。 */
 export async function wrapNoteKeyPinLock(cfg: PinLockConfig, noteKey: CryptoKey, pin: string): Promise<string> {
   if (!cfg.pinLock || !cfg.pinLockSaltPrefix || !cfg.pinLockAad) throw new Error('ERR_PINLOCK_NOT_CONFIGURED');
   const pinNorm = normalizePin(pin);
@@ -84,7 +86,9 @@ export async function wrapNoteKeyPinLock(cfg: PinLockConfig, noteKey: CryptoKey,
   return cfg.pinLock + b64(payload);
 }
 
-/** jr1p. 解包：全自描述；任何不符（前綴/長度/PIN 空/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 1）。 */
+/** jr1p. 解包：全自描述；任何不符（前綴/長度/PIN 空/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 1）。
+ *  t_7710c766：嚴格檢查收口 openNoteKey 一本體（payload 嚴格 108B＋rawHex hex 形檢查；
+ *  hexToBytes fail-closed 由 try/catch 承接＝行為不變）。 */
 export async function unwrapNoteKeyPinLock(cfg: PinLockConfig, wrapped: string, pin: string): Promise<CryptoKey | null> {
   try {
     if (!cfg.pinLock || !cfg.pinLockSaltPrefix || !cfg.pinLockAad) return null;
@@ -92,12 +96,12 @@ export async function unwrapNoteKeyPinLock(cfg: PinLockConfig, wrapped: string, 
     const payload = unb64(wrapped.slice(cfg.pinLock.length));
     if (payload.length !== PAYLOAD_LEN) return null;
     const pinSalt = payload.slice(0, SALT_LEN);
-    const ivPrefixedCt = payload.slice(SALT_LEN); // decryptWithKey 契約：payload = iv[12] ‖ ct
+    const ivPrefixedCt = payload.slice(SALT_LEN); // 鹽內嵌家族：payload = pinSalt[16] ‖ iv[12] ‖ ct
     const pinNorm = normalizePin(pin);
     if (!pinNorm) return null;
     const kek = await deriveLockKek(pinNorm, pinSalt, cfg);
     const rawHex = await decryptWithKey(kek, ivPrefixedCt, cfg.pinLockAad);
-    if (!rawHex) return null;
+    if (!rawHex || rawHex.length !== 64 || !/^[0-9a-f]+$/.test(rawHex)) return null;
     return importAesGcm(hexToBytes(rawHex), true);
   } catch {
     return null;
