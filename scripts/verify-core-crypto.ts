@@ -16,6 +16,7 @@ import {
   storeLocalWrap,
   clearLocalWrap,
   buildBindPayload,
+  openNoteKey,
   unwrapNoteKey,
   unwrapNoteKeyWithRecToken,
   wrapNoteKey,
@@ -32,6 +33,7 @@ import {
   decryptLocal,
   hexToBytes,
   encryptWithKey,
+  decryptWithKey,
 } from '../src/client/note-crypto.ts';
 import {
   verifyArgonKat,
@@ -719,11 +721,12 @@ await A('hexToBytes 奇數長度 → throw', await (async () => {
 await A('hexToBytes 空字串 → throw', await (async () => {
   try { hexToBytes(''); return false; } catch (e) { return (e as Error).message === 'ERR_BAD_HEX'; }
 })());
-await A('hexToBytes 全形正規化（' + 'ff' + '）→ 不 throw，Bytes 等值', (() => { try { return hexToBytes('ff').length === 1; } catch { return false; } })());
+await A(`hexToBytes 全形正規化（'${'ｆｆ'}'）→ Bytes [255] 等值`, (() => { try { return Array.from(hexToBytes('ｆｆ')).join(',') === '255'; } catch { return false; } })());
+await A(`hexToBytes 全形數字（'２ｆ'）→ Bytes 等值（NFKC 窗殲滅——round 1 MINOR-4：parse 原始串 NaN 歸零殘形）`, (() => { try { return Array.from(hexToBytes('２ｆ')).join(',') === '47'; } catch { return false; } })());
 await A('bip39 hexToBytes 同步（HEX64_RE 自守前提下的舊向量不變）', (await bip.recTokenToWords('ab'.repeat(32)))?.length === 24);
 await A('unwrap：鹽 hex 非法字元 → 假錯誤誘餌面 null（原碼靜默歸零會錯誤炸出成功路徑）',
   (await unwrapNoteKey(TACET2, dual.wrapped, passD, 'a'.repeat(31) + 'z')) === null);
-await A('unwrapNoteKeyDual：salt1 hex 非法字元 ' + 'z' + ' → null（92B 檢查終結於 openNoteKey 收口）',
+await A('unwrapNoteKeyDual：salt1 hex 非法字元 ' + 'z' + ' → null（鹽內嵌族 own 檢查照舊——收口本體=鹽外置族）',
   (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31) + 'z')) === null);
 await A('unwrapNoteKeyDual：salt1 hex 奇數長 → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31))) === null);
 await A('unwrapNoteKey3：salt hex 形檢查照舊（既有契約不變）',
@@ -731,29 +734,52 @@ await A('unwrapNoteKey3：salt hex 形檢查照舊（既有契約不變）',
 // 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
 // 舊碼（無 rawHex 長度/形檢）下 32-hex 假 noteKey 與 'zz' 前綴零化 hex 皆 NON-NULL＝假金鑰生產器。
 const craftKek = (async (): Promise<CryptoKey> => {
+  // deriveKek 鏡像（未匯出）：PBKDF2-SHA256(pass, salt, 600k) → AES-GCM-256。
   const keyMat = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: hexToBytes(salt) as BufferSource, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 })();
-await A('鍛造 60B payload（32-hex 假 noteKey 面）→ null（payload 長度＋rawHex 長度雙擋）', await (async () => {
+// 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
+// 舊碼（無 rawHex 長度/形檢）下 'zz' 前綴零化 hex 非 null＝假金鑰生產器。
+// round 1 審查 MAJOR-1 校正：鍛造 encrypt 必帶 additionalData('notekey')＝與 decryptWithKey
+// 同 AAD——缺 AAD 的鍛造 GCM 層恆拒＝rawHex 形檢從未執行（斷言空轉）。
+// craftKek 鏡像真 deriveKek（同 pass 同 salt 同 600k）＝鍛造鏈與真 unwrap 同 KEK：
+// 有效形鍛造真解開（NON-NULL 自證鏈活）、畸形形由各檢查點拒——機制面直接可觀察。
+const F_AAD: BufferSource = enc.encode('notekey');
+await A('MAJOR-1 機制面：帶 AAD 鍛造 ct 可解回 rawHex（形檢層可達＝斷言活）', await (async () => {
   const kekC = await craftKek;
   const ivC = crypto.getRandomValues(new Uint8Array(12));
-  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('ab'.repeat(16)) as BufferSource));
-  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
-  return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
+  return (await decryptWithKey(kekC, new Uint8Array([...ivC, ...ctC]), 'notekey')) === 'zz' + 'a'.repeat(62);
 })());
-await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex hex 形檢查；長度檢幫不上）', await (async () => {
+await A('MAJOR-1 空轉形：同 payload 無 AAD 鍛造 → decryptWithKey null（GCM 層恆拒＝round 1 空轉病理）', await (async () => {
   const kekC = await craftKek;
   const ivC = crypto.getRandomValues(new Uint8Array(12));
   const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
+  return (await decryptWithKey(kekC, new Uint8Array([...ivC, ...ctC]), 'notekey')) === null;
+})());
+await A('鍛造有效形 92B payload（64-hex 假 noteKey）→ NON-NULL（鍛造鏈自證：真解到 importAesGcm＝假金鑰真產出）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('ab'.repeat(32)) as BufferSource));
+  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
+  const k = await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt);
+  if (k === null) return false;
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', k));
+  return raw.length === 32 && raw.every((b: number) => b === 0xab);
+})());
+await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex HEX_RE 形檢查；帶 AAD 真解後形檢拒）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
   const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
   return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
 })());
-// 短 payload 鍛造（65B：iv+ct(hex32假 noteKey)）→ null：openNoteKey 嚴格長度檢的可觀察承載
+// 短 payload 鍛造（60B：iv+ct(hex32假 noteKey)）→ null：openNoteKey 嚴格長度檢的可觀察承載
 //（僅 hexToBytes fail-closed 擋不住「合法 hex 的假 32B 金鑰」——長度檢獨立承載）。
-await A('鍛造 65B payload（合法 hex 32B 假 noteKey）→ null（openNoteKey 嚴格長度檢；hex 檢獨立面）', await (async () => {
+await A('鍛造 60B payload（合法 hex 32B 假 noteKey，帶 AAD）→ null（openNoteKey 嚴格 92B 長度檢先行）', await (async () => {
   const kekC = await craftKek;
   const ivC = crypto.getRandomValues(new Uint8Array(12));
-  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('ab'.repeat(16)) as BufferSource));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('ab'.repeat(16)) as BufferSource));
   const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
   return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
 })());
@@ -809,10 +835,16 @@ await A('index barrel 匯出 clearLocalWrap/buildBindPayload', await (async () =
   const src = await import('../src/index.ts');
   return typeof src.clearLocalWrap === 'function' && typeof src.buildBindPayload === 'function';
 })());
-await A('PinLockConfig 型別面零 noteKeyExtractable（必填死欄移除）', await (async () => {
-  const src = await import('../src/client/pinlock.ts');
-  const cfg = src as { PinLockConfig?: unknown };
-  return typeof cfg === 'object'; // 型別面由 tsc 承載（tacet 消費端摘欄後編譯綠）；此處承載 runtime 在場
+// PinLockConfig 死欄退場（t_7710c766）：型別面真齒＝excess-property 探針（round 1 審查 MINOR-3：
+// 舊形 typeof cfg==='object' 恆真空轉）——dead 欄復活（毒化輪補回 noteKeyExtractable）即 TS2353 紅；
+// 本面綠態＝core+tacet 摘欄後編譯綠。@ts-expect-error 只入毒化形（pristine 待位錯誤＝TS2578 自擋）。
+const _cfgProbe: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'p:', pinLockAad: 'notekey-pinlock' };
+// 壞 b64 面向量（openNoteKey 誠實契約「任何不符恆回 null 不拋」的可觀察承載——round 1 MINOR-5）：
+await A('鍛造壞 base64 面字符 → unwrapNoteKey null（openNoteKey unb64 拋點吞收＝不拋契約）',
+  (await unwrapNoteKey(TACET, 'jr1w.' + '!!not-base64!!', pass, salt)) === null);
+await A('openNoteKey 直接呼叫：壞 base64 → null 不拋（本體吞收點）', await (async () => {
+  const kekC = await craftKek;
+  return (await openNoteKey('jr1w.' + '!!not-base64!!', kekC, 'notekey', 'jr1w.')) === null;
 })());
 
 // ── 決議 ────────────────────────────────────────────────────────────────────

@@ -77,11 +77,14 @@ export function toHex(bytes: Uint8Array): string {
 export function hexToBytes(hex: string): Uint8Array {
   // fail-closed（目標 #2）：非法字元靜默歸零是 unwrap 家族的假金鑰生產器——
   // 拋 ERR_BAD_HEX（呼叫端 unwrap 全部 try/catch 回 null；非 catch 端僅 bip39
-  // HEX64_RE 前置自守）。奇數長度、大小寫、非 hex 皆拒。
-  if (!HEX_RE.test(hex.normalize('NFKC').toLowerCase()) || hex.length === 0) {
+  // HEX64_RE 前置自守）。奇數長度、非 hex、空字串皆拒；大小寫/全形 NFKC 收容。
+  // 測與 parse 同一（正規化後）真相——round 1 審查 MINOR-4：形檢吃正規化串、
+  // parseInt 吃原始串＝全形 hex digit NaN 歸零殘形（README 例外契約自穿透），收口殲滅。
+  const norm = hex.normalize('NFKC').toLowerCase();
+  if (!HEX_RE.test(norm)) {
     throw new Error('ERR_BAD_HEX');
   }
-  return new Uint8Array((hex.match(/.{2}/g) ?? []).map(h => parseInt(h, 16)));
+  return new Uint8Array((norm.match(/.{2}/g) ?? []).map(h => parseInt(h, 16)));
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -316,13 +319,23 @@ export async function sealNoteKey(prefix: string | null | undefined, noteKey: Cr
 }
 
 /**
- * 共用解包核心（目標 #1 收口）：任何不符——前綴、payload 長度、base64 合法性（unb64）、
- * GCM（金鑰/AAD/密文損壞）、rawHex 長度/hex 形——回 null，不拋。
- * 9 個 unwrap 複製點的分歧（jr1w/jrsw/jr3s 檢 92B、jr1wRec 恆空、jr3w 半檢）由此一本體終結。
+ * 共用解包核心（目標 #1 收口）：任何不符——前綴、base64 形、payload 長度、
+ * GCM（金鑰/AAD/密文損壞）、rawHex 長度/hex 形——恆回 null 不拋。
+ * round 1 審查 MINOR-5：atob 對非法字元會拋、原 docstring「不拋」與實作不符——
+ * 本體吞收 null（公開原語誠實契約；呼叫端 unwrap 家族 try/catch 是雙防線非依賴面）。
+ * 家族嚴格度收口實況（round 1 審查 MINOR-2 校正）：舊碼 argon2 側 jr3w 與雙因子
+ * （jr2w/jr3d/jr1p）有 payload 長度檢、note-crypto 單因子家族（unwrapNoteKey/Share/
+ * WithRecToken/loadLocalWrap）皆無——9 個 unwrap 複製點的嚴格度分歧由嚴格 92B
+ * 一本體終結（jr1wRec 同本體）。
  */
 export async function openNoteKey(wrapped: string, kek: CryptoKey, aad: string, prefix: string): Promise<CryptoKey | null> {
   if (!wrapped.startsWith(prefix)) return null;
-  const payload = unb64(wrapped.slice(prefix.length));
+  let payload: Uint8Array;
+  try {
+    payload = unb64(wrapped.slice(prefix.length)); // atob 非法字元拋點吞收 null（公開原語全 null 契約）
+  } catch {
+    return null; // 壞 base64＝任何不符面之一（行為閘有壞 b64 向量承載）
+  }
   if (payload.length !== IV_LEN + 80) return null; // 嚴格 92B：iv 12＋ct 80（hex64 字串編碼 64B＋tag 16）
   const rawHex = await decryptWithKey(kek, payload, aad);
   if (!rawHex || rawHex.length !== NOTEKEY_HEX_LEN || !HEX_RE.test(rawHex)) return null;

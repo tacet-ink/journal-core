@@ -19,8 +19,6 @@ import {
   b64, unb64, toHex, hexToBytes, decryptWithKey, importAesGcm, normalizePin,
 } from './note-crypto.ts';
 
-void b64; // jr1p. 是鹽內嵌家族（pinSalt‖iv‖ct），未收口 sealNoteKey（t_7710c766 實證裁決；re-export 別名保留）
-
 /** 雙因子 pin 段等級（2M）過重：鎖定閘要即時性，600k 與 jr1w. 同級。 */
 export const PINLOCK_ITERATIONS = 600_000;
 

@@ -64,7 +64,7 @@ guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 215 斷言對真模組（禁鏡像；t_7710c766 收口＋鍛造/自洽向量）：roundtrip/AAD 防搬移/
+npm run verify   # 219 斷言對真模組（禁鏡像；t_7710c766 收口＋鍛造/自洽向量）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
 ```
@@ -108,7 +108,7 @@ const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'note
 PH1 派生（登入憑證）：`derivePh1Argon(pass, saltArg?)` 預設鹽 `PH1_V2_SALT`
 （`'tacet-ph1-v1'`，Tacet 實例）。其他產品可自選**固定域鹽**傳入 `saltArg`——
 鹽一經選定即 per-product 恆固定（PH2 UNIQUE 約束：同一密語必須恆生同一 PH2；
-per-user 鹽會摧毀幽靈帳号機制）。改鹽＝帶內版本化換鹽尾碼重遷移，禁原地改語意。
+per-user 鹽會摧毀幽靈帳號機制）。改鹽＝帶內版本化換鹽尾碼重遷移，禁原地改語意。
 
 ### 例外契約（錯誤碼語意）
 
@@ -171,7 +171,7 @@ carrier: `node:crypto` ≥ Node 26 / hash-wasm in browsers, RFC 9106 test vector
 PH1/PH2 hash ladder and unique PH2 constraint (`auth.ts`), per-IP fixed-window rate limiting on
 D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 215 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 219 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
