@@ -36,8 +36,8 @@
 | `src/client/pinlock.ts` | 本機 PIN 鎖定包裹（jr1p.，開啟時鎖定） |
 | `src/client/bip39.ts` | 復原套件 24 詞 ⇄ hex64 轉寫層（BIP39，零依賴自製） |
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
-| `src/server/auth.ts` | 零知識 auth 核心：PH1/PH2 hash-ladder、PH2 UNIQUE、session 撤銷、包裹欄組成對契約 |
-| `src/server/ratelimit.ts` | per-IP 滑動視窗限流（D1 計數，併發安全版） |
+| `src/server/auth.ts` | 零知識 auth 核心：PH1→PH2 login 動線、入庫格式驗證、包裹欄組成對（pair 檢查 pickKeyPackage）；PH2 UNIQUE 衝突與 session 撤銷＝呼叫端職責 |
+| `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
 ## 前綴契約（家族表：10 個資料前綴＋閘對照組 jr1g.）
@@ -64,13 +64,13 @@ guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 219 斷言對真模組（禁鏡像；t_7710c766 收口＋鍛造/自洽向量）：roundtrip/AAD 防搬移/
+npm run verify   # 225 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
 ```
 
 - 產品碼**零執行時依賴**（WebCrypto 原語）；devDependencies 僅閘用（typescript、@scure/bip39 對照、workers types）。
-- Argon2id 雙載體：node 走 `node:crypto`（Node 26+ 原生）、瀏覽器走 hash-wasm（wasm 內嵌），
+- Argon2id 雙載體：node 走 `node:crypto`（Node 24.7+ 原生）、瀏覽器走 hash-wasm（wasm 內嵌），
   RFC 9106 標準向量逐位元一致；無載體即 throw（禁 fallback 鐵律）。
 - BIP39 原語自製零依賴，與 @scure/bip39 參照 200 組雙向對照（僅 entropy↔words 轉寫層，禁用其 seed 派生）。
 
@@ -165,13 +165,14 @@ and salted hashes, and never learns your passphrase or the content of any note.
 a primitive are unaffected. Unknown or malformed strings never decrypt to plaintext.
 
 **Modules.** Client: two-era crypto (`note-crypto.ts`), Argon2id wrapping (`argon2.ts`, dual
-carrier: `node:crypto` ≥ Node 26 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
+carrier: `node:crypto` ≥ Node 24.7 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
 (`pinlock.ts`), recovery-package BIP39 codec (`bip39.ts`, zero-dependency, cross-checked against
-@scure/bip39), brand-namespaced key storage (`keys.ts`). Server: zero-knowledge auth with a
-PH1/PH2 hash ladder and unique PH2 constraint (`auth.ts`), per-IP fixed-window rate limiting on
-D1 (`ratelimit.ts`), shared CORS/hash utilities.
+@scure/bip39), brand-namespaced key storage (`keys.ts`). Server: zero-knowledge auth core with a
+PH1→PH2 login flow, inbound cipher/package validation and paired key-package selection
+(`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
+fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 219 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 225 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 

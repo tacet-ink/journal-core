@@ -34,10 +34,11 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=24.7.0"
   },
   "scripts": {
-    "verify": "node --experimental-strip-types scripts/verify-core-crypto.ts"
+    "verify": "node --experimental-strip-types scripts/verify-core-crypto.ts",
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260831.1",
