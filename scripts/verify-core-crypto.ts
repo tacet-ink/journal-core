@@ -34,6 +34,8 @@ import {
   hexToBytes,
   encryptWithKey,
   decryptWithKey,
+  b64 as modB64,
+  unb64 as unb64Mod,
 } from '../src/client/note-crypto.ts';
 import {
   verifyArgonKat,
@@ -68,6 +70,7 @@ import {
 } from '../src/server/auth.ts';
 import { checkRate, isRateAllowed, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
 import { generateSessionToken, timingSafeEq } from '../src/server/hash.ts';
+import { CORS_HEADERS, corsResponse } from '../src/server/cors.ts';
 
 const enc = new TextEncoder();
 
@@ -138,7 +141,8 @@ await A('AAD 防搬移：跨身份 guest 解密失敗回 null',
 // 舊版明文相容層：無前綴 = 原樣返回
 await A('舊明文原樣返回', (await decryptNote(TACET, held, '純舊明文', 'x', { current: () => identityA })) === '純舊明文');
 
-// ── 3. 包裹三件套（pass / rec / 本機） ───────────────────────────────────────
+// ── 3. 包裹三件套（pass / rec / 本機；2026-09-24 效能審查節——buildBindPayload 兩段
+//      PBKDF2 600k 已由卡C t_7361b68c 收 Promise.all 並行，node 實測 133-152ms→68-84ms） ──
 
 console.log('\n[3] 金鑰包裹（passphrase / 復原 / 本機）');
 const pass = 'correct-horse-battery-staple-42';
@@ -231,11 +235,9 @@ await A('dual unwrapNoteKeyDual 拒收 jr1w 字串', (await unwrapNoteKeyDual(TA
 await A('既有 jr1w 包裹不受 dual 並存影響', (await unwrapNoteKey(TACET2, wrapped, pass, salt)) !== null);
 
 // payload 竄改 → 一律 null（自描述完整性：pinSalt/hksalt/iv/ct 任一區）
+// 卡C 收口：本地複製退場、直呼模組 unb64（單一真相；t_7361b68c [14] 導入面）。
 function unb64(text: string): Uint8Array {
-  const bin = atob(text);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
+  return unb64Mod(text);
 }
 const payload2 = unb64(dual.wrapped.slice('jr2w.'.length));
 const tamperedAt = async (idx: number): Promise<boolean> => {
@@ -921,6 +923,103 @@ await A('openNoteKey 直接呼叫：壞 base64 → null 不拋（本體吞收點
   const kekC = await craftKek;
   return (await openNoteKey('jr1w.' + '!!not-base64!!', kekC, 'notekey', 'jr1w.')) === null;
 })());
+
+// ── 14. 效能形契約（卡C t_7361b68c：零行為變更——輸出 byte 等價是合約；錨面咬「形」） ──
+//
+// 效能批的閘承載物理：執行時間不能進閘（機器相依）——咬「並行形在場＋串行殘留歸零」
+// 靜態錨＋「Argon 串行刻意保留」負向＋b64 輸出等價行為面＋Max-Age/sideEffects 字面。
+// 執行帳（node 26.8.1 實測，2026-10-04）：buildBindPayload 串行 133-152ms→並行 68-84ms；
+// dual 串行 234ms→並行 179ms median；b64 4MiB 132-181ms→18ms。瀏覽器帳=review 222ms→27ms。
+
+console.log('\n[14] 效能形契約（buildBindPayload 並行／b64 分塊／argon 禁並行／CORS Max-Age／sideEffects）');
+
+const noteCryptoSrc14 = await srcOf('../src/client/note-crypto.ts');
+const argon2Src14 = await srcOf('../src/client/argon2.ts');
+const corsSrc14 = await srcOf('../src/server/cors.ts');
+await A('[14] buildBindPayload 兩段共用 Promise.all 並行錨（wrapNoteKey＋wrapNoteKeyWithRecToken）',
+  /await Promise\.all\(\[\r?\n\s*wrapNoteKey\(cfg, noteKey, passphrase\),\r?\n\s*wrapNoteKeyWithRecToken\(cfg, noteKey, recToken, identity\)/.test(noteCryptoSrc14));
+await A('[14] deriveKek2 pass/pin 兩段 PBKDF2 共用 Promise.all 並行錨',
+  /await Promise\.all\(\[\r?\n\s*derivePbkdf2Bits\(passphrase, salt1, PBKDF2_ITERATIONS, keyMat\),\r?\n\s*derivePbkdf2Bits\(pin,/.test(noteCryptoSrc14));
+await A('[14] buildBindPayload 舊串行形歸零（await wrapNoteKeyWithRecToken 串行殘留）',
+  !noteCryptoSrc14.includes('await wrapNoteKeyWithRecToken'));
+await A('[14] deriveKek2 舊串行形歸零（串行 passBits 殘留）',
+  !/const passBits = await derivePbkdf2Bits/.test(noteCryptoSrc14));
+await A('[14] argon 側禁並行警示在場（deriveKek2Argon 串行刻意——hash-wasm 共享記憶體池）',
+  /argon2id 禁並行|禁並行/.test(argon2Src14) && !argon2Src14.includes('await Promise.all'));
+await A('[14] b64 分塊 apply 錨＋舊逐位元組形歸零（fromCharCode(bytes[i]) 殘留）',
+  noteCryptoSrc14.includes('String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)') &&
+  !noteCryptoSrc14.includes('String.fromCharCode(bytes[i])'));
+// b64 行為面：分塊後輸出必逐位元組等價（本閘起手 b64 是獨立複製＝黃金對照）；邊界尺寸
+//（0/1/7/8191/8192/8193）咬窗緣、65539 非 8192 倍數咬長尾、4MiB 咬分塊多輪＋unb64 全往返。
+const b64Ref14 = (bytes: Uint8Array): string => {
+  let bin = '';
+  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+};
+{
+  let boundsEq = true;
+  for (const size of [0, 1, 7, 8191, 8192, 8193]) {
+    const buf = new Uint8Array(size);
+    for (let i = 0; i < size; i++) buf[i] = (i * 7 + 3) & 0xff;
+    if (modB64(buf) !== b64Ref14(buf)) boundsEq = false;
+  }
+  await A('[14] b64 輸出等價：邊界尺寸 0/1/7/8191/8192/8193 逐位元組對照', boundsEq);
+}
+await A('[14] b64 輸出等價：65539（非 8192 倍數長尾）逐位元組對照', (() => {
+  const buf = new Uint8Array(65539);
+  for (let i = 0; i < buf.length; i++) buf[i] = (i * 13 + 5) & 0xff;
+  return modB64(buf) === b64Ref14(buf);
+})());
+await A('[14] b64 輸出等價：4MiB 多區塊＋unb64 roundtrip 逐位元組',
+  (() => {
+    const buf = new Uint8Array(4 * 1024 * 1024);
+    for (let i = 0; i < buf.length; i++) buf[i] = i & 0xff;
+    const s = modB64(buf);
+    if (s !== b64Ref14(buf)) return false;
+    const back = unb64(s);
+    if (back.byteLength !== buf.byteLength) return false;
+    for (let i = 0; i < buf.length; i++) if (back[i] !== buf[i]) return false;
+    return true;
+  })());
+await A('[14] CORS_HEADERS 帶 Access-Control-Max-Age（preflight 快取 86400）',
+  CORS_HEADERS['Access-Control-Max-Age'] === '86400' && /'Access-Control-Max-Age': '86400'/.test(corsSrc14));
+await A('[14] CORS 其餘三頭零變（ACAO *／Methods GET, POST, OPTIONS／Headers Content-Type, Authorization）',
+  CORS_HEADERS['Access-Control-Allow-Origin'] === '*' &&
+  CORS_HEADERS['Access-Control-Allow-Methods'] === 'GET, POST, OPTIONS' &&
+  CORS_HEADERS['Access-Control-Allow-Headers'] === 'Content-Type, Authorization');
+await A('[14] corsResponse 仍完整轉發四頭（corsResponse 面帶 Max-Age）',
+  (() => {
+    const h = new Headers({ 'x-probe': '1' });
+    const out = corsResponse(new Response('ok', { headers: h }));
+    return CORS_HEADERS && Object.entries(CORS_HEADERS).every(([k, v]) => out.headers.get(k) === v) && out.headers.get('x-probe') === '1';
+  })());
+{
+  const fsPkg14 = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { readFileSync?: (p: string, enc: string) => string } | undefined };
+  }).process?.getBuiltinModule?.('node:fs');
+  const pkg14 = JSON.parse(fsPkg14!.readFileSync!(new URL('../package.json', import.meta.url).pathname, 'utf8')) as { sideEffects?: boolean; version: string };
+  await A('[14] package.json sideEffects:false（tree-shake server 模組＋BIP39 詞表）', pkg14.sideEffects === false);
+  await A('[14] sideEffects 前提：src 頂層零副作用語句（const/interface/type/function 之外的型退場）',
+    await (async () => {
+      const files = ['client/note-crypto.ts', 'client/argon2.ts', 'client/keys.ts', 'client/pinlock.ts', 'client/bip39.ts', 'client/wordlist.ts', 'server/auth.ts', 'server/ratelimit.ts', 'server/cors.ts', 'server/hash.ts', 'server/env.ts', 'index.ts'];
+      const fsRe = (globalThis as unknown as {
+        process?: { getBuiltinModule?: (id: string) => { readFileSync?: (p: string, enc: string) => string } | undefined };
+      }).process?.getBuiltinModule?.('node:fs');
+      let offenders = 0;
+      for (const f of files) {
+        const lines = (fsRe!.readFileSync!(new URL(`../src/${f}`, import.meta.url).pathname, 'utf8')).split('\n');
+        for (const line of lines) {
+          if (/^[a-zA-Z(/]/.test(line)) {
+            // 頂層語句白名單：import/export＋註解＋純宣告（const/let/var/function/async/
+            // interface/type/enum/class/declare）——其餘字母開頭頂層＝執行面 side effect。
+            if (/^(import\b|export\b|\/\*\*|\*|\/\/|const\b|let\b|var\b|function\b|async\b|interface\b|type\b|enum\b|class\b|declare\b)/.test(line)) continue;
+            offenders++;
+          }
+        }
+      }
+      return offenders === 0;
+    })());
+}
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 
