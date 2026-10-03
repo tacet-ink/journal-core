@@ -58,8 +58,10 @@ const HEX_RE = /^([0-9a-f][0-9a-f])+$/;
 // ── 基礎工具（export 供 argon2.ts 等同檔模組複用；語意不變） ─────────────────
 
 export function b64(bytes: Uint8Array): string {
-  // 分塊 String.fromCharCode.apply（t_7361b68c 目標 2：review 實測瀏覽器 4MiB 222ms→27ms、
-  // node 1ms）。瀏覽器端恆走本形——core 是 isomorphic TS 源碼發行，不引入 Node-only
+  // 分塊 String.fromCharCode.apply（t_7361b68c 目標 2：review 實測瀏覽器 4MiB 222ms→27ms；
+  // node 端分塊形 132-181ms→18ms，與閘執行帳同源——review 的 Node-only toBase64 1ms 帳是
+  // 不同形，非本體帳：round 2 MINOR-2 對齊）。瀏覽器端恆走本形——core 是 isomorphic TS
+  // 源碼發行，不引入 Node-only
   // toBase64 分支（卡面否決案）。apply 參數上限安全窗 8192；輸出 byte 等價
   // （驗證閘 [14] 有 0/1/7/8191/8192/8193/65539 邊界逐位元組對照＋unb64 roundtrip）。
   let binary = '';
@@ -146,8 +148,8 @@ export function normalizePin(pin: string): string {
   return pin.normalize('NFKC').trim().toLowerCase();
 }
 
-async function derivePbkdf2Bits(password: string, salt: Uint8Array, iterations: number, keyMat?: CryptoKey): Promise<Uint8Array> {
-  const km = keyMat ?? await importKeyRawForKdf(password);
+async function derivePbkdf2Bits(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+  const km = await importKeyRawForKdf(password);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' }, km, 256);
   return new Uint8Array(bits);
 }
@@ -156,9 +158,11 @@ async function deriveKek2(cfg: NoteCryptoConfig, passphrase: string, pin: string
   // pass 段與 pin 段 PBKDF2 相互獨立（不同 salt/密碼不同鹽源）＝可並行（t_7361b68c 目標 1）。
   // ⚠️ 瀏覽器 hash-wasm Argon2（jr3d. 對應形 deriveKek2Argon）禁並行——純 wasm Argon2id
   // 共享記憶體池、兩實例並行在部分引擎靜態直 throw，卡面 review 明示；並行只收 PBKDF2 家族。
-  const keyMat = await importKeyRawForKdf(passphrase);
+  // 兩段各自 importKeyRawForKdf（round 2 NIT-2：keyMat 參數化退場——pass/pin 段絕不共享 PBKDF2 基材）。
+  // 輸出序＝ikm 組裝序＝passBits@0 ‖ pinBits@32（與原串行逐位一致）；閘錨綁左手側 destructure，
+  // 對調滑接＝既有 jr2w. 帳戶全不可解（round 2 MAJOR-1 reviewer rev-harm 一手實證）。
   const [passBits, pinBits] = await Promise.all([
-    derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS, keyMat),
+    derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS),
     derivePbkdf2Bits(pin, new TextEncoder().encode(cfg.pinSaltPrefix + toHex(pinSalt)), PIN_PBKDF2_ITERATIONS),
   ]);
   const ikm = new Uint8Array(passBits.byteLength + pinBits.byteLength);
@@ -434,8 +438,10 @@ export async function unwrapNoteKeyWithRecToken(cfg: NoteCryptoConfig, wrapped: 
 /**
  * 綁定請求的金鑰包裹三件套（bind 用）+ recovery_token_hash。
  * 兩段 600k PBKDF2 相互獨立（pass 鹽隨機、rec 鹽=recSaltPrefix‖identity 定值）＝並行
- *（t_7361b68c 目標 1：node 實測 133-152ms→55-81ms）。AES-GCM derive 佔 600k 迴圈 99%，
- * 兩段 wrapped 各自有隨機 iv 與鹽——逐位等值帳由「兩段各自與 wrapNoteKey 直呼相等」承載。
+ *（t_7361b68c 目標 1：node 實測 133-152ms→68-84ms，與閘執行帳同源——round 2 MINOR-2 對齊）。
+ * AES-GCM derive 佔 600k 迴圈 99%，兩段 wrapped 各自隨機 iv（pass 段另隨機鹽 16B；rec 腿
+ * KEK 鹽定值、回傳 salt 來自 pass 腿 w1——round 2 MINOR-2 措辭修正）——逐位等值帳由
+ * 「兩段各自與 wrapNoteKey 直呼相等」承載。
  */
 export async function buildBindPayload(
   cfg: NoteCryptoConfig,
