@@ -727,6 +727,26 @@ await A('unwrapNoteKeyDual：salt1 hex 非法字元 ' + 'z' + ' → null（92B �
 await A('unwrapNoteKeyDual：salt1 hex 奇數長 → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31))) === null);
 await A('unwrapNoteKey3：salt hex 形檢查照舊（既有契約不變）',
   (await unwrapNoteKey3(TACET3, w3.wrapped, pass, 'a'.repeat(31) + 'z')) === null);
+// 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
+// 舊碼（無 rawHex 長度/形檢）下 32-hex 假 noteKey 與 'zz' 前綴零化 hex 皆 NON-NULL＝假金鑰生產器。
+const craftKek = (async (): Promise<CryptoKey> => {
+  const keyMat = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: hexToBytes(salt) as BufferSource, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+})();
+await A('鍛造 60B payload（32-hex 假 noteKey 面）→ null（payload 長度＋rawHex 長度雙擋）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('ab'.repeat(16)) as BufferSource));
+  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
+  return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
+})());
+await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex hex 形檢查；長度檢幫不上）', await (async () => {
+  const kekC = await craftKek;
+  const ivC = crypto.getRandomValues(new Uint8Array(12));
+  const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
+  const p = new Uint8Array(12 + ctC.byteLength); p.set(ivC, 0); p.set(ctC, 12);
+  return (await unwrapNoteKey(TACET, 'jr1w.' + b64(p), pass, salt)) === null;
+})());
 // 錯誤碼語意分離（目標 6）：空 PIN ≠ 未配置；jr3d 兩 case 同碼分流
 await A('wrapNoteKeyDual 空 PIN → ERR_PIN_EMPTY（非 NOT_CONFIGURED）', await (async () => {
   try { await wrapNoteKeyDual(TACET2, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
