@@ -8,7 +8,8 @@
  *   同 IP 併發首發不再有 INSERT/輸家競態（同語句同鍵衝突時第二發原子吃到
  *   count+1；D1 實測 RETURNING 逐發回真值——同 IP 併發首發不 undercount）。
  * - fail-open 裁定不變（2026-09-06）：限流儲存故障時放行（保護面不可反噬主功能），
- *   只擋明確超額。
+ *   只擋明確超額。RETURNING 異形回應（results 空／alias 斷裂）同向 fail-open
+ *   並 console.error 照實回報（r2 MINOR-3：異形不反向成 deny）。
  *
  * 放行判準：RETURNING 的 count <= max（窗口內超額後的每一發都回實際 count，
  * 由呼叫端以 count <= max 拒絕——計數不封頂，超額仍逐發累計）。
@@ -35,14 +36,14 @@ function assertSafeTable(table: string): void {
   if (!/^[\w]+$/.test(table)) throw new Error(`ERR_RATE_TABLE_NAME: ${table}`);
 }
 
-/** UPSERT…RETURNING 單句（{table} 佔位由呼叫端替換；D1 實測 RETURNING 列經 results 回帶）。 */
+/** @internal（0.1.6 公開面走 index.ts checkRate）。UPSERT…RETURNING 單句（{table} 佔位由呼叫端替換；D1 實測 RETURNING 列經 results 回帶）。 */
 export const SQL_RATE_BUMP = `INSERT INTO {table} (ip, window_start, count) VALUES (?1, ?2, 1)
   ON CONFLICT(ip) DO UPDATE SET
     count        = CASE WHEN window_start <= ?3 THEN 1 ELSE count + 1 END,
     window_start = CASE WHEN window_start <= ?3 THEN ?2 ELSE window_start END
   RETURNING count AS n`;
 
-/** 放行判準單一真相：窗口內超額後照實回實際 count，呼叫端以 count <= max 拒絕。 */
+/** @internal（0.1.6 公開面走 index.ts checkRate）。放行判準單一真相：窗口內超額後照實回實際 count，呼叫端以 count <= max 拒絕。 */
 export function isRateAllowed(count: number, max: number): boolean {
   return count <= max;
 }
@@ -55,11 +56,14 @@ async function bumpRate(env: Env, w: RateWindow, ip: string): Promise<boolean> {
       SQL_RATE_BUMP.replaceAll('{table}', w.table)
     ).bind(ip, now, now - w.windowMs).run();
     const first = results[0] as { n?: unknown } | undefined;
-    const count =
-      first && typeof first.n === 'number' && Number.isFinite(first.n)
-        ? first.n
-        : NaN;
-    return isRateAllowed(count, w.max);
+    const n = first?.n;
+    if (typeof n !== 'number' || !Number.isFinite(n)) {
+      // 異形回應（results 空／alias 斷裂）與儲存故障同向 fail-open（2026-09-06 裁定：
+      // 缺陷偏向放行，不反向成 deny）；真 D1 不產生（探針實證）——守衛照實回報。
+      console.error(`[ratelimit] ${w.table} unexpected RETURNING shape:`, first);
+      return true;
+    }
+    return isRateAllowed(n, w.max);
   } catch (e) {
     // fail-open 裁定（2026-09-06）：儲存故障時放行，只擋明確超額
     console.error(`[ratelimit] ${w.table} update failed:`, e);

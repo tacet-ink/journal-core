@@ -595,15 +595,21 @@ await A("畸形 guest 前綴 '' → decryptNote 舊明文相容層同「未配�
 //         checkRate/timingSafeEq）＋ 本機鎖定全函式（pinlock jr1p.，目標 8） ──────────
 
 console.log('\n[12] 伺服器端原語（auth/ratelimit/hash）＋ 本機鎖定（pinlock）');
-// ratelimit 行為面（t_b91ed07f）：真 node:sqlite 直載 UPSERT…RETURNING 單句對真實
-// SQLite 引擎全三態驗證（D1 同為 SQLite；D1 實測另有 wrangler dev 探針回帶 results——
-// 見卡 comments）。表名直插 SQL＝注入面驗證；放行判準 count<=max 單一真相。
+// ratelimit 行為面（t_b91ed07f；r2 MAJOR-2 收口）：真 node:sqlite 直載 UPSERT…RETURNING 單句，
+// 行為斷言全數「真生產函式 checkRate 直驅」——D1 形 shim 包 node:sqlite 只做 D1 run() 的
+// {results} 回帶形，無測試端 glue 副本。表名直插 SQL＝注入面驗證；放行判準 count<=max
+// 單一真相。同 IP 真併發不 undercount 的 D1 活線證據見卡 comments（wrangler dev 探針：
+// UPSERT…RETURNING 於 wrangler 4.129.0 workerd 逐發回真值；併發首發兩發計數 1→2）。
 type RateRow = { ip: string; window_start: number; count: number };
+const RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 3 };
 const makeRateDb = (): {
-  db: unknown;
-  allowed: (ip: string, windowStart: number, cutoff: number, max: number) => boolean;
+  db: {
+    exec: (s: string) => void;
+    prepare: (s: string) => { all: (...p: unknown[]) => Array<Record<string, unknown>>; get: (...p: unknown[]) => Record<string, unknown> | undefined };
+  };
   row: (ip: string) => RateRow | undefined;
   runRaw: (sql: string) => void;
+  check: (ip: string) => Promise<boolean>;
 } => {
   const { DatabaseSync } = (globalThis as unknown as {
     process?: { getBuiltinModule?: (id: string) => { DatabaseSync?: unknown } };
@@ -614,64 +620,83 @@ const makeRateDb = (): {
     prepare: (s: string) => { all: (...p: unknown[]) => Array<Record<string, unknown>>; get: (...p: unknown[]) => Record<string, unknown> | undefined };
   })(':memory:');
   db.exec('CREATE TABLE login_rate (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
-  const bump = db.prepare(SQL_RATE_BUMP.replaceAll('{table}', 'login_rate'));
-  const sel = db.prepare('SELECT * FROM login_rate WHERE ip = ?');
   return {
     db,
-    allowed: (ip, windowStart, cutoff, max) =>
-      isRateAllowed((bump.all(ip, windowStart, cutoff)[0]?.n as number) ?? NaN, max),
-    row: (ip) => sel.get(ip) as RateRow | undefined,
-    runRaw: (sql) => db.exec(sql),
+    row: (ip: string) =>
+      db.prepare('SELECT * FROM login_rate WHERE ip = ?').get(ip) as RateRow | undefined,
+  runRaw: (sql) => db.exec(sql),
+    // 真 checkRate 直驅：?1/?2/?3 有名參數語意在 node:sqlite 與 workerd 一致（端對端探針實證，見卡 comments）。
+    check: (ip) =>
+      checkRate(
+        {
+          DB: {
+            prepare: (sql: string) => ({
+              bind: (...p: unknown[]) => ({
+                run: async () => ({ results: db.prepare(sql).all(...p), meta: {} }),
+              }),
+            }),
+          },
+        } as unknown as Parameters<typeof checkRate>[0],
+        RATE,
+        ip,
+      ),
   };
 };
-const RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 3 };
-await A('rate：窗內首發 pass（RETURNING n=1）', await (async () => {
-  const r = makeRateDb(); return r.allowed('ip-1', 1000, 900, RATE.max) === true && JSON.stringify(r.row('ip-1'))?.includes('"count":1');
-})());
-await A('rate：同 IP 三發連續 pass、第四發 reject（放行判準 count<=max）', await (async () => {
+await A('rate：真 checkRate 窗內首發 pass（D1-shim 直驅；RETURNING n=1）', await (async () => {
   const r = makeRateDb();
-  const seq = [r.allowed('ip-1', 1000, 900, RATE.max), r.allowed('ip-1', 1000, 900, RATE.max), r.allowed('ip-1', 1000, 900, RATE.max), r.allowed('ip-1', 1000, 900, RATE.max)];
-  return seq[0] && seq[1] && seq[2] && seq[3] === false;
+  return (await r.check('ip-1')) === true && JSON.stringify(r.row('ip-1'))?.includes('"count":1');
 })());
-await A('rate：併發首發不 undercount（原 INSERT/輸家競態面——單句原子後兩發計數 1→2）', await (async () => {
+await A('rate：同 IP 連發衝突臂計數 1→2（UPSERT 單句原子——同鍵衝突逐發累計不 undercount；真併發面由 D1 活線探針承載見卡 comments）', await (async () => {
   const r = makeRateDb();
-  r.allowed('ip-c', 1000, 900, RATE.max); r.allowed('ip-c', 1000, 900, RATE.max);
-  return r.row('ip-c')?.count === 2;
+  return (await r.check('ip-c')) === true && (await r.check('ip-c')) === true && r.row('ip-c')?.count === 2;
 })());
-await A('rate：窗口過期整窗重置（count 歸 1＋window_start 換新）', await (async () => {
+await A('rate：同 IP 三發 pass、第四發 reject（真 checkRate；放行判準 count<=max）', await (async () => {
   const r = makeRateDb();
-  for (let i = 0; i < RATE.max + 2; i++) r.allowed('ip-w', 1000, 900, RATE.max);
-  r.allowed('ip-w', 2000000, 1940000, RATE.max); // 過期窗：window_start 1000 <= cutoff 1940000 → 重置
+  const seq = [await r.check('ip-3'), await r.check('ip-3'), await r.check('ip-3'), await r.check('ip-3')];
+  return seq[0] === true && seq[1] === true && seq[2] === true && seq[3] === false;
+})());
+await A('rate：真 checkRate 窗口過期整窗重置（舊窗 seed→重置發放行且 n=1 不吃 max 帽；window_start 換新至真時鐘）', await (async () => {
+  const r = makeRateDb();
+  r.runRaw("INSERT INTO login_rate (ip, window_start, count) VALUES ('ip-w', 1000, 99)");
+  const ok = (await r.check('ip-w')) === true;
   const row = r.row('ip-w');
-  return row?.count === 1 && row?.window_start === 2000000;
+  return ok && row?.count === 1 && (row?.window_start ?? 0) > 1_700_000_000_000;
 })());
-await A('rate：同一發內過期重置＋立即放行（重置發回 n=1 不吃 max 帽）', await (async () => {
+await A('rate：真 checkRate count 不封頂（超額發照實累計 6——審計可見非靜默吞）', await (async () => {
   const r = makeRateDb();
-  for (let i = 0; i < RATE.max + 1; i++) r.allowed('ip-x', 3000000, 2940000, RATE.max); // 已滿窗
-  return r.allowed('ip-x', 4000000, 3940000, RATE.max) === true; // 過期後首發放行
-})());
-await A('rate：count 不封頂（超額發照實累計 5、6——審計可見非靜默吞）', await (async () => {
-  const r = makeRateDb();
-  for (let i = 0; i < 6; i++) r.allowed('ip-m', 1000, 900, RATE.max);
+  for (let i = 0; i < 6; i++) await r.check('ip-m');
   return r.row('ip-m')?.count === 6;
 })());
-await A('rate：checkRate 呼叫端形（env.DB.prepare→bind→run；D1 results 回帶）fail-open', await (async () => {
+await A('rate：真 checkRate 他 IP 隔離（計數互不干擾）', await (async () => {
+  const r = makeRateDb();
+  await r.check('ip-a');
+  await r.check('ip-b'); await r.check('ip-b');
+  return r.row('ip-a')?.count === 1 && r.row('ip-b')?.count === 2;
+})());
+await A('rate：checkRate 呼叫端形（env.DB.prepare→bind→run；餵 D1 的 SQL 直插面）＋fail-open', await (async () => {
   const calls: string[] = [];
   const env12 = { DB: {
     prepare: (sql: string) => ({
-      bind: (..._p: unknown[]) => ({ run: async () => { calls.push(sql.slice(0, 30)); throw new Error('D1_DOWN'); } }),
+      bind: (..._p: unknown[]) => ({ run: async () => { calls.push(sql); throw new Error('D1_DOWN'); } }),
     }),
   } };
   const ok = await checkRate(env12 as unknown as Parameters<typeof checkRate>[0], RATE, 'ip-fail');
-  return ok === true && calls.length === 1 && calls[0].startsWith('INSERT INTO');
+  return ok === true && calls.length === 1 && calls[0].startsWith('INSERT INTO') && calls[0].includes('RETURNING');
 })());
 await A('rate：表名注入拒絕（直插 SQL 面）', await (async () => {
   try { await checkRate({ DB: { prepare: () => { throw new Error('SHOULD_NOT_PREPARE'); } } } as unknown as Parameters<typeof checkRate>[0], { table: 'x; DROP TABLE users--', windowMs: 1000, max: 3 }, 'ip'); return false; }
   catch (e) { return String((e as Error).message).startsWith('ERR_RATE_TABLE_NAME'); }
 })());
-await A('rate：表名 \w 合法（字母數字底線）', await (async () => {
+await A('rate：表名 \\w 合法（字母數字底線）', await (async () => {
   try { await checkRate({ DB: { prepare: () => { throw new Error('D1_DOWN_FAILOPEN'); } } } as unknown as Parameters<typeof checkRate>[0], { table: 'login_rate_2', windowMs: 1000, max: 3 }, 'ip'); return true; }
   catch (e) { return String((e as Error).message).startsWith('ERR_RATE_TABLE_NAME') === false && String((e as Error).message).includes('D1_DOWN_FAILOPEN'); }
+})());
+await A('rate：RETURNING 異形回應守衛 fail-open（results 空／alias 斷裂——與儲存故障同向，r2 MINOR-3 不反向 deny）', await (async () => {
+  const mkEnv = (run: () => Promise<unknown>) =>
+    ({ DB: { prepare: () => ({ bind: () => ({ run }) }) } } as unknown as Parameters<typeof checkRate>[0]);
+  const empty = await checkRate(mkEnv(async () => ({ results: [] })), RATE, 'ip');
+  const alias = await checkRate(mkEnv(async () => ({ results: [{ m: 1 }] })), RATE, 'ip');
+  return empty === true && alias === true;
 })());
 await A('rate：SQL_RATE_BUMP 常數形（UPSERT…RETURNING…count AS n；{table} 佔位）',
   /^INSERT INTO \{table\} \(ip, window_start, count\) VALUES \(\?1, \?2, 1\)\n\s+ON CONFLICT\(ip\) DO UPDATE SET\n\s+count\s+= CASE WHEN window_start <= \?3 THEN 1 ELSE count \+ 1 END,\n\s+window_start = CASE WHEN window_start <= \?3 THEN \?2 ELSE window_start END\n\s+RETURNING count AS n$/.test(SQL_RATE_BUMP));
@@ -697,15 +722,19 @@ await A('inboundCipher：真明文照收', inbound('純明文') === '純明文')
 await A('inboundCipher：非字串 null', inbound(42) === null);
 await A('isCipherFor：家族前綴 true／非家族 false',
   isCipherFor('jr1b.abc', formats) && isCipherFor('jr1u.abc', formats) && !isCipherFor('jr2x.abc', formats));
-await A('makeInboundCipher regex 跳脫全字面（P2.5 行為面：舊碼 .replace 單點跳脫讓 c() 誤判密文——>max 丟棄 vs 明文截斷兩路分岔）',
+await A('makeInboundCipher regex 跳脫全字面（r2 MAJOR-1 辨別形重推——探針新舊碼輸出一手實測，兩向分歧各一）',
   (() => {
-    // 前綴字面含 regex 符號（可建構形——裸 '(' 形舊碼建構即 throw）：'a.b|c()'
-    const f: CipherFormats = { cipherPrefixes: ['a.b|c(' + String.fromCharCode(41), 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 500 };
+    // 舊碼 .replace('.','\\.') 只跳第一個點，前綴含 regex 符號（| ( )）時家族 regex 失真，
+    // 兩方向輸出分歧（一手對照探針帳面：tmp probe-d1.cjs，main 舊碼 vs 分支新碼）：
+    // ①完整前綴形『a.b|c()』+A*600（真家族密文標記）：正碼辨得前綴 → >max 密文丟棄 null；
+    //   舊碼 regex 辨不出自家前綴 → 誤落明文截斷（>max 密文截半損毀＝舊碼 slice(0,500)）。
+    // ②點前截形『a.b』+A*600：舊碼 a\.b 殘臂（從頭起 b64 全程）誤咬 → 丟棄 null；
+    //   正碼前綴不完整非家族 → 明文截斷照收 slice(0,500)。兩形缺一即探針無齒（r1 教訓）。
+    const f: CipherFormats = { cipherPrefixes: ['a.b|c()', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 500 };
     const m = makeInboundCipher(f);
-    // 'c()' + 600 chars > max：舊碼 regex 的 c\(\) 誤分支咬住 → 密文丟棄 null；
-    // 正碼全字面跳脫 → 非家族前綴 → 明文截斷照收。
-    const probe = 'c()' + 'A'.repeat(600);
-    return m(probe) === probe.slice(0, 500) && m('a.b|c()Zm9v') === 'a.b|c()Zm9v';
+    const full = 'a.b|c()' + 'A'.repeat(600);
+    const dotHead = 'a.b' + 'A'.repeat(600);
+    return m(full) === null && m(dotHead) === dotHead.slice(0, 500);
   })());
 await A('validWrappedKey：合法包裹 true／超長 null／非法前綴 null',
   validWrappedKey('jr1w.' + b64(new Uint8Array(32)), 'jr1w.') !== null &&

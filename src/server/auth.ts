@@ -19,13 +19,15 @@
  * - 常數時間比較 timingSafeEq：./hash.ts 匯出（login 動線經 PH2 查詢不直比）。
  *
  * 不變量（勿破壞）：
- * - 金鑰包裹欄組（wrapped+salt）缺一整組放棄；rec 包裹與種子 hash 必須成對出現
+ * - 金鑰包裹欄組（wrapped+salt）缺一整組放棄——pair 檢查本體在 pickKeyPackage。
+ * - recPkg 與 recHash 成對出現＝呼叫端（fork store）職責：本層介面兩參各自可空、
+ *   不做 pair 檢查（r2 MINOR-4 照此收口；pickKeyPackage 是同職責的成對檢查先例）。
  */
 
 import { corsResponse } from './cors.ts';
 import { sha256Hex, generateSessionToken } from './hash.ts';
 import { checkRate, type RateWindow } from './ratelimit.ts';
-import type { Env } from './env';
+import type { Env } from './env.ts';
 
 // ── 格式驗證（自 noteCrypt.ts 抽出；前綴由 config 注入） ─────────────────────
 
@@ -56,7 +58,8 @@ function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
 
 /**
  * 入庫前校正：前綴密文原樣入庫；超限密文／編碼丟棄（截斷必壞）、明文截到上限照收。
- * plainMax：明文相容層上限（入庫原樣、禁截斷密文；無明文相容層的產品可設 0）。
+ * cipherMax（UTF-16 單位）同為明文截斷帽：明文相容層無 opt-out——明文一律照收、
+ * 截到 cipherMax 入庫（r2 MINOR-5：JSDoc 幽靈參數 plainMax 摘除）。
  */
 export function makeInboundCipher(c: CipherFormats) {
   const RE = cipherPrefixRe(c.cipherPrefixes);

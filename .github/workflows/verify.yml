@@ -27,7 +27,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # 斷言數以腳本實際輸出為準（219 → 卡批次後實值見 AGENTS.md；npm run verify
-      # 自帶「N 斷言全綠」尾行——此 step 名不寫死數字免漂移）
+      # 斷言數以腳本實際輸出為準（npm run verify 自帶「N 斷言全綠」尾行）
       - name: Verify crypto primitives
         run: npm run verify

@@ -16,7 +16,7 @@
  * AAD 與長度把關，跨前綴呼叫一律回 null（unwrap 有前綴守衛，驗證閘有跨協議斷言）。
  *
  * 雙載體（同一 spec 兩端一致，交叉驗證逐位元一致）：
- * - node（驗證閘/prod smoke）：node:crypto.argon2（Node 26 原生，26.8.1 實測）
+ * - node（驗證閘/prod smoke）：node:crypto.argon2（24.7.0 落地版，26.8.1 實測）
  * - 瀏覽器：hash-wasm argon2id（純 wasm 內嵌 base64，零網路請求，4.12.0 實測 64MiB t=3 ≈ 180ms）
  * 標準向量：RFC 9106 無 secret/associated-data Argon2id（t=3, m=32, p=4, pwd=32B 0x01, salt=16B 0x00）
  *   = 72d2a36fd5c266bcc96121b24937bc253338cdfcbd273713655748c54b4dd503（兩載體實測 MATCH）。
