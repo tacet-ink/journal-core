@@ -232,6 +232,9 @@ async function deriveKek2Argon(
   pinSalt: Uint8Array,
 ): Promise<CryptoKey> {
   if (!cfg.pinSalt3Prefix) throw new Error('ERR_JR3W_NOT_CONFIGURED');
+  // ⚠️ 瀏覽器 hash-wasm Argon2 禁並行（t_7361b68c）：純 wasm Argon2id 共享記憶體池，
+  // 兩實例並行在部分引擎靜態直 throw——這裡故意保持串行（與 jr2w. PBKDF2 版
+  // deriveKek2 的 Promise.all 並行不同：那裡並行的前提是 crypto.subtle 原生派生）。
   const passBits = await deriveArgon2id(passphrase, salt1, ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM);
   const pinBits = await deriveArgon2id(
     pinNorm,
