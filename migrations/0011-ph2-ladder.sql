@@ -18,10 +18,17 @@
 
 PRAGMA defer_foreign_keys = TRUE;
 
+-- PK 面裁定（run 590 定形）：ph2 本身為 PRIMARY KEY（值主權威——同一舊值恰一列，
+-- 最新持有者勝：A 遷移落 ladder(V→A) 後，若 V 值幽靈帳戶後建並同樣遷移，upsert
+-- 以 ON CONFLICT(ph2) 覆蓋為 (V→B)，查表恆回唯一列）。account_id NOT NULL＋UNIQUE
+-- index（一帳戶可有多舊值歷列：legacy→v2→v3 每段遷移各存一段舊值）；FK CASCADE
+-- 隨帳戶刪除清列（fork delete-account 面零新語句）。表列可重建（v2 形重新遷移即重落）。
 CREATE TABLE IF NOT EXISTS ph2_ladder (
-  account_id TEXT NOT NULL,              -- ladder 對位（一帳戶單列；移段直銷）
-  ph2 TEXT NOT NULL,                     -- 舊段 ph2 形（'v2'｜'legacy'，搬入即存）
-  upgraded_at INTEGER NOT NULL,          -- 舊形被覆蓋的時刻（時鐘面；遷移率觀測）
-  PRIMARY KEY (account_id),
-  FOREIGN KEY (account_id) REFERENCES users(account_id)
+  ph2 TEXT PRIMARY KEY NOT NULL,          -- 舊值本身（值主權威；查表鍵＝主鍵）
+  account_id TEXT NOT NULL,               -- 持有者（UNIQUE index；帳戶刪除即清）
+  ph2_kind TEXT NOT NULL,                 -- 舊值當年形：'legacy'｜'v2'
+  upgraded_at INTEGER NOT NULL,           -- 舊形被覆蓋的時刻（時鐘面；遷移率觀測）
+  FOREIGN KEY (account_id) REFERENCES users(account_id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_ph2_ladder_ph2 ON ph2_ladder(ph2);
