@@ -64,7 +64,7 @@ guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 247 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 249 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
 ```
@@ -172,7 +172,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 247 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 249 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
