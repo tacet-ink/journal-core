@@ -23,8 +23,8 @@
   前綴全部可配置，AAD（防搬移綁結）由呼叫端傳入。
 - **extractable 鐵律**：要被 exportKey/wrap 的 key（noteKey 全部產生路徑），
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
-- **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal）
-  未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
+- **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal／
+  wrap4／wrapDual4）未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
   解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。
 
 ## 模組（Modules）
@@ -32,7 +32,7 @@
 | 模組 | 內容 |
 | --- | --- |
 | `src/client/note-crypto.ts` | 兩時代加解密、passphrase/復原套件/本機三路包裹、PIN 第二因子合鑰（jr2w.） |
-| `src/client/argon2.ts` | Argon2id 包裹原語（jr3w./jr3d./jr3s.）、PH1 v2 派生、RFC 9106 KAT、雙載體（node:crypto＋hash-wasm） |
+| `src/client/argon2.ts` | Argon2id 包裹原語（jr3w./jr3d./jr3s.＋密語正規化 v3 世代 jr4w./jr4d.）、PH1 v2/v3 派生、RFC 9106 KAT、雙載體（node:crypto＋hash-wasm） |
 | `src/client/pinlock.ts` | 本機 PIN 鎖定包裹（jr1p.，開啟時鎖定） |
 | `src/client/bip39.ts` | 復原套件 24 詞 ⇄ hex64 轉寫層（BIP39，零依賴自製） |
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
@@ -40,7 +40,7 @@
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
-## 前綴契約（家族表：10 個資料前綴＋閘對照組 jr1g.）
+## 前綴契約（家族表：12 個資料前綴＋閘對照組 jr1g.）
 
 前綴是版本契約：payload 佈局與 KDF 由前綴界定，升級 = 新前綴。
 Tacet 部署實例（config 傳入）：
@@ -55,18 +55,29 @@ Tacet 部署實例（config 傳入）：
 | `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
 | `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形，AAD `notekey` |
 | `jr3d.` | PIN 第二因子合鑰（Argon2id 版） | Argon2id(pass)＋Argon2id(pin) → HKDF-SHA256 | 同 jr2w. 形，108B，AAD `notekey2` |
+| `jr4w.` | passphrase 包裹（密語正規化 v3 世代） | Argon2id(normalizePassphrase(pass)，NFKC-only) 同上參數 | 同 jr1w./jr3w. 形，AAD `notekey` |
+| `jr4d.` | PIN 第二因子合鑰（密語正規化 v3 世代） | Argon2id(normalizePassphrase(pass))＋Argon2id(pin) → HKDF-SHA256 | 同 jr2w./jr3d. 形，108B，AAD `notekey2` |
 | `jr3s.` | 單篇分享連結包裹 | Argon2id（同上參數） | 同 jr1w. 形，AAD `notekey-share` |
 | `jr1p.` | 本機 PIN 鎖定（開啟時鎖定） | PBKDF2-SHA256 600k（刻意不用 Argon2id：解鎖要即時） | 同 jr2w. 形，AAD `notekey-pinlock` |
 
 guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌參數化本身；tacet 部署實例 guest 用 `jr1u.`）。
 跨前綴呼叫一律回 null（前綴守衛＋AAD＋長度把關），不拋、不降級。
 
+**世代命名兩軸**（jr4w./jr4d. 起）：前綴數字軸＝KDF 世代代（jr1w→jr2w→jr3w→jr4w，
+KEK 輸入契約改變即換世代）；「v3 家族」文案＝PH1 規格代（PH1 v3 用 `derivePh1ArgonV3`）。
+密語正規化 v3 世代＝KEK 吃 `normalizePassphrase`（NFKC-only：不 trim、不分大小寫）——
+舊前綴家族（jr1w./jr3w./jr2w./jr3d.）契約面永不變（raw 密語派生，帶內版本化禁原地改語意）；
+跨前綴呼叫恆 null（家族隔離）。同密語寫法差（全形/NFD/NFC）在 v3 世代收容為同一 KEK/PH2，
+大小寫與首尾空白仍刻意分流（v3 契約只收容寫法差）。
+
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 249 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 318 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
+                 # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
+                 # ＋常駐毒化矩陣 [16]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
 ```
 
 - 產品碼**零執行時依賴**（WebCrypto 原語）；devDependencies 僅閘用（typescript、@scure/bip39 對照、workers types）。
@@ -106,16 +117,21 @@ const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'note
 ```
 
 PH1 派生（登入憑證）：`derivePh1Argon(pass, saltArg?)` 預設鹽 `PH1_V2_SALT`
-（`'tacet-ph1-v1'`，Tacet 實例）。其他產品可自選**固定域鹽**傳入 `saltArg`——
+（`'tacet-ph1-v1'`，Tacet 實例，raw pass）。其他產品可自選**固定域鹽**傳入 `saltArg`——
 鹽一經選定即 per-product 恆固定（PH2 UNIQUE 約束：同一密語必須恆生同一 PH2；
 per-user 鹽會摧毀幽靈帳號機制）。改鹽＝帶內版本化換鹽尾碼重遷移，禁原地改語意。
+
+PH1 v3（密語正規化世代）：`derivePh1ArgonV3(pass, saltArg?)` 預設鹽 `PH1_V3_SALT`
+（`'tacet-ph1-v2'`，新鹽域＝世代 ph2 命名空間分離——同鹽域會讓 v3 'ＰＡＳＳ' 與 v2 世代
+raw 'PASS' 撞同一 ph2）。派生輸入吃 `normalizePassphrase`（NFKC-only）；v2/legacy 派生面
+零變更（舊帳戶憑證 raw 契約）。兩代 ph2 可並存查表＝tacet 遷移層職責（v0.2.0 批卡②）。
 
 ### 例外契約（錯誤碼語意）
 
 - 空 identity（guest 派生）：加密面拋 `ERR_NO_IDENTITY`、解密面回 `null`
   （K_u = SHA-256(prefix ‖ '') 會靜默產出「空帳號金鑰」＝誤配炸彈，兩面皆 fail-closed）。
-- 空 PIN（`wrapNoteKeyDual`/`wrapNoteKeyDual3`）：拋 `ERR_PIN_EMPTY`——與
-  「功能未配置」（`ERR_DUAL_NOT_CONFIGURED`/`ERR_JR3W_NOT_CONFIGURED`）語意分離。
+- 空 PIN（`wrapNoteKeyDual`/`wrapNoteKeyDual3`/`wrapNoteKeyDual4`）：拋 `ERR_PIN_EMPTY`——與
+  「功能未配置」（`ERR_DUAL_NOT_CONFIGURED`/`ERR_JR3W_NOT_CONFIGURED`/`ERR_JR4W_NOT_CONFIGURED`）語意分離。
 - `hexToBytes` fail-closed：非法 hex（奇數長度/非 hex 字元/空字串）拋 `ERR_BAD_HEX`，
   不再 parseInt 靜默歸零（假金鑰生產器）。unwrap 家族的 try/catch 承接＝跨前綴鐵律
   （回 null 不拋）不變。
@@ -154,7 +170,10 @@ and salted hashes, and never learns your passphrase or the content of any note.
   (e.g. `jr1b.` for bound-era ciphertext, `jr3w.` for Argon2id-wrapped note keys). Upgrading KDF
   parameters always means a new prefix; old prefixes keep decrypting forever (no in-place
   semantic changes). Cross-prefix calls always return `null` — prefix guard + AAD + length
-  checks; they never throw or fall back.
+  checks; they never throw or fall back. The passphrase-normalization generation follows the
+  same rule: `jr4w.`/`jr4d.` wrap with `normalizePassphrase` (NFKC-only — no trim, no
+  case-folding); older prefixes keep deriving from the raw passphrase, so every legacy payload
+  stays decryptable as-is.
 - **Tamper-evidence.** Every AES-GCM operation binds additional authenticated data (AAD) —
   e.g. ciphertext is bound to its note id, so records cannot be shuffled between notes.
 - **Key hygiene.** Any key that must be exported/wrapped is imported with `extractable=true`;
@@ -172,7 +191,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 249 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 318 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
