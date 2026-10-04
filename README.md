@@ -24,7 +24,7 @@
 - **extractable 鐵律**：要被 exportKey/wrap 的 key（noteKey 全部產生路徑），
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
 - **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal／
-  wrap4／wrapDual4）未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
+  wrap4／wrapDual4／wrapLocal）未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
   解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。
 
 ## 模組（Modules）
@@ -40,7 +40,7 @@
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
-## 前綴契約（家族表：12 個資料前綴＋閘對照組 jr1g.）
+## 前綴契約（家族表：13 個資料前綴＋閘對照組 jr1g.）
 
 前綴是版本契約：payload 佈局與 KDF 由前綴界定，升級 = 新前綴。
 Tacet 部署實例（config 傳入）：
@@ -51,6 +51,7 @@ Tacet 部署實例（config 傳入）：
 | `jr1b.` | 綁定時代密文 | 隨機 256-bit noteKey | AES-GCM，AAD 綁 noteId |
 | `jr1c.` | 附件密文（image attachments；選配） | 同筆記金鑰（noteKey／guest key 由呼叫端決定） | AES-GCM，AAD `jr1a:<noteId>:<attachId>` |
 | `jr1d.` | 本機 IDB stored 密文（notes store；選配） | 同筆記金鑰（呼叫端注入） | AES-GCM，AAD 綁 note_id，payload 自帶 `v` 欄 |
+| `jr1l.` | 本機包裹（PWA session 期免重打密語；選配） | deriveGuestKey＝K_u 同 guest 面（identity 派生、passphrase-free） | 同 jr1w. 形，AAD `notekey-local` |
 | `jr1w.` | passphrase 包裹＋復原套件包裹 | PBKDF2-SHA256 600k | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey` |
 | `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
 | `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形，AAD `notekey` |
@@ -76,11 +77,12 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 337 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 374 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
-                 # ＋常駐毒化矩陣 [16]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
+                 # + 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫新自癒）
+                 # ＋常駐毒化矩陣 [16][18]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
 ```
 
@@ -111,6 +113,7 @@ const cfg = {
   cipherGuest: 'jr1g.',      // 換成你自己的品牌前綴家族
   cipherBound: 'jr1b.',
   wrap: 'jr1w.',
+  wrapLocal: 'jr1l.',       // 選配：本機包裹專用前綴（未配置 = 讀舊形回落、寫面退場）
   store: makeKeyStore({ brand: 'myapp' }),
   // cipherGuest / wrapDual / wrapShare / pinLock / cipherAttach / cipherLocal：選配，未配置即拒絕
 };
@@ -189,8 +192,9 @@ and salted hashes, and never learns your passphrase or the content of any note.
   KEK and guest keys are permanently non-extractable.
 
 **Opt-in primitives.** Optional contracts (`cipherGuest` / `wrapDual` / `wrapShare` / `pinLock` /
-`cipherAttach` / `cipherLocal`) are rejected unless explicitly configured, so forks that don't use
-a primitive are unaffected. Unknown or malformed strings never decrypt to plaintext.
+`cipherAttach` / `cipherLocal` / `wrap4` / `wrapDual4` / `wrapLocal`) are rejected unless explicitly
+configured, so forks that don't use a primitive are unaffected. Unknown or malformed strings never
+decrypt to plaintext.
 
 **Modules.** Client: two-era crypto (`note-crypto.ts`), Argon2id wrapping (`argon2.ts`, dual
 carrier: `node:crypto` ≥ Node 24.7 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
@@ -200,7 +204,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 337 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 374 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
