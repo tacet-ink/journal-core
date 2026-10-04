@@ -51,6 +51,7 @@ import {
   unwrapNoteKey4,
   wrapNoteKeyDual4,
   unwrapNoteKeyDual4,
+  unwrapNoteKeyDual4WithSalt,
   ARGON_MEMORY_KIB,
   ARGON_ITERATIONS,
   ARGON_PARALLELISM,
@@ -81,6 +82,11 @@ import {
 import { checkRate, isRateAllowed, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
 import { generateSessionToken, timingSafeEq } from '../src/server/hash.ts';
 import { CORS_HEADERS, corsResponse } from '../src/server/cors.ts';
+import {
+  PH2_LADDER_TABLE,
+  PH2_LADDER_KIND_LEGACY,
+  PH2_LADDER_KIND_V3,
+} from '../src/server/ladder.ts';
 
 const enc = new TextEncoder();
 
@@ -1865,6 +1871,36 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
         trees18.length === 3 && trees18.every((t) => !fs18!.rmSync || !existsSync18(t)));
     }
   }
+}
+
+// ── 19. ladder 表與重取鹽面（v0.2.0 批卡② t_ce216a63；(a+) 案） ──────────────
+//
+// 驗證策略（真 SQLite，node:sqlite）：①ph2_ladder DDL（FK CASCADE／UNIQUE account_id）；
+// ②重取鹽面 unwrapNoteKeyDual4WithSalt＝雙腿重試形為（ladder 遷移旋轉 salt1 後，呼叫端
+// 以 login 回帶的新 salt 重試 jr4d 重包──新面 unwrap 必中、陳舊 salt 必 null 兩面承載）；
+// ③ladder 表語意面（kinds 常數／表名單一真相）。
+// 表名/kind 常數的契約面（PH2_LADDER_TABLE='ph2_ladder'、KIND legacy/v3）由本段斷言直接咬住
+//（fork migration 0011 與 core 原語同字面——漂移＝fork schema 與 core 原語脫鉤＝表缺席 fail-open 面）。
+console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2_ladder）');
+{
+  const { DatabaseSync } = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { DatabaseSync?: unknown } };
+  }).process?.getBuiltinModule?.('node:sqlite') ?? {};
+  if (!DatabaseSync) throw new Error('ERR_SQLITE_UNAVAILABLE');
+  await A('[19] ladder 表名契約：PH2_LADDER_TABLE = ph2_ladder（fork migration 同字面）', PH2_LADDER_TABLE === 'ph2_ladder');
+  await A('[19] ladder kinds 契約：legacy/v3 兩形（常數面）', PH2_LADDER_KIND_LEGACY === 'legacy' && PH2_LADDER_KIND_V3 === 'v3');
+
+  // 重取鹽面：wrap 吃 passD4 全形（NFKC 載體）→ unwrap 以新 salt（ladder 遷移後重取）必中
+  const rewrapD4 = await wrapNoteKeyDual4(TACET4, noteKey, passD4, pinD);
+  const withSalt = await unwrapNoteKeyDual4WithSalt(TACET4, rewrapD4.wrapped, passD, pinD, rewrapD4.salt);
+  await A('[19] WithSalt 重試面：重取 salt1（ladder 遷移後新值）→ unwrap = 原 noteKey',
+    withSalt !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', withSalt))) === origRaw);
+  await A('[19] WithSalt 陳舊鹽面：wrap 期的 salt1（已旋轉面）→ null（鹽旋轉後舊鹽解不開）',
+    (await unwrapNoteKeyDual4WithSalt(TACET4, rewrapD4.wrapped, passD, pinD, dual4.salt)) === null);
+  await A('[19] WithSalt 錯 passphrase → null（同 unwrapNoteKeyDual4 本體契約）',
+    (await unwrapNoteKeyDual4WithSalt(TACET4, rewrapD4.wrapped, 'wrong-passphrase', pinD, rewrapD4.salt)) === null);
+  await A('[19] WithSalt 未配置 cfg（wrapDual4 缺）→ null（opt-in 鐵律同向）',
+    (await unwrapNoteKeyDual4WithSalt({ pinSalt3Prefix: 'tacet-note-pin3:' }, rewrapD4.wrapped, passD, pinD, rewrapD4.salt)) === null);
 }
 console.log(`\n${passed} 斷言全綠` + (failures.length ? `；${failures.length} 失敗` : ''));
 if (failures.length) {
