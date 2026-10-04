@@ -51,13 +51,15 @@ function escapeReLiteral(s: string): string {
 }
 
 /** 前綴家族 → 密文形 regex（單一組裝點；cipherRe 死碼退場）。
- *  never-match 守衛（t_580f9c54 N-7，opt-in 鐵律面）：空陣列／含空字串前綴會組裝出
- *  accept-all 形（`([])` 空交替＝charset 永假、`('')` 空字串首選交替＝明文誤入家族面）——
+ *  never-match 守衛（t_580f9c54 N-7，opt-in 鐵律面；run 574 r2 實測校正）：空字首組態會
+ *  組裝出 accept-all 形——`[]` 與 `['']` 組裝出 byte-identical `^()[A-Za-z0-9+/]+={0,2}$`
+ *  （join('|') 同為空串），無點純 b64 串（≤200）在舊碼 validWrappedKey/pickKeyPackage 放行＝真洞；
  *  回恆不匹配 regex（`/^(?=a)b/` 正 lookahead 錨死永假）＝未配置形整面拒絕，與 opt-in 律同向。
- *  （probe 實證：`[]` 組裝形對 b64 樣本恆 false＝charset 面自帶防線；`['']` 形對明文 true＝真洞。） */
+ *  （probe 實證 /tmp/t580f9c54-r2/n7-corrected-probe.mjs：`[]` 對純 b64 樣本 NON-NULL——
+ *  「charset 恆假自帶防線」是錯誤敘事；帶點前綴向量舊碼本就 null＝帳面無承載。） */
 function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
   const usable = cipherPrefixes.filter(p => typeof p === 'string' && p.length > 0);
-  if (usable.length === 0) return /^(?=a)b/; // never-match（負向條件形：正 lookahead 錨死永假——空字串/任意串皆不匹配）
+  if (usable.length === 0) return /^(?=a)b/; // never-match（lookahead 錨死矛盾面）——空字串/任意串皆不匹配
   const escaped = usable.map(p => escapeReLiteral(p));
   return new RegExp(`^(${escaped.join('|')})[A-Za-z0-9+/]+={0,2}$`);
 }
@@ -87,7 +89,12 @@ export function makeInboundCipher(c: CipherFormats) {
 
 export function isCipherFor(text: string | null | undefined, c: CipherFormats): boolean {
   if (typeof text !== 'string') return false;
-  return text.startsWith(c.cipherPrefixes[0]) || text.startsWith(c.cipherPrefixes[1]);
+  // 空字首組態同面守衛（t_580f9c54 N-7 範圍增補，run 574 r2）：'' 態 startsWith('') 恆真＝
+  // 整體分類面 accept-all（cipherPrefixRe never-match 守衛不覆蓋此直讀 tuple 面——本函式是
+  // 另一組裝點）。守衛形＝跳過空字首的 some() 單點承載：空集恆 false（與 never-match 家族拒絕、
+  // opt-in 未配置即拒鐵律同向）、混合形只摘空槽（['','jr1b.']＝jr1b. 家族面照活）——
+  // 「空集 if 檢＋保留 startsWith(tuple) 原式」兩行形對混合形不設防（空槽仍經 startsWith('') 放行）。
+  return c.cipherPrefixes.some(p => typeof p === 'string' && p.length > 0 && text.startsWith(p));
 }
 
 export function validWrappedKey(v: unknown, wrapPrefix: string | string[]): string | null {

@@ -92,8 +92,10 @@ export function hexToBytes(hex: string): Uint8Array {
   // 測與 parse 同一（正規化後）真相——round 1 審查 MINOR-4：形檢吃正規化串、
   // parseInt 吃原始串＝全形 hex digit NaN 歸零殘形（README 例外契約自穿透），收口殲滅。
   // NFKC 寬容＝設計面刻意（round 2 NIT 記錄 t_580f9c54）：'⑩'→'10' 等相容字元收容後是真 hex
-  // 值（⑩→[16] 實帳），非缺陷形（NaN 歸零已殲滅＝輸出恆數學等值）；正式輸入面（unwrap/鹽欄）
-  // 皆有 ASCII regex 前置守衛攔截，公開原語只保證「正規化後真 hex 恆等值、垃圾恆拒」。
+  // 值（⑩→[16] 實帳），非缺陷形（NaN 歸零已殲滅＝輸出恆數學等值）；rawHex 檢查同式（HEX_RE 同行後置
+  // ＝rawHex 前置守衛）；鹽欄同為同行後置（note-crypto/argon2 各 unwrap 面鹽欄形檢——行號帳不寫死，
+  // 新增段推移行號＝註解行號帳漂移，NIT-a 同病禁再犯）。
+  // 行為恆 null（純註解）；正式輸入面形檢在場，公開原語只保證「正規化後真 hex 恆等值、垃圾恆拒」。
   // 若要 ASCII-only 收緊＝帶內版本化（換前綴），禁原地改語意。
   const norm = hex.normalize('NFKC').toLowerCase();
   if (!HEX_RE.test(norm)) {

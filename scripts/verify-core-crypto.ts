@@ -731,6 +731,15 @@ await A('inboundCipher：真明文照收', inbound('純明文') === '純明文')
 await A('inboundCipher：非字串 null', inbound(42) === null);
 await A('isCipherFor：家族前綴 true／非家族 false',
   isCipherFor('jr1b.abc', formats) && isCipherFor('jr1u.abc', formats) && !isCipherFor('jr2x.abc', formats));
+await A('isCipherFor 空字首組態 → false（\x27\x27 態 startsWith(\x27\x27) 恆真 accept-all——run 574 MINOR-3：cipherPrefixRe 守衛不覆蓋直讀 tuple 面，同向收口；非字串 false 契約照舊）',
+  (() => {
+    const emptyTuple: CipherFormats = { cipherPrefixes: ['', ''], wrapPrefix: 'jr1w.', cipherMax: 5000 };
+    const mixed: CipherFormats = { cipherPrefixes: ['', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 5000 };
+    return isCipherFor('jr1g.abc', emptyTuple) === false && isCipherFor('純明文', emptyTuple) === false &&
+      isCipherFor('jr1g.abc', mixed) === false && // 混合形：空槽摘除、真前綴面承載
+      isCipherFor('jr1b.abc', mixed) === true && // 真前綴面零誤傷
+      isCipherFor(null, formats) === false; // 非字串 false 面（typed 形合法態；運行時 typeof 守衛承載 unknown 呼叫端）
+  })());
 await A('makeInboundCipher regex 跳脫全字面（r2 MAJOR-1 辨別形重推——探針新舊碼輸出一手實測，兩向分歧各一）',
   (() => {
     // 舊碼 .replace('.','\\.') 只跳第一個點，前綴含 regex 符號（| ( )）時家族 regex 失真，
@@ -745,28 +754,40 @@ await A('makeInboundCipher regex 跳脫全字面（r2 MAJOR-1 辨別形重推—
     const dotHead = 'a.b' + 'A'.repeat(600);
     return m(full) === null && m(dotHead) === dotHead.slice(0, 500);
   })());
-// N-7（t_580f9c54）：cipherPrefixRe 空字首組態毒形——never-match 守衛的行為面（probe /tmp/t580f9c54-n7-probe.mts 一手實測後釘期望值）：
-// 『[]／['','']』形 family regex 整面失守＝明文/b64 誤入家族路；『''』單字串 wrapPrefix 形
-// ＝validWrappedKey 對任意 b64 全放行（accept-all 首選交替面）。守衛後：family/re 面 never-match
-// ＝家族路拒絕、明文相容層與 legacy b64 慣例照舊（prefix 無關面不受牽連）；混合『['','jr1b.']』形
-// 只摘空槽不傷真前綴（降級非全拒）。
-await A('validWrappedKey 空字首組態 → null（cipherPrefixRe never-match 守衛——N-7 accept-all 毒形；空陣列/空陣元/空字串三形）',
+// N-7（t_580f9c54）：cipherPrefixRe 空字首組態毒形——never-match 守衛的行為面。
+// run 574 r2 校正（新舊碼組裝對照一手實測 /tmp/t580f9c54-r2/n7-corrected-probe.mjs）：舊碼
+// `[]` 與 `['']` 組裝出 byte-identical `^()[A-Za-z0-9+/]+={0,2}$`（join('|') 同為空串），
+// `['','']` 僅多空首選交替 `^(|)…`＝同面——真洞＝無點純 b64 串（≤200）在舊碼
+// validWrappedKey/pickKeyPackage 放行（NON-NULL）；帶點前綴向量（'jr1w.'+b64）舊碼本就 null
+// （'.' 在 b64 charset 外）＝帳面無承載。r1 版敘事（charset 恆假自帶防線／空槽首選交替洞）經
+// run 574 一手實證俱誤——本段已按實測帳重寫（revert-poison 案為守衛還原面的直接承載）。
+// 守衛後（usable 過濾＋never-match）：家族/re 面整面拒絕；inboundCipher 輸出面 zero delta
+// （家族路摘除後長路徑 b64≤max 短路進 legacy 慣例層、超限丟棄、明文相容層照收——出口與舊碼
+// RE 路徑恆等，probe 33 組合實證）；混合『['','jr1b.']』形只摘空槽、真前綴家族面照活（降級非全拒）。
+await A('N-7 真洞還原面：無點純 b64 ≤200 空字首組態 → null（cipherPrefixRe never-match——守衛摘除即翻紅；三組態）',
   (() => {
-    const w = 'jr1w.' + b64(new Uint8Array(32));
+    const pureB64 = b64(new Uint8Array(32)); // 無點 b64（44 字符）——舊碼本就放行＝真洞載體（帶點向量舊碼本就 null，無承載）
     const emptyTuple = ['', ''];
-    return validWrappedKey(w, []) === null &&
-      validWrappedKey(w, emptyTuple) === null &&
-      validWrappedKey(w, '') === null; // string 形空前綴（單字串 wrapPrefix 誤配）
+    return validWrappedKey(pureB64, []) === null &&
+      validWrappedKey(pureB64, emptyTuple) === null &&
+      validWrappedKey(pureB64, '') === null; // string 形空前綴同面
   })());
-await A('inboundCipher 空字首組態 → 家族路拒絕、明文相容層照收（never-match 守衛不傷 prefix 無關面）',
+await A('N-7 pickKeyPackage 空字首組態 → 整組放棄（validWrappedKey never-match 傳播——wrapped/salt 同 null）',
+  (() => {
+    const p = pickKeyPackage({ wrapped: b64(new Uint8Array(32)), salt: 'a'.repeat(32) }, ['', '']);
+    return p.wrapped === null && p.salt === null;
+  })());
+await A('inboundCipher 空字首組態：輸出面 zero delta（family RE 摘除後長路徑 b64≤max 落 legacy 慣例層、超限丟棄、明文相容層照收——probe 33 組合實證舊≡新，僅路徑歸層從家族 RE 移到 b64 慣例層）',
   (() => {
     const mEmpty = makeInboundCipher({ cipherPrefixes: ['', ''], wrapPrefix: 'jr1w.', cipherMax: 500 });
     const mOneEmpty = makeInboundCipher({ cipherPrefixes: ['', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 500 });
     const plain = '純明文日記內容';
-    return mEmpty(plain) === plain.slice(0, 500) && // 明文相容層照收（family 守衛不誤傷）
+    const pureB64 = b64(new Uint8Array(32)); // 44 字符 >40＝legacy b64 慣例面（家族路拒絕後的唯一去處）
+    return mEmpty(plain) === plain.slice(0, 500) && // 明文相容層照收（家族守衛不誤傷 prefix 無關面）
+      mEmpty(pureB64) === pureB64 && // 家族路摘除後 b64 落 legacy 慣例層（與舊碼 RE+慣例短路出口恆等）
       mOneEmpty('jr1b.' + b64(new Uint8Array(32))) === 'jr1b.' + b64(new Uint8Array(32)) && // 混合形只摘空槽——真前綴家族面照活
-      mOneEmpty(plain) === plain.slice(0, 500); // 空槽首選交替洞封死：明文不誤入家族原樣路
-  })());
+      mOneEmpty(plain) === plain.slice(0, 500);
+  })()); // 真前綴放行面對照＝下兩案「validWrappedKey：合法包裹／pickKeyPackage：成對成立」（同體放行帳，不另立重複案）
 await A('validWrappedKey：合法包裹 true／超長 null／非法前綴 null',
   validWrappedKey('jr1w.' + b64(new Uint8Array(32)), 'jr1w.') !== null &&
   validWrappedKey('jr1w.' + b64(new Uint8Array(300)), 'jr1w.') === null &&
@@ -837,7 +858,6 @@ await A('unwrapNoteKeyDual：salt1 hex 非法字元 ' + 'z' + ' → null（鹽�
 await A('unwrapNoteKeyDual：salt1 hex 奇數長 → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31))) === null);
 await A('unwrapNoteKey3：salt hex 形檢查照舊（既有契約不變）',
   (await unwrapNoteKey3(TACET3, w3.wrapped, pass, 'a'.repeat(31) + 'z')) === null);
-// 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
 // 舊碼（無 rawHex 長度/形檢）下 32-hex 假 noteKey 與 'zz' 前綴零化 hex 皆 NON-NULL＝假金鑰生產器。
 const craftKek = (async (): Promise<CryptoKey> => {
   // deriveKek 鏡像（未匯出）：PBKDF2-SHA256(pass, salt, 600k) → AES-GCM-256。
@@ -943,14 +963,14 @@ await A('index barrel 匯出 clearLocalWrap/buildBindPayload', await (async () =
   return typeof src.clearLocalWrap === 'function' && typeof src.buildBindPayload === 'function';
 })());
 // PinLockConfig 死欄退場（t_7710c766）：型別面真齒＝excess-property 探針（round 1 審查 MINOR-3：
-// 舊形 typeof cfg==='object' 恆真空轉）。r2 MINOR-2 實測校正（t_580f9c54）：required 復活形＝
-// TS2741/TS2345（:679 的 PINLOCK 常數同報＝探針零加值齒）、optional 復活形＝探針字面量未帶該欄
-// ＝excess-property 檢照不到＝tsc 0 綠——robust 形＝pristine 就在探針字面量帶 `noteKeyExtractable:
-// true`＋前置 // @ts-expect-error：欄位復活任何形（required/optional）都多出待位錯誤＝TS2578 紅；
-// pristine 態錯誤恰由 expect-error 吸收＝全 repo tsc 0 綠。
-// 本面綠態＝core+tacet 摘欄後編譯綠。@ts-expect-error 只入毒化形（pristine 待位錯誤＝TS2578 自擋）。
-// @ts-expect-error — 死欄已退場：欄位復活（任何形）＝TS2353/TS2741 在場，TS2578 反噬＝P12 案紅（@see P12-poison-pinlock-deadfield）
-const _cfgProbe: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'p:', pinLockAad: 'notekey-pinlock', noteKeyExtractable: true };
+// 舊形 typeof cfg==='object' 恆真空轉）。r2 MINOR-2 實測校正（t_580f9c54；行號帳由 P12 毒化 tsc 輸出承載
+// 而非註解寫死——新增段推移行號＝註解行號帳漂移，NIT-a 同病禁再犯）：required 復活形＝TS2741（PINLOCK
+// 常數面）＋TS2345（未配置兩案），optional 復活形＝舊形探針未帶該欄＝excess-property 檢照不到＝tsc 0 綠——robust 形＝pristine 就在探針字面量帶 `noteKeyExtractable:
+// undefined as never`＋前置 @ts-expect-error：欄位復活任何形（required/optional/false 字面量）都多出待位錯誤＝TS2578 紅；
+// pristine 態錯誤恰由 expect-error 吸收＝全 repo tsc 0 綠（探針字面量缺 false 形欄不另生錯＝零加值面除名）。
+// 本面綠態＝core+tacet 摘欄後編譯綠。@ts-expect-error 常駐在場（robust 形，見上註）；pristine 態恰由其吸收。
+// @ts-expect-error — 死欄退場待位錯誤面（pristine 恰此一待位錯由本指令吸收；欄位復活任何形＝本指令反噬 TS2578＝P12 案紅）
+const _cfgProbe: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'p:', pinLockAad: 'notekey-pinlock', noteKeyExtractable: undefined as never };
 void _cfgProbe;
 // 壞 b64 面向量（openNoteKey 誠實契約「任何不符恆回 null 不拋」的可觀察承載——round 1 MINOR-5）：
 await A('鍛造壞 base64 面字符 → unwrapNoteKey null（openNoteKey unb64 拋點吞收＝不拋契約；家族面毒化形＝頂層 crash，本面包 try/catch 收乾淨 ✗）', await (async () => {
