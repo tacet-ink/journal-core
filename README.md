@@ -37,6 +37,7 @@
 | `src/client/bip39.ts` | 復原套件 24 詞 ⇄ hex64 轉寫層（BIP39，零依賴自製） |
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
 | `src/server/auth.ts` | 零知識 auth 核心：PH1→PH2 login 動線、入庫格式驗證、包裹欄組成對（pair 檢查 pickKeyPackage）；PH2 UNIQUE 衝突與 session 撤銷＝呼叫端職責 |
+| `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）——幽靈守衛的資料承载位（查表接線在 fork route） |
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
@@ -77,11 +78,12 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 374 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 384 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
                  # + 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫新自癒）
+                 # ＋ladder 表與重取鹽面 [19]（ph2_ladder 原語／upsert 值主權威行為面／unwrapNoteKeyDual4WithSalt）
                  # ＋常駐毒化矩陣 [16][18]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
 ```
@@ -204,7 +206,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 374 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 384 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
