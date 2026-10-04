@@ -306,7 +306,7 @@ export async function unwrapNoteKey4(cfg: Argon3Config, wrapped: string, passphr
 
 async function deriveKek2Argon(
   cfg: Argon3Config,
-  passphrase: string,
+  passLeg: string,
   pinNorm: string,
   salt1: Uint8Array,
   pinSalt: Uint8Array,
@@ -316,7 +316,7 @@ async function deriveKek2Argon(
   // ⚠️ 瀏覽器 hash-wasm Argon2 禁並行（t_7361b68c）：純 wasm Argon2id 共享記憶體池，
   // 兩實例並行在部分引擎靜態直 throw——這裡故意保持串行（與 jr2w. PBKDF2 版
   // deriveKek2 的 Promise.all 並行不同：那裡並行的前提是 crypto.subtle 原生派生）。
-  const passBits = await deriveArgon2id(passphrase, salt1, ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM);
+  const passBits = await deriveArgon2id(passLeg, salt1, ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM);
   const pinBits = await deriveArgon2id(
     pinNorm,
     new TextEncoder().encode(cfg.pinSalt3Prefix + toHex(pinSalt)),
@@ -485,4 +485,27 @@ export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sh
   } catch {
     return null;
   }
+}
+
+// ── ladder 重試鹽面：unwrapNoteKeyDual4WithSalt（v0.2.0 批卡② t_ce216a63） ────
+//
+// 為何同構再開一支：v3 遷移（登入即重遷）會旋轉 salt1（wrapNoteKeyDual4 落新值）；
+// login 舊形面帶回的 salt（v2 世代的 salt1）在遷移後已解不開 v3 新包裹──呼叫端
+// （tacet loginAndUnwrap 的 jr4d. 腿）以「login 回應當下帶回的新 salt」重取入參
+// 重試 unwrap 就是本變體唯一承載面。本體與 unwrapNoteKeyDual4 完全同構（同嚴格
+// 檢查、同 HKDF info 域、同輸出契約）──開支出零差異；命名開新支是「重取鹽」的
+// 語意承載位（呼叫端 grep 可審計），零新增實作面。
+//
+// 補記（t_b91ed07f 家族嚴格度）：salt1 形檢／payload 108B／rawHex 形檢全在
+// unwrapNoteKeyDual4 本體（共用）；本變體純語意薄身。
+
+/** jr4d. 解包（重取 salt1 面）：pinSalt 內嵌自描述，salt1 由呼叫端重取後帶入（ladder 遷移後的新値）；任何不符回 null，不拋。 */
+export async function unwrapNoteKeyDual4WithSalt(
+  cfg: Argon3Config,
+  wrapped: string,
+  passphrase: string,
+  pin: string,
+  salt1Hex: string,
+): Promise<CryptoKey | null> {
+  return unwrapNoteKeyDual4(cfg, wrapped, passphrase, pin, salt1Hex);
 }
