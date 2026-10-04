@@ -158,7 +158,8 @@ export function normalizePin(pin: string): string {
 }
 
 /**
- * 密語正規化契約 v3（v0.2.0 批卡①；卡D 裁定 NFKC-only）：NFKC——**不 trim、不分大小寫**。
+ * 密語正規化契約 v3（v0.2.0 批卡①；卡D 裁定 NFKC-only）：NFKC——**大小寫摺疊禁絕：區分大小寫
+ * （大小寫差＝不同 KEK/ph2）＋首尾空白保留（不 trim）**。
  * 消費面只有 v3 世代：jr4w./jr4d. 包裹家族與 PH1 v3（derivePh1ArgonV3）——
  * 舊前綴家族（jr1w./jr3w./jr2w./jr3d.）契約面永不變（raw pass 派生，帶內版本化＝
  * KEK 輸入契約改變＝換新前綴，禁原地改語意），禁把本函式接進舊家族入口。

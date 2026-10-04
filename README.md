@@ -65,19 +65,23 @@ guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌
 
 **世代命名兩軸**（jr4w./jr4d. 起）：前綴數字軸＝KDF 世代代（jr1w→jr2w→jr3w→jr4w，
 KEK 輸入契約改變即換世代）；「v3 家族」文案＝PH1 規格代（PH1 v3 用 `derivePh1ArgonV3`）。
-密語正規化 v3 世代＝KEK 吃 `normalizePassphrase`（NFKC-only：不 trim、不分大小寫）——
+密語正規化 v3 世代＝KEK 吃 `normalizePassphrase`（NFKC-only：不 trim、不分大小寫——
+大小寫摺疊禁絕＝大小寫差恆不同 KEK/ph2）——
 舊前綴家族（jr1w./jr3w./jr2w./jr3d.）契約面永不變（raw 密語派生，帶內版本化禁原地改語意）；
 跨前綴呼叫恆 null（家族隔離）。同密語寫法差（全形/NFD/NFC）在 v3 世代收容為同一 KEK/PH2，
-大小寫與首尾空白仍刻意分流（v3 契約只收容寫法差）。
+首尾空白與大小寫仍刻意分流（v3 契約只收容寫法差）。
+jr4d. 的 KEK2 HKDF info 域＝`'journal-kek2-v1:' + wrapDual4`（自有域——NFKC-effective 密語下
+jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob 互解 null 為證）。
 
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 318 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 337 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
                  # ＋常駐毒化矩陣 [16]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
+                 # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
 ```
 
 - 產品碼**零執行時依賴**（WebCrypto 原語）；devDependencies 僅閘用（typescript、@scure/bip39 對照、workers types）。
@@ -123,15 +127,20 @@ per-user 鹽會摧毀幽靈帳號機制）。改鹽＝帶內版本化換鹽尾�
 
 PH1 v3（密語正規化世代）：`derivePh1ArgonV3(pass, saltArg?)` 預設鹽 `PH1_V3_SALT`
 （`'tacet-ph1-v2'`，新鹽域＝世代 ph2 命名空間分離——同鹽域會讓 v3 'ＰＡＳＳ' 與 v2 世代
-raw 'PASS' 撞同一 ph2）。派生輸入吃 `normalizePassphrase`（NFKC-only）；v2/legacy 派生面
-零變更（舊帳戶憑證 raw 契約）。兩代 ph2 可並存查表＝tacet 遷移層職責（v0.2.0 批卡②）。
+raw 'PASS' 撞同一 ph2）。派生輸入吃 `normalizePassphrase`（NFKC-only；大小寫摺疊禁絕＝
+大小寫差恆不同 ph2）；v2/legacy 派生面零變更（舊帳戶憑證 raw 契約）。兩代 ph2 可並存查表＝
+tacet 遷移層職責（v0.2.0 批卡②）。
+⚠️ 鹽撞位警告（MINOR-5）：`PH1_V3_SALT` 禁當 `derivePh1Argon` 的 `saltArg` 餵入（反之亦然）——
+把 v3 鹽域值餵 v2 派生（或 fork 把同一 saltArg 帶到兩面）＝NFKC-effective 密語與 v2 raw 密語
+同值撞 ph2，跨世代帳戶空間混合。v3 的 `saltArg` 必須異於本 product 的 v2 鹽域值。
 
 ### 例外契約（錯誤碼語意）
 
 - 空 identity（guest 派生）：加密面拋 `ERR_NO_IDENTITY`、解密面回 `null`
   （K_u = SHA-256(prefix ‖ '') 會靜默產出「空帳號金鑰」＝誤配炸彈，兩面皆 fail-closed）。
 - 空 PIN（`wrapNoteKeyDual`/`wrapNoteKeyDual3`/`wrapNoteKeyDual4`）：拋 `ERR_PIN_EMPTY`——與
-  「功能未配置」（`ERR_DUAL_NOT_CONFIGURED`/`ERR_JR3W_NOT_CONFIGURED`/`ERR_JR4W_NOT_CONFIGURED`）語意分離。
+  「功能未配置」（`ERR_DUAL_NOT_CONFIGURED`/`ERR_JR3W_NOT_CONFIGURED`/`ERR_JR4W_NOT_CONFIGURED`/
+  `ERR_JR4D_NOT_CONFIGURED`）語意分離。
 - `hexToBytes` fail-closed：非法 hex（奇數長度/非 hex 字元/空字串）拋 `ERR_BAD_HEX`，
   不再 parseInt 靜默歸零（假金鑰生產器）。unwrap 家族的 try/catch 承接＝跨前綴鐵律
   （回 null 不拋）不變。
