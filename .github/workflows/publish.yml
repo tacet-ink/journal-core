@@ -34,6 +34,15 @@ jobs:
         run: npm run verify
 
       - name: Check tag matches package version
+        # workflow_dispatch（branch ref）無 v-tag：直接 fail-fast 標記「須推 v* tag」，
+        # 不誤踩「tag != package version」檢查錯訊（t_b91ed07f 殘餘 N-3；t_580f9c54 落地）。
+        if: github.ref_type != 'tag'
+        run: |
+          echo "::error::publish runs on tag refs only (GITHUB_REF_TYPE=$GITHUB_REF_TYPE); push a v* tag."
+          exit 1
+
+      - name: Check tag matches package version (tag ref)
+        if: github.ref_type == 'tag'
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG="$(node -p "require('./package.json').version")"

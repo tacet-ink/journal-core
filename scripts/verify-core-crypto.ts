@@ -731,6 +731,15 @@ await A('inboundCipher：真明文照收', inbound('純明文') === '純明文')
 await A('inboundCipher：非字串 null', inbound(42) === null);
 await A('isCipherFor：家族前綴 true／非家族 false',
   isCipherFor('jr1b.abc', formats) && isCipherFor('jr1u.abc', formats) && !isCipherFor('jr2x.abc', formats));
+await A('isCipherFor 空字首組態 → false（\x27\x27 態 startsWith(\x27\x27) 恆真 accept-all——run 574 MINOR-3：cipherPrefixRe 守衛不覆蓋直讀 tuple 面，同向收口；非字串 false 契約照舊）',
+  (() => {
+    const emptyTuple: CipherFormats = { cipherPrefixes: ['', ''], wrapPrefix: 'jr1w.', cipherMax: 5000 };
+    const mixed: CipherFormats = { cipherPrefixes: ['', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 5000 };
+    return isCipherFor('jr1g.abc', emptyTuple) === false && isCipherFor('純明文', emptyTuple) === false &&
+      isCipherFor('jr1g.abc', mixed) === false && // 混合形：空槽摘除、真前綴面承載
+      isCipherFor('jr1b.abc', mixed) === true && // 真前綴面零誤傷
+      isCipherFor(null, formats) === false; // 非字串 false 面（typed 形合法態；運行時 typeof 守衛承載 unknown 呼叫端）
+  })());
 await A('makeInboundCipher regex 跳脫全字面（r2 MAJOR-1 辨別形重推——探針新舊碼輸出一手實測，兩向分歧各一）',
   (() => {
     // 舊碼 .replace('.','\\.') 只跳第一個點，前綴含 regex 符號（| ( )）時家族 regex 失真，
@@ -745,6 +754,40 @@ await A('makeInboundCipher regex 跳脫全字面（r2 MAJOR-1 辨別形重推—
     const dotHead = 'a.b' + 'A'.repeat(600);
     return m(full) === null && m(dotHead) === dotHead.slice(0, 500);
   })());
+// N-7（t_580f9c54）：cipherPrefixRe 空字首組態毒形——never-match 守衛的行為面。
+// run 574 r2 校正（新舊碼組裝對照一手實測 /tmp/t580f9c54-r2/n7-corrected-probe.mjs）：舊碼
+// `[]` 與 `['']` 組裝出 byte-identical `^()[A-Za-z0-9+/]+={0,2}$`（join('|') 同為空串），
+// `['','']` 僅多空首選交替 `^(|)…`＝同面——真洞＝無點純 b64 串（≤200）在舊碼
+// validWrappedKey/pickKeyPackage 放行（NON-NULL）；帶點前綴向量（'jr1w.'+b64）舊碼本就 null
+// （'.' 在 b64 charset 外）＝帳面無承載。r1 版敘事（charset 恆假自帶防線／空槽首選交替洞）經
+// run 574 一手實證俱誤——本段已按實測帳重寫（revert-poison 案為守衛還原面的直接承載）。
+// 守衛後（usable 過濾＋never-match）：家族/re 面整面拒絕；inboundCipher 輸出面 zero delta
+// （家族路摘除後長路徑 b64≤max 短路進 legacy 慣例層、超限丟棄、明文相容層照收——出口與舊碼
+// RE 路徑恆等，probe 33 組合實證）；混合『['','jr1b.']』形只摘空槽、真前綴家族面照活（降級非全拒）。
+await A('N-7 真洞還原面：無點純 b64 ≤200 空字首組態 → null（cipherPrefixRe never-match——守衛摘除即翻紅；三組態）',
+  (() => {
+    const pureB64 = b64(new Uint8Array(32)); // 無點 b64（44 字符）——舊碼本就放行＝真洞載體（帶點向量舊碼本就 null，無承載）
+    const emptyTuple = ['', ''];
+    return validWrappedKey(pureB64, []) === null &&
+      validWrappedKey(pureB64, emptyTuple) === null &&
+      validWrappedKey(pureB64, '') === null; // string 形空前綴同面
+  })());
+await A('N-7 pickKeyPackage 空字首組態 → 整組放棄（validWrappedKey never-match 傳播——wrapped/salt 同 null）',
+  (() => {
+    const p = pickKeyPackage({ wrapped: b64(new Uint8Array(32)), salt: 'a'.repeat(32) }, ['', '']);
+    return p.wrapped === null && p.salt === null;
+  })());
+await A('inboundCipher 空字首組態：輸出面 zero delta（family RE 摘除後長路徑 b64≤max 落 legacy 慣例層、超限丟棄、明文相容層照收——probe 33 組合實證舊≡新，僅路徑歸層從家族 RE 移到 b64 慣例層）',
+  (() => {
+    const mEmpty = makeInboundCipher({ cipherPrefixes: ['', ''], wrapPrefix: 'jr1w.', cipherMax: 500 });
+    const mOneEmpty = makeInboundCipher({ cipherPrefixes: ['', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 500 });
+    const plain = '純明文日記內容';
+    const pureB64 = b64(new Uint8Array(32)); // 44 字符 >40＝legacy b64 慣例面（家族路拒絕後的唯一去處）
+    return mEmpty(plain) === plain.slice(0, 500) && // 明文相容層照收（家族守衛不誤傷 prefix 無關面）
+      mEmpty(pureB64) === pureB64 && // 家族路摘除後 b64 落 legacy 慣例層（與舊碼 RE+慣例短路出口恆等）
+      mOneEmpty('jr1b.' + b64(new Uint8Array(32))) === 'jr1b.' + b64(new Uint8Array(32)) && // 混合形只摘空槽——真前綴家族面照活
+      mOneEmpty(plain) === plain.slice(0, 500);
+  })()); // 真前綴放行面對照＝下兩案「validWrappedKey：合法包裹／pickKeyPackage：成對成立」（同體放行帳，不另立重複案）
 await A('validWrappedKey：合法包裹 true／超長 null／非法前綴 null',
   validWrappedKey('jr1w.' + b64(new Uint8Array(32)), 'jr1w.') !== null &&
   validWrappedKey('jr1w.' + b64(new Uint8Array(300)), 'jr1w.') === null &&
@@ -815,7 +858,6 @@ await A('unwrapNoteKeyDual：salt1 hex 非法字元 ' + 'z' + ' → null（鹽�
 await A('unwrapNoteKeyDual：salt1 hex 奇數長 → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31))) === null);
 await A('unwrapNoteKey3：salt hex 形檢查照舊（既有契約不變）',
   (await unwrapNoteKey3(TACET3, w3.wrapped, pass, 'a'.repeat(31) + 'z')) === null);
-// 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
 // 舊碼（無 rawHex 長度/形檢）下 32-hex 假 noteKey 與 'zz' 前綴零化 hex 皆 NON-NULL＝假金鑰生產器。
 const craftKek = (async (): Promise<CryptoKey> => {
   // deriveKek 鏡像（未匯出）：PBKDF2-SHA256(pass, salt, 600k) → AES-GCM-256。
@@ -823,11 +865,12 @@ const craftKek = (async (): Promise<CryptoKey> => {
   return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: hexToBytes(salt) as BufferSource, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 })();
 // 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
-// 舊碼（無 rawHex 長度/形檢）下 'zz' 前綴零化 hex 非 null＝假金鑰生產器。
+// 舊碼（無 rawHex 長度/形檢）下 'zz' 前綴零化 hex 與 32-hex 假 noteKey 皆 NON-NULL＝假金鑰生產器。
 // round 1 審查 MAJOR-1 校正：鍛造 encrypt 必帶 additionalData('notekey')＝與 decryptWithKey
 // 同 AAD——缺 AAD 的鍛造 GCM 層恆拒＝rawHex 形檢從未執行（斷言空轉）。
 // craftKek 鏡像真 deriveKek（同 pass 同 salt 同 600k）＝鍛造鏈與真 unwrap 同 KEK：
 // 有效形鍛造真解開（NON-NULL 自證鏈活）、畸形形由各檢查點拒——機制面直接可觀察。
+// AAD 單一化（r2 NIT-a）：F_AAD 是四鍛造向量唯一 AAD 源（對 decryptWithKey 同 AAD 律的 helper 收口）。
 const F_AAD: BufferSource = enc.encode('notekey');
 await A('MAJOR-1 機制面：帶 AAD 鍛造 ct 可解回 rawHex（形檢層可達＝斷言活）', await (async () => {
   const kekC = await craftKek;
@@ -851,7 +894,7 @@ await A('鍛造有效形 92B payload（64-hex 假 noteKey）→ NON-NULL（鍛�
   const raw = new Uint8Array(await crypto.subtle.exportKey('raw', k));
   return raw.length === 32 && raw.every((b: number) => b === 0xab);
 })());
-await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex HEX_RE 形檢查；帶 AAD 真解後形檢拒）', await (async () => {
+await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex HEX_RE 形檢＋hexToBytes fail-closed 雙層——單摘任一被次層接住，P2 同摘 6F 才翻；帶 AAD 真解後形檢拒）', await (async () => {
   const kekC = await craftKek;
   const ivC = crypto.getRandomValues(new Uint8Array(12));
   const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
@@ -860,7 +903,7 @@ await A('鍛造 92B payload 的零化 hex rawHex（zz 前綴）→ null（rawHex
 })());
 // 短 payload 鍛造（60B：iv+ct(hex32假 noteKey)）→ null：openNoteKey 嚴格長度檢的可觀察承載
 //（僅 hexToBytes fail-closed 擋不住「合法 hex 的假 32B 金鑰」——長度檢獨立承載）。
-await A('鍛造 60B payload（合法 hex 32B 假 noteKey，帶 AAD）→ null（openNoteKey 嚴格 92B 長度檢先行）', await (async () => {
+await A('鍛造 60B payload（合法 hex 32B 假 noteKey，帶 AAD）→ null（openNoteKey 嚴格 92B 長度檢＋rawHex 64B 長度雙層——P1b 同摘才翻）', await (async () => {
   const kekC = await craftKek;
   const ivC = crypto.getRandomValues(new Uint8Array(12));
   const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('ab'.repeat(16)) as BufferSource));
@@ -920,12 +963,21 @@ await A('index barrel 匯出 clearLocalWrap/buildBindPayload', await (async () =
   return typeof src.clearLocalWrap === 'function' && typeof src.buildBindPayload === 'function';
 })());
 // PinLockConfig 死欄退場（t_7710c766）：型別面真齒＝excess-property 探針（round 1 審查 MINOR-3：
-// 舊形 typeof cfg==='object' 恆真空轉）——dead 欄復活（毒化輪補回 noteKeyExtractable）即 TS2353 紅；
-// 本面綠態＝core+tacet 摘欄後編譯綠。@ts-expect-error 只入毒化形（pristine 待位錯誤＝TS2578 自擋）。
-const _cfgProbe: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'p:', pinLockAad: 'notekey-pinlock' };
+// 舊形 typeof cfg==='object' 恆真空轉）。r2 MINOR-2 實測校正（t_580f9c54；行號帳由 P12 毒化 tsc 輸出承載
+// 而非註解寫死——新增段推移行號＝註解行號帳漂移，NIT-a 同病禁再犯）：required 復活形＝TS2741（PINLOCK
+// 常數面）＋TS2345（未配置兩案），optional 復活形＝舊形探針未帶該欄＝excess-property 檢照不到＝tsc 0 綠——robust 形＝pristine 就在探針字面量帶 `noteKeyExtractable:
+// undefined as never`＋前置 @ts-expect-error：欄位復活任何形（required/optional/false 字面量）都多出待位錯誤＝TS2578 紅；
+// pristine 態錯誤恰由 expect-error 吸收＝全 repo tsc 0 綠（探針字面量缺 false 形欄不另生錯＝零加值面除名）。
+// 本面綠態＝core+tacet 摘欄後編譯綠。@ts-expect-error 常駐在場（robust 形，見上註）；pristine 態恰由其吸收。
+// @ts-expect-error — 死欄退場待位錯誤面（pristine 恰此一待位錯由本指令吸收；欄位復活任何形＝本指令反噬 TS2578＝P12 案紅）
+const _cfgProbe: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'p:', pinLockAad: 'notekey-pinlock', noteKeyExtractable: undefined as never };
+void _cfgProbe;
 // 壞 b64 面向量（openNoteKey 誠實契約「任何不符恆回 null 不拋」的可觀察承載——round 1 MINOR-5）：
-await A('鍛造壞 base64 面字符 → unwrapNoteKey null（openNoteKey unb64 拋點吞收＝不拋契約）',
-  (await unwrapNoteKey(TACET, 'jr1w.' + '!!not-base64!!', pass, salt)) === null);
+await A('鍛造壞 base64 面字符 → unwrapNoteKey null（openNoteKey unb64 拋點吞收＝不拋契約；家族面毒化形＝頂層 crash，本面包 try/catch 收乾淨 ✗）', await (async () => {
+  try {
+    return (await unwrapNoteKey(TACET, 'jr1w.' + '!!not-base64!!', pass, salt)) === null;
+  } catch { return false; } // 吞收契約破形（本體或呼叫端漏 catch）＝本面 false 紅，非 runner crash
+})());
 await A('openNoteKey 直接呼叫：壞 base64 → null 不拋（本體吞收點）', await (async () => {
   const kekC = await craftKek;
   return (await openNoteKey('jr1w.' + '!!not-base64!!', kekC, 'notekey', 'jr1w.')) === null;

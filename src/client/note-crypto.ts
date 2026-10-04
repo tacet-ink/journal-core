@@ -52,7 +52,10 @@ export const PIN_PBKDF2_ITERATIONS = 2_000_000; // 雙因子 pin 段（設計 v2
 export const IV_LEN = 12;
 
 const HEX32_RE = /^[0-9a-f]{32}$/; // 16-byte salt hex
-/** hex 合法性（fail-closed 目標 #2）：大小寫正規化後長度恰 4n＋每雙位元組真 hex。 */
+/**
+ * hex 合法性（fail-closed 目標 #2）：大小寫正規化後長度恰 2n（n bytes＝2 hex digits×n）＋
+ * 每雙位元組真 hex。
+ */
 const HEX_RE = /^([0-9a-f][0-9a-f])+$/;
 
 // ── 基礎工具（export 供 argon2.ts 等同檔模組複用；語意不變） ─────────────────
@@ -88,6 +91,12 @@ export function hexToBytes(hex: string): Uint8Array {
   // HEX64_RE 前置自守）。奇數長度、非 hex、空字串皆拒；大小寫/全形 NFKC 收容。
   // 測與 parse 同一（正規化後）真相——round 1 審查 MINOR-4：形檢吃正規化串、
   // parseInt 吃原始串＝全形 hex digit NaN 歸零殘形（README 例外契約自穿透），收口殲滅。
+  // NFKC 寬容＝設計面刻意（round 2 NIT 記錄 t_580f9c54）：'⑩'→'10' 等相容字元收容後是真 hex
+  // 值（⑩→[16] 實帳），非缺陷形（NaN 歸零已殲滅＝輸出恆數學等值）；rawHex 檢查同式（HEX_RE 同行後置
+  // ＝rawHex 前置守衛）；鹽欄同為同行後置（note-crypto/argon2 各 unwrap 面鹽欄形檢——行號帳不寫死，
+  // 新增段推移行號＝註解行號帳漂移，NIT-a 同病禁再犯）。
+  // 行為恆 null（純註解）；正式輸入面形檢在場，公開原語只保證「正規化後真 hex 恆等值、垃圾恆拒」。
+  // 若要 ASCII-only 收緊＝帶內版本化（換前綴），禁原地改語意。
   const norm = hex.normalize('NFKC').toLowerCase();
   if (!HEX_RE.test(norm)) {
     throw new Error('ERR_BAD_HEX');
@@ -211,7 +220,7 @@ export async function unwrapNoteKeyDual(cfg: NoteCryptoConfig, wrapped: string, 
     const salt1 = hexToBytes(salt1Hex);
     if (salt1.length !== 16 || !HEX32_RE.test(salt1Hex)) return null;
     const payload = unb64(wrapped.slice(cfg.wrapDual.length));
-    // 嚴格長度：pinSalt(16) + iv(12) + ct(hex 字串 64B + GCM tag 16B) = 108B 固定；rawHex hex 形由 openNoteKey 收口
+    // 嚴格長度：pinSalt(16) + iv(12) + ct(hex 字串 64B + GCM tag 16B) = 108B 固定；rawHex hex 形為本函式自有檢查（鹽內嵌族不經 openNoteKey 本體）
     if (payload.length !== DUAL_SALT_LEN + DUAL_IV_LEN + 80) return null;
     const pinSalt = payload.slice(0, DUAL_SALT_LEN);
     const ivPrefixedCt = payload.slice(DUAL_SALT_LEN); // decryptWithKey 契約：payload = iv[12] ‖ ct
@@ -346,10 +355,12 @@ export async function sealNoteKey(prefix: string | null | undefined, noteKey: Cr
  * GCM（金鑰/AAD/密文損壞）、rawHex 長度/hex 形——恆回 null 不拋。
  * round 1 審查 MINOR-5：atob 對非法字元會拋、原 docstring「不拋」與實作不符——
  * 本體吞收 null（公開原語誠實契約；呼叫端 unwrap 家族 try/catch 是雙防線非依賴面）。
- * 家族嚴格度收口實況（round 1 審查 MINOR-2 校正）：舊碼 argon2 側 jr3w 與雙因子
- * （jr2w/jr3d/jr1p）有 payload 長度檢、note-crypto 單因子家族（unwrapNoteKey/Share/
- * WithRecToken/loadLocalWrap）皆無——9 個 unwrap 複製點的嚴格度分歧由嚴格 92B
- * 一本體終結（jr1wRec 同本體）。
+ * 家族嚴格度收口實況（round 1 審查 MINOR-2 校正＋r2 MINOR-1 殘餘校正 t_580f9c54）：
+ * 鹽外置 6 點由本體嚴格 92B 終結——note-crypto 四點（unwrapNoteKey＝jr1w／
+ * unwrapNoteKeyShare＝jrsw／unwrapNoteKeyWithRecToken＝jr1wRec 同本體／loadLocalWrap）
+ * ＋argon2 兩點（unwrapNoteKey3＝jr3w／unwrapNoteKeyShare3＝jr3s；own 92B 檢已隨收口摘除）；
+ * 鹽內嵌 3 點（jr2w/jr3d/jr1p）own 108B＋rawHex 形檢——與本體同嚴格度、刻意不經本體
+ * （pinSalt 前綴不在鹽外置形契約內）。維護本體時鹽內嵌三族不隨行。
  */
 export async function openNoteKey(wrapped: string, kek: CryptoKey, aad: string, prefix: string): Promise<CryptoKey | null> {
   if (!wrapped.startsWith(prefix)) return null;
