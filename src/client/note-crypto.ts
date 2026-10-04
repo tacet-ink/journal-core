@@ -33,6 +33,10 @@ export interface NoteCryptoConfig {
   cipherBound: string;
   /** 金鑰包裹前綴，如 'jr1w.'。 */
   wrap: string;
+  /** 本機包裹前綴（jr1l.，v0.2.0 批卡③：本機包裹不再借用 cfg.wrap——「一個前綴一份契約」
+   *  的第二違例收口）。未配置 = storeLocalWrap/loadLocalWrap 退場（無寫入／讀取照走
+   *  舊形回落，行為不變——cipherLocal opt-in 母型）。 */
+  wrapLocal?: string;
   /** 雙因子合鑰包裹前綴（jr2w.，PIN 第二因子）。未配置 = dual API 拒絕（未配置行為不變）。 */
   wrapDual?: string;
   /** 雙因子 pin 段 PBKDF2 salt 前綴，如 'journal-note-pin1:'（pinSalt 內嵌 payload 後拼接）。 */
@@ -489,11 +493,23 @@ export async function buildBindPayload(
 
 // ── 本機包裹（PWA session 期免重打密語） ─────────────────────────────────────
 
+/**
+ * 本機包裹（v0.2.0 批卡③）：KEK = deriveGuestKey（identity 派生、passphrase-free——
+ * session 期免重打密語的機制原樣），payload 改走專用前綴 cfg.wrapLocal（jr1l.）。
+ * 舊實作借用 cfg.wrap（jr1w. passphrase 包裹前綴）寫本機包裹＝「一個前綴一份契約」
+ * 的第二違例（wrappedRec 專用前綴歸卡①批面）：本機包裹的 KDF 與 caller 不同、
+ * 儲存面（localStorage）不同、生命週期不同（clearLocalWrap 隨時摘除）——共前綴讓
+ * 「本機字串是否可能誤入 server 包裹欄」對帳失真。新前綴＝讀舊寫新自癒：
+ * loadLocalWrap 先試 jr1l.（本體嚴格面），命中舊形（jr1w.）回落解密後即重包
+ * cfg.wrapLocal 回寫（自癒一次），寫入恆 jr1l.。
+ */
 export async function storeLocalWrap(cfg: NoteCryptoConfig, identity: string, noteKey: CryptoKey): Promise<void> {
   try {
-    if (!cfg.wrap) throw new Error('ERR_WRAP_NOT_CONFIGURED');
+    // 寫入恆專用前綴 cfg.wrapLocal（jr1l.；未配置＝無寫入退場，讀取面照走舊形回落——
+    // 行為不變態）。單一真相：loadLocalWrap 自癒腿經本函式回寫（前綴契約不二寫）。
+    if (!cfg.wrapLocal) return;
     const guest = await deriveGuestKey(cfg, identity);
-    const wrapped = await sealNoteKey(cfg.wrap, noteKey, guest, 'notekey-local');
+    const wrapped = await sealNoteKey(cfg.wrapLocal, noteKey, guest, 'notekey-local');
     cfg.store.set(cfg.store.noteKeyWrap(identity), wrapped);
   } catch { /* private mode：不阻擋主流程 */ }
 }
@@ -501,9 +517,21 @@ export async function storeLocalWrap(cfg: NoteCryptoConfig, identity: string, no
 async function loadLocalWrap(cfg: NoteCryptoConfig, identity: string): Promise<CryptoKey | null> {
   try {
     const stored = cfg.store.get(cfg.store.noteKeyWrap(identity));
-    if (!stored || !cfg.wrap) return null;
+    if (!stored) return null;
     const guest = await deriveGuestKey(cfg, identity);
-    return await openNoteKey(stored, guest, 'notekey-local', cfg.wrap);
+    // 次序契約：新形必先於舊形試——新形 blob 在舊前綴面恆拒（family isolation），次序可觀察。
+    const fresh = cfg.wrapLocal
+      ? await openNoteKey(stored, guest, 'notekey-local', cfg.wrapLocal) // 本體嚴格面（92B＋rawHex hex 形）
+      : null;
+    if (fresh) return fresh;
+    const legacy = cfg.wrap
+      ? await openNoteKey(stored, guest, 'notekey-local', cfg.wrap)
+      : null;
+    if (legacy) {
+      await storeLocalWrap(cfg, identity, legacy);
+      return legacy;
+    }
+    return null;
   } catch {
     return null;
   }

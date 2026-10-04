@@ -37,6 +37,9 @@ import {
   decryptWithKey,
   b64 as modB64,
   unb64 as unb64Mod,
+  deriveGuestKey,
+  sealNoteKey,
+  importAesGcm,
 } from '../src/client/note-crypto.ts';
 import {
   verifyArgonKat,
@@ -1611,6 +1614,258 @@ const KAT17 = {
       (await unwrapNoteKeyDual4(TACET4, KAT17.jr3d, passD, KAT17.pin, KAT17.sd3)) === null);
   }
 
+// ── 18. 本機包裹專用前綴（v0.2.0 批卡③：wrapLocal opt-in＋讀舊寫新自癒；jr1l.） ──
+//
+// 舊實作借用 cfg.wrap（jr1w. passphrase 包裹前綴）寫本機包裹＝「一個前綴一份契約」的第二
+// 違例（wrappedRec 專用前綴歸卡①批面）。收口三面：
+//   ①寫面專用前綴：storeLocalWrap 寫入恆 cfg.wrapLocal（jr1l.）；未配置＝退場無寫入
+//     （cipherLocal opt-in 母型——未配置面零寫入零拋）。
+//   ②讀舊寫新自癒：loadLocalWrap 先試新前綴（本體嚴格面）；命中舊形（借用期 jr1w. blob）
+//     回落解密後重包 cfg.wrapLocal 回寫（自癒恰一次）；解不回（損壞/他機搬來）誠實 null
+//     不硬遷移。
+//   ③未配置態讀取面：照走舊形 cfg.wrap（行為不變），且不自癒重寫（heal 綁在新前綴面）。
+// KEK 不動＝deriveGuestKey（identity 派生、passphrase-free——session 期免重打密語的機制
+// 原樣）；本卡只界「前綴」面（payload 布局的 KDF/prefix 契約由前綴界定——帶內版本化母型）。
+console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫新自癒）');
+{
+  // section 專用 Map store：node 端 localStorage 死位（keys.ts try/catch 恆 null）——stored 面
+  // 行為斷言要可觀察可重放，結構 KeyStore 注入（同 cfg 注入母型；TACET 基座 fixture 不動）。
+  const mapS18 = (() => { const m = new Map<string, string>(); return {
+    get: (k: string): string | null => (m.has(k) ? m.get(k)! : null),
+    set: (k: string, v: string): void => { m.set(k, v); },
+    remove: (k: string): void => { m.delete(k); },
+    noteKeyWrap: (soul: string): string => 't18_notekey:' + soul,
+  }; })();
+  const TACET_L18 = { ...TACET, wrapLocal: 'jr1l.', store: mapS18 };
+  const { wrapLocal: _omit18, ...restN18 } = TACET_L18;
+  const TACET18_NOLOCAL: NoteCryptoConfig = restN18; // wrap 帶、wrapLocal 無（行為不變態）
+  const { wrap: _omitw18, ...restW18 } = TACET_L18;
+  const TACET18_NOWRAP = restW18 as unknown as NoteCryptoConfig; // wrapLocal 帶、wrap 無（回落守衛態）
+
+  const RAW18 = hex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
+  const eqNoteKey18 = async (k: CryptoKey | null): Promise<boolean> =>
+    k !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) === RAW18;
+  const storedOf18 = (c: NoteCryptoConfig, id: string): string | null => c.store.get(c.store.noteKeyWrap(id));
+  const guestOf18 = async (c: NoteCryptoConfig, id: string): Promise<CryptoKey> => deriveGuestKey(c, id);
+
+  // 舊形向量＝借用期工件真本體：sealNoteKey(cfg.wrap, key, guest, 'notekey-local') 形直呼
+  //（PRE 樹一對照實測：舊碼 storeLocalWrap 產出即此形——92B 嚴格面（hex64 字串 payload））。
+  const guestL18 = await guestOf18(TACET_L18, 'acct-l2');
+  const legacyL18 = await sealNoteKey(TACET.wrap, noteKey, guestL18, 'notekey-local');
+  await A('[18] 舊形向量自洽錨：回落前直解 jr1w. blob = 原 noteKey（樣本可重放）',
+    eqNoteKey18(await openNoteKey(legacyL18, guestL18, 'notekey-local', TACET.wrap)));
+
+  // ── P1 寫面：寫入恆新前綴；未配置退場 ──
+  await storeLocalWrap(TACET_L18, 'acct-l2', noteKey);
+  const freshL18 = storedOf18(TACET_L18, 'acct-l2');
+  await A('[18] 寫前綴 jr1l.（store 契約——借用 cfg.wrap 舊形＝反）', !!freshL18 && freshL18!.startsWith('jr1l.'));
+  await A('[18] 寫入 payload unwrap = 原 noteKey（KEK=deriveGuestKey 原樣——本體 92B 嚴格面）',
+    freshL18 !== null && eqNoteKey18(await openNoteKey(freshL18!, guestL18, 'notekey-local', TACET_L18.wrapLocal!)));
+  await A('[18] 未配置 wrapLocal store 退場（noop——stored 殘留零，opt-in 母型）',
+    (async () => { await storeLocalWrap(TACET18_NOLOCAL, 'acct-l1', noteKey); return storedOf18(TACET18_NOLOCAL, 'acct-l1') === null; })());
+
+  // ── P1b 讀面通路（loadLocalWrap 唯一消費點：encryptNote/decryptNote 的 held 設值面） ──
+  const heldB18 = makeHeldKey(); heldB18.set(noteKey);
+  const ctB18 = await encryptNote(TACET_L18, heldB18, 'plain-read-18', 'aad-18b', { current: () => 'acct-l3' });
+  await A('[18] 樣本自洽：bound 密文前綴 jr1b.（held 預置面）', ctB18.startsWith('jr1b.'));
+  await storeLocalWrap(TACET_L18, 'acct-l3r', noteKey);
+  await A('[18] 空-held decrypt 經本機包裹通路 = 原文（read 通路行為面）',
+    (await decryptNote(TACET_L18, makeHeldKey(), ctB18, 'aad-18b', { current: () => 'acct-l3r' })) === 'plain-read-18');
+  await A('[18] 該 identity 無 stored → null（通路不無中生有）',
+    (await decryptNote(TACET_L18, makeHeldKey(), ctB18, 'aad-18b', { current: () => 'acct-l3x' })) === null);
+
+  // ── P2 舊形回落＋自癒回寫（讀舊寫新） ──
+  TACET_L18.store.set(TACET_L18.store.noteKeyWrap('acct-l2'), legacyL18);
+  await A('[18] 舊形（借用期 jr1w. blob）讀回 = 解密成立（回落面行為）',
+    (await decryptNote(TACET_L18, makeHeldKey(), ctB18, 'aad-18b', { current: () => 'acct-l2' })) === 'plain-read-18');
+  const healedL18 = storedOf18(TACET_L18, 'acct-l2');
+  await A('[18] 自癒回寫恆新前綴（stored 舊形摘除——v1 借用面行為翻轉）', !!healedL18 && healedL18!.startsWith(TACET_L18.wrapLocal!));
+  await A('[18] 自癒 blob unwrap 等值（同一 guest KEK 重包）',
+    healedL18 !== null && eqNoteKey18(await openNoteKey(healedL18!, guestL18, 'notekey-local', TACET_L18.wrapLocal!)));
+  await A('[18] 自癒 blob 舊形恆拒（新形不落舊前綴——家族隔離）',
+    (await openNoteKey(healedL18!, guestL18, 'notekey-local', TACET.wrap)) === null);
+  const beforeRe18 = storedOf18(TACET_L18, 'acct-l2');
+  await A('[18] 自癒後二次讀回（fresh face 通路承載）',
+    (await decryptNote(TACET_L18, makeHeldKey(), ctB18, 'aad-18b', { current: () => 'acct-l2' })) === 'plain-read-18');
+  await A('[18] 二次讀不自癒二次（byte-identical——自癒恰一次）', storedOf18(TACET_L18, 'acct-l2') === beforeRe18);
+
+  // ── P2b/P3 垃圾面：回落解不回＝誠實 null 零回寫；他家族/明文殘留零 crash ──
+  const guestB18 = await guestOf18(TACET_L18, 'acct-l2b');
+  const brokenL18 = (await sealNoteKey(TACET.wrap, noteKey, guestB18, 'notekey-local')).slice(0, -8) + 'AAAABBBB';
+  TACET_L18.store.set(TACET_L18.store.noteKeyWrap('acct-l2b'), brokenL18);
+  const blobBeforeBf18 = storedOf18(TACET_L18, 'acct-l2b');
+  const heldT18 = makeHeldKey(); heldT18.set(noteKey);
+  const ctT18 = await encryptNote(TACET_L18, heldT18, 'plain-bf-18', 'aad-18t', { current: () => 'acct-l2t' });
+  await A('[18] 壞舊形（ct 竄改）讀回 → null（誠實降級非拋）',
+    (await decryptNote(TACET_L18, makeHeldKey(), ctT18, 'aad-18t', { current: () => 'acct-l2b' })) === null);
+  await A('[18] 壞舊形零回寫（自癒條款面：解不回不遷移）', storedOf18(TACET_L18, 'acct-l2b') === blobBeforeBf18);
+  const otherK18 = await importAesGcm(crypto.getRandomValues(new Uint8Array(32)), false);
+  TACET_L18.store.set(TACET_L18.store.noteKeyWrap('acct-l2c'), 'jr3d.' + await encryptWithKey(otherK18, 'y'.repeat(50), 'x'));
+  await A('[18] 他家族 blob（鹽內嵌形）讀回 → null（前綴路由不串家族）',
+    (await decryptNote(TACET_L18, makeHeldKey(), ctT18, 'aad-18t', { current: () => 'acct-l2c' })) === null);
+  TACET_L18.store.set(TACET_L18.store.noteKeyWrap('acct-l2p'), 'plain-leftover-18');
+  await A('[18] 明文殘留讀回 → null（零 crash——舊資料層不進包裹通路）',
+    (await decryptNote(TACET_L18, makeHeldKey(), ctT18, 'aad-18t', { current: () => 'acct-l2p' })) === null);
+
+  // ── P3d cfg.wrap 缺席態（回落守衛面：無舊形可解，wrapLocal 帶著也不硬寫） ──
+  const guestW18 = await guestOf18(TACET18_NOWRAP, 'acct-l2w');
+  const legacyW18 = await sealNoteKey('jr1w.', noteKey, guestW18, 'notekey-local');
+  TACET18_NOWRAP.store.set(TACET18_NOWRAP.store.noteKeyWrap('acct-l2w'), legacyW18);
+  const blobBeforeW18 = storedOf18(TACET18_NOWRAP, 'acct-l2w');
+  await A('[18] cfg.wrap 缺席讀舊形 → null（回落守衛面）',
+    (await decryptNote(TACET18_NOWRAP, makeHeldKey(), ctB18, 'aad-18b', { current: () => 'acct-l2w' })) === null);
+  await A('[18] 守衛面 stored 不變（零硬寫）', storedOf18(TACET18_NOWRAP, 'acct-l2w') === blobBeforeW18);
+
+  // ── P5 未配置態讀取面（wrap 帶、wrapLocal 無——v1 行為不變且不自癒） ──
+  const guestN18 = await guestOf18(TACET18_NOLOCAL, 'acct-l2n');
+  const legacyN18 = await sealNoteKey(TACET18_NOLOCAL.wrap, noteKey, guestN18, 'notekey-local');
+  TACET18_NOLOCAL.store.set(TACET18_NOLOCAL.store.noteKeyWrap('acct-l2n'), legacyN18);
+  const blobBeforeN18 = storedOf18(TACET18_NOLOCAL, 'acct-l2n');
+  await A('[18] 未配置態讀舊形 = 解密成立（v1 行為不變——讀取面回落照走）',
+    (await decryptNote(TACET18_NOLOCAL, makeHeldKey(), ctB18, 'aad-18b', { current: () => 'acct-l2n' })) === 'plain-read-18');
+  await A('[18] 未配置態讀取不自癒重寫（heal 綁在新前綴面）', storedOf18(TACET18_NOLOCAL, 'acct-l2n') === blobBeforeN18);
+
+  // ── P6/P7 分離面＋fail-open（私隱模式） ──
+  const gCt18 = await encryptNote(TACET_L18, makeHeldKey(), 'guest-note-18', 'aad-18g', { current: () => 'acct-l5' });
+  await A('[18] guest 期零本機觸碰（stored 殘留零＋前綴 jr1g. 分離面）',
+    storedOf18(TACET_L18, 'acct-l5') === null && gCt18.startsWith('jr1g.'));
+  const FIXQ18 = { get: (): string | null => { throw new Error('LS_GET_DENIED'); }, set: (): void => { throw new Error('LS_SET_DENIED'); }, remove: (): void => { throw new Error('LS_RM_DENIED'); }, noteKeyWrap: (soul: string): string => 't18q_notekey:' + soul };
+  const TACET_Q18: NoteCryptoConfig = { ...TACET_L18, store: FIXQ18 };
+  await A('[18] 私隱模式 store 拋錯不外拋：empty-held encrypt 降級 guest 面（fail-open）',
+    (await encryptNote(TACET_Q18, makeHeldKey(), 'plain-q-18', 'aad-18q', { current: () => 'acct-l4q' })).startsWith('jr1g.'));
+  await A('[18] 私隱模式 get 拋錯 decrypt → null（誠實降級非外拋）',
+    (await decryptNote(TACET_Q18, makeHeldKey(), ctB18, 'aad-18b', { current: () => 'acct-l4q' })) === null);
+  await A('[18] guest 分支零 store 依賴（私隱模式 guest 密文照解）',
+    (await decryptNote(TACET_Q18, makeHeldKey(), gCt18, 'aad-18g', { current: () => 'acct-l5' })) === 'guest-note-18');
+
+  // ── clearLocalWrap 契約原樣 ──
+  await A('[18] clearLocalWrap 摘除面（契約原樣）', (async () => {
+    await storeLocalWrap(TACET_L18, 'acct-l6', noteKey);
+    const had = storedOf18(TACET_L18, 'acct-l6') !== null;
+    clearLocalWrap(TACET_L18, 'acct-l6');
+    return had && storedOf18(TACET_L18, 'acct-l6') === null;
+  })());
+
+  // ── 源碼窗靜態錨（本地段結構——毒化形即計數/窗錨變異） ──
+  const ncSrc18 = await srcOf('../src/client/note-crypto.ts');
+  const localWin18 = ncSrc18.slice(ncSrc18.indexOf('── 本機包裹'), ncSrc18.indexOf('── 日記密文入口'));
+  await A('[18] 源碼窗：本機段零 throw 面（ERR_WRAP_NOT_CONFIGURED 退場——未配置＝無寫入無拋）',
+    localWin18.length > 1900 && !localWin18.includes('ERR_WRAP_NOT_CONFIGURED'));
+  await A('[18] 源碼窗：寫面唯 cfg.wrapLocal seal＋舊借形零殘留（v1 借用面復活即反）',
+    localWin18.split('sealNoteKey(cfg.wrapLocal').length === 2 && !localWin18.includes('sealNoteKey(cfg.wrap,'));
+  await A('[18] 源碼窗：回落三元恰 1（收口形——自癒腿與未配置態同走單一 cfg.wrap 面；借用形復活即 2+）＋自癒接線（if legacy → storeLocalWrap identity legacy 恰 1）',
+    localWin18.split('openNoteKey(stored, guest, \'notekey-local\', cfg.wrap)').length === 2
+    && localWin18.split('await storeLocalWrap(cfg, identity, legacy)').length === 2
+    && /if \(legacy\) \{\s*await storeLocalWrap\(cfg, identity, legacy\);/.test(localWin18));
+  await A('[18] 界面欄：wrapLocal? 宣告恰 1（note-crypto 全檔——NoteCryptoConfig 選配欄）',
+    ncSrc18.split('wrapLocal?: string;').length === 2);
+  // ── [18] 常駐毒化矩陣（本機段結構毒三案——母型 [16]：/tmp 拷貝突變＋fresh import＋出生即棄） ──
+  {
+    const getBuiltin18 = (id: string): unknown =>
+      (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+    const os18 = getBuiltin18('node:os') as { tmpdir?: () => string } | undefined;
+    const fs18 = getBuiltin18('node:fs') as {
+      rmSync?: (p: string, o?: { recursive: boolean; force: boolean }) => void;
+      cpSync?: (a: string, b: string, o?: { recursive: boolean; filter?: (src: string) => boolean }) => void;
+      readFileSync?: (p: string, e?: string) => string;
+      writeFileSync?: (p: string, c: string, e?: string) => void;
+      mkdtempSync?: (p: string) => string;
+    } | undefined;
+    const inner18 = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.POISON_GATE_INNER === '1';
+    const ready18 = !!os18?.tmpdir && !!fs18?.mkdtempSync && !!fs18?.cpSync && !!fs18?.readFileSync && !!fs18?.writeFileSync && !!fs18?.rmSync;
+    if (inner18 || !ready18) {
+      await A('[18] 毒化矩陣載體就緒（node 內建模組在場；內層遞迴由 sentinel 跳過＝正常；缺席＝顯性 FAIL）', inner18 && !ready18 ? false : inner18, 'env unavailable AND not inner');
+    } else {
+      const repoRoot18 = new URL('..', import.meta.url).pathname;
+      const skip18 = (s: string): boolean => s.endsWith('/.git') || s.includes('/.git/') || s.includes('/node_modules') || s.split('/').pop() === 'node_modules';
+      const needlePA18 = "\n    const fresh = cfg.wrapLocal\n      ? await openNoteKey(stored, guest, 'notekey-local', cfg.wrapLocal) // 本體嚴格面（92B＋rawHex hex 形）\n      : null;\n    if (fresh) return fresh;";
+      const needlePB18 = "      await storeLocalWrap(cfg, identity, legacy);\n      return legacy;";
+      const needlePC18 = "sealNoteKey(cfg.wrapLocal,";
+      const existsSync18 = (p: string): boolean => {
+        const fsx18 = getBuiltin18('node:fs') as { existsSync?: (p: string) => boolean } | undefined;
+        return typeof fsx18?.existsSync === 'function' ? fsx18.existsSync(p) : false;
+      };
+      const trees18: string[] = [];
+      const withPoison18 = async (applyS: (s: string) => string, restoreS: (s: string) => string, probe: (dir: string) => Promise<void>): Promise<void> => {
+        const dir = fs18!.mkdtempSync!(os18!.tmpdir!() + '/t18-lw-')!;
+        trees18.push(dir);
+        try {
+          fs18!.cpSync!(repoRoot18, dir, { recursive: true, filter: (s: string) => !skip18(s) });
+          const p = dir + '/src/client/note-crypto.ts';
+          const s0 = fs18!.readFileSync!(p, 'utf8');
+          fs18!.writeFileSync!(p, applyS(s0), 'utf8');
+          await probe(dir);
+        } finally {
+          fs18!.rmSync!(dir, { recursive: true, force: true });
+        }
+      };
+      const freshImport18 = async (dir: string): Promise<Record<string, unknown>> => await import('file://' + dir + '/src/client/note-crypto.ts') as Record<string, unknown>;
+      const mapStore18 = () => { const m = new Map<string, string>(); return {
+        get: (k: string): string | null => (m.has(k) ? m.get(k)! : null),
+        set: (k: string, v: string): void => { m.set(k, v); },
+        remove: (k: string): void => { m.delete(k); },
+        noteKeyWrap: (soul: string): string => 't18p_notekey:' + soul,
+      }; };
+      const baseCfg18 = (store: ReturnType<typeof mapStore18>): NoteCryptoConfig => ({ ...TACET, wrapLocal: 'jr1l.', store: store as unknown as NoteCryptoConfig['store'] });
+
+      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋自癒腿（舊形服務）仍活
+      await withPoison18(
+        (s: string) => s.replace(needlePA18, '\n    const fresh = null;'),
+        (s: string) => s.replace('\n    const fresh = null;', needlePA18),
+        async (dir: string) => {
+          const mod = (await freshImport18(dir)) as typeof import('../src/client/note-crypto.ts');
+          const FIX = mapStore18(); const CFG = baseCfg18(FIX);
+          const nk = await mod.generateNoteKey();
+          await mod.storeLocalWrap(CFG, 'acca2', nk);
+          const hp = mod.makeHeldKey(); hp.set(nk);
+          const ct = await mod.encryptNote(CFG, hp, 'plain-ct-18', 'aadz', { current: () => 'acca2y' });
+          const back = await mod.decryptNote(CFG, mod.makeHeldKey(), ct, 'aadz', { current: () => 'acca2' });
+          await A('[18] 毒化 P18 摘 fresh-face → 本機通路讀死（blob 不可讀——designated）', back === null, String(back));
+          const guestA = await mod.deriveGuestKey(CFG, 'acca2');
+          CFG.store.set(CFG.store.noteKeyWrap('acca2'), await mod.sealNoteKey('jr1w.', nk, guestA, 'notekey-local'));
+          const lback = await mod.decryptNote(CFG, mod.makeHeldKey(), ct, 'aadz', { current: () => 'acca2' });
+          await A('[18] 毒化 P18 自癒腿仍活（舊形 blob 照服務——單面隔離非互毀）', lback !== null, String(lback));
+        });
+      // P18b 摘自癒回寫 → 舊形讀回照解＋stored 殘留 jr1w.（零重寫）
+      await withPoison18(
+        (s: string) => s.replace(needlePB18, '      return legacy;'),
+        (s: string) => s.replace('      return legacy;', needlePB18),
+        async (dir: string) => {
+          const mod = (await freshImport18(dir)) as typeof import('../src/client/note-crypto.ts');
+          const FIX = mapStore18(); const CFG = baseCfg18(FIX);
+          const nk = await mod.generateNoteKey();
+          const guest = await mod.deriveGuestKey(CFG, 'accb2');
+          const legacy = await mod.sealNoteKey('jr1w.', nk, guest, 'notekey-local');
+          CFG.store.set(CFG.store.noteKeyWrap('accb2'), legacy);
+          const hp = mod.makeHeldKey(); hp.set(nk);
+          const ct = await mod.encryptNote(CFG, hp, 'plain-ct-18', 'aadz', { current: () => 'accb2y' });
+          const back = await mod.decryptNote(CFG, mod.makeHeldKey(), ct, 'aadz', { current: () => 'accb2' });
+          await A('[18] 毒化 P18b 摘自癒回寫 → 舊形讀回照解（讀面不依賴回寫線）', back !== null, String(back));
+          await A('[18] 毒化 P18b stored 殘留 jr1w.（零重寫——heal 條款面是唯一重寫者）',
+            typeof legacy === 'string' && legacy.startsWith('jr1w.') && (CFG.store.get(CFG.store.noteKeyWrap('accb2')) ?? '') === legacy);
+        });
+      // P18c 寫面接回借用形（禁手）→ 寫面 fallback jr1w.（v1 借用面復活的行為翻轉）
+      await withPoison18(
+        (s: string) => s.replace(needlePC18, 'sealNoteKey(cfg.wrap,'),
+        (s: string) => s.replace('sealNoteKey(cfg.wrap,', needlePC18),
+        async (dir: string) => {
+          const mod = (await freshImport18(dir)) as typeof import('../src/client/note-crypto.ts');
+          const FIX = mapStore18(); const CFG = baseCfg18(FIX);
+          const nk = await mod.generateNoteKey();
+          await mod.storeLocalWrap(CFG, 'accc2', nk);
+          const blob = CFG.store.get(CFG.store.noteKeyWrap('accc2'));
+          await A('[18] 毒化 P18c 寫面接回借用形 → 寫面 fallback jr1w.（designated——寫面契約行為翻轉）',
+            typeof blob === 'string' && blob.startsWith('jr1w.'), String(blob ?? '').slice(0, 8));
+        });
+      // 還原自證：真樹 needle 計數在所有毒化後仍恰 1×3（byte-exact 還原的行程帳）
+      const srcAfter18 = await srcOf('../src/client/note-crypto.ts');
+      await A('[18] 毒化還原自證（真樹 needle 恰 1×3——毒化零殘留本樹）',
+        srcAfter18.split(needlePA18).length === 2 && srcAfter18.split(needlePB18).length === 2 && srcAfter18.split(needlePC18).length === 2);
+      await A('[18] 毒化樹零殘留（本 run 喚出 ' + trees18.length + ' 棵全清——封閉集判準）',
+        trees18.length === 3 && trees18.every((t) => !fs18!.rmSync || !existsSync18(t)));
+    }
+  }
+}
 console.log(`\n${passed} 斷言全綠` + (failures.length ? `；${failures.length} 失敗` : ''));
 if (failures.length) {
   console.error('失敗項：', failures);
