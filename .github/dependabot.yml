@@ -1,0 +1,23 @@
+# Dependabot：GitHub Actions 版本更新（供應鏈裁定 t_b91ed07f——actions 以 SHA 釘選，
+# 浮動 tag 重寫由 bot PR 提案＋人工覆核 SHA 對位，防 pin 陳舊累積安全債）。t_b91ed07f 殘餘 N-3，t_580f9c54 落地。
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions-minor:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm-dev-minor:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"

@@ -50,9 +50,15 @@ function escapeReLiteral(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** 前綴家族 → 密文形 regex（單一組裝點；cipherRe 死碼退場）。 */
+/** 前綴家族 → 密文形 regex（單一組裝點；cipherRe 死碼退場）。
+ *  never-match 守衛（t_580f9c54 N-7，opt-in 鐵律面）：空陣列／含空字串前綴會組裝出
+ *  accept-all 形（`([])` 空交替＝charset 永假、`('')` 空字串首選交替＝明文誤入家族面）——
+ *  回恆不匹配 regex（`/^(?=a)b/` 正 lookahead 錨死永假）＝未配置形整面拒絕，與 opt-in 律同向。
+ *  （probe 實證：`[]` 組裝形對 b64 樣本恆 false＝charset 面自帶防線；`['']` 形對明文 true＝真洞。） */
 function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
-  const escaped = cipherPrefixes.map(p => escapeReLiteral(p));
+  const usable = cipherPrefixes.filter(p => typeof p === 'string' && p.length > 0);
+  if (usable.length === 0) return /^(?=a)b/; // never-match（負向條件形：正 lookahead 錨死永假——空字串/任意串皆不匹配）
+  const escaped = usable.map(p => escapeReLiteral(p));
   return new RegExp(`^(${escaped.join('|')})[A-Za-z0-9+/]+={0,2}$`);
 }
 
