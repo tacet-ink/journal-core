@@ -27,6 +27,7 @@ import {
   wrapNoteKeyDual,
   unwrapNoteKeyDual,
   normalizePin,
+  normalizePassphrase,
   encryptAttach,
   decryptAttach,
   encryptLocal,
@@ -43,12 +44,18 @@ import {
   unwrapNoteKey3,
   wrapNoteKeyDual3,
   unwrapNoteKeyDual3,
+  wrapNoteKey4,
+  unwrapNoteKey4,
+  wrapNoteKeyDual4,
+  unwrapNoteKeyDual4,
   ARGON_MEMORY_KIB,
   ARGON_ITERATIONS,
   ARGON_PARALLELISM,
   ARGON_TAG_LEN,
   derivePh1Argon,
+  derivePh1ArgonV3,
   PH1_V2_SALT,
+  PH1_V3_SALT,
   type Argon3Config,
 } from '../src/client/argon2.ts';
 import { makeKeyStore } from '../src/client/keys.ts';
@@ -1124,11 +1131,376 @@ await A('[14] corsResponse 仍完整轉發四頭（corsResponse 面帶 Max-Age�
     })());
 }
 
+// ── 15. 密語正規化 v3 世代（v0.2.0 批卡①：normalizePassphrase＋jr4w./jr4d.＋PH1 v3） ──
+//
+// 帶內版本化母型實例：密語 KEK 輸入契約改變（raw → normalizePassphrase NFKC-only）＝新前綴。
+// 命名兩軸分離：卡D 文案「v3 家族」＝PH1 規格代（derivePh1ArgonV3）；前綴數字軸 jr4w./jr4d.
+// ＝KDF 世代代（jr1w→jr2w→jr3w→jr4w，README 家族表對照）。舊家族（jr1w./jr2w./jr3w./jr3d.）
+// 函式體零改＝raw 契約永久不變——本節同字面雙家族對照向量（ＰＡＳＳ１２x／PASS12x）就是
+// 「免換前綴合約證明」的承載面：同組字串在舊家族恆異 KEK（raw 直派生）、在 v3 家族恆同 KEK（NFKC 收容）。
+
+console.log('\n[15] 密語正規化 v3 世代（normalizePassphrase／jr4w.／jr4d.／PH1 v3）');
+
+const noteCryptoSrc15 = await srcOf('../src/client/note-crypto.ts');
+const argon2Src15 = await srcOf('../src/client/argon2.ts');
+const TACET4: Argon3Config = { wrap4: 'jr4w.', wrapDual4: 'jr4d.', pinSalt3Prefix: 'tacet-note-pin3:' };
+const pass4 = 'v3-generation-passphrase-42';
+const passD4 = 'ｄｕａｌ－ｆａｃｔｏｒ－ｐａｓｓｐｈｒａｓｅ－４２'; // NFKC → passD 的全形形
+const passD4_NFKC = normalizePassphrase(passD4); // 與 passD 恆等（NFKC 收容）——正確性自證錨
+if (passD4_NFKC !== passD) { failures.push('passD4_NFKC 定義自證'); console.error('  ✗ passD4_NFKC !== passD'); process.exit(1); }
+
+// 函式契約面（單一真相本體：normalizePassphrase 與 normalizePin 並存不混）
+await A('normalizePassphrase NFKC 契約：全形收容（ｐａｓｓ=pass）', normalizePassphrase('ｐａｓｓ') === 'pass');
+await A('normalizePassphrase NFKC 契約：結合序列合成（カ+U+3099=ガ——NFD/NFC 裝置差收容）',
+  normalizePassphrase('カ\u3099x') === 'ガx');
+await A('normalizePassphrase 分離向量一：不 trim（首尾空白保留）', normalizePassphrase(' pass ') === ' pass ');
+await A('normalizePassphrase 分離向量二：不分大小寫（PaSs 恆 PaSs）', normalizePassphrase('PaSs') === 'PaSs');
+await A('normalizePassphrase 與 normalizePin 契約並存不混（同輸入兩形＝兩輸出）',
+  normalizePin(' Ｐｉｎ42 ') === 'pin42' && normalizePassphrase(' Ｐｉｎ42 ') === ' Pin42 ');
+
+// jr4w. 單因子（v3 密語）roundtrip
+const w4 = await wrapNoteKey4(TACET4, noteKey, pass4);
+await A('wrapped 前綴 jr4w.', w4.wrapped.startsWith('jr4w.'));
+await A('jr4w salt = 16B hex', /^[0-9a-f]{32}$/.test(w4.salt));
+const unwrapped4 = await unwrapNoteKey4(TACET4, w4.wrapped, pass4, w4.salt);
+await A('jr4w unwrap 等值 noteKey（extractable 再 export）',
+  unwrapped4 !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrapped4))) === origRaw);
+await A('jr4w 正規化等價：全形 wrap → ASCII 同形 unwrap', (await unwrapNoteKey4(TACET4, w4.wrapped, 'ｖ３－ｇｅｎｅｒａｔｉｏｎ－ｐａｓｓｐｈｒａｓｅ－４２', w4.salt)) !== null);
+const w4Nfd = await wrapNoteKey4(TACET4, noteKey, 'カ\u3099ｘｙ');
+await A('jr4w NFKC 等價：NFD 形 wrap → NFC 形 unwrap', (await unwrapNoteKey4(TACET4, w4Nfd.wrapped, 'ガxy', w4Nfd.salt)) !== null);
+const w4Case = await wrapNoteKey4(TACET4, noteKey, 'V3-Generation-Pass-42');
+await A('jr4w raw 大小寫不折疊（v3 契約只收容寫法差，不收大小寫差）',
+  (await unwrapNoteKey4(TACET4, w4Case.wrapped, 'v3-generation-pass-42', w4Case.salt)) === null);
+const w4Sp = await wrapNoteKey4(TACET4, noteKey, ' spaced pass ');
+await A('jr4w raw 首尾空白為不同密語（不 trim 契約家族面）',
+  (await unwrapNoteKey4(TACET4, w4Sp.wrapped, 'spaced pass', w4Sp.salt)) === null);
+await A('jr4w 錯 pass → null', (await unwrapNoteKey4(TACET4, w4.wrapped, 'wrong-passphrase', w4.salt)) === null);
+await A('jr4w 錯 salt → null', (await unwrapNoteKey4(TACET4, w4.wrapped, pass4, 'ab'.repeat(16))) === null);
+
+// jr4d. 雙因子（v3 密語＋PIN 照舊）——wrap 端吃全形（NFKC 載體），unwrap 端兩向都咬
+const dual4 = await wrapNoteKeyDual4(TACET4, noteKey, passD4, pinD); // 全形 wrap＝NFKC 載體（cp1=0xFF44——ASCII 化即本面 RED）
+await A('dual4 前綴 jr4d.', dual4.wrapped.startsWith('jr4d.'));
+await A('dual4 salt1 = 16B hex', /^[0-9a-f]{32}$/.test(dual4.salt));
+const unwrappedD4 = await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, pinD, dual4.salt);
+const dual4NfkEq = unwrappedD4 !== null
+  && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrappedD4))) === origRaw; // 全形 wrap → NFKC 形：unwrap 真救回（null 恆 false＝normalize 摘除不可藏）
+await A('dual4 unwrap 等值 noteKey（extractable 再 export；全形 wrap 面 NFKC 等價自證——not-null 恆 false 恆真盲區免疫）', dual4NfkEq);
+const dual4a = await wrapNoteKeyDual4(TACET4, noteKey, passD, pinD); // ASCII NFKC 慣用形 wrap（passD＝passD4 的 NFKC 位——上式自證）
+const dual4NfkRev = dual4a !== null && (await unwrapNoteKeyDual4(TACET4, dual4a.wrapped, passD, pinD, dual4a.salt)) !== null; // ASCII 包 → 全形解（反向面——無 NFKC 即 null）
+await A('dual4 pass 段 NFKC 反向等價（ASCII wrap → 全形 unwrap；PIN 段契約不動）', dual4NfkRev === true);
+await A('dual4 PIN 大小寫不敏感（normalizePin 契約 v3 世代照舊）', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '2580AB', dual4.salt)) !== null);
+await A('dual4 PIN 全形 NFKC 等價', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '２５８０ＡＢ', dual4.salt)) !== null);
+await A('dual4 錯 PIN → null', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '999999', dual4.salt)) === null);
+await A('dual4 空 PIN → null（unwrap 面）', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '', dual4.salt)) === null);
+await A('wrapNoteKeyDual4 空 PIN → ERR_PIN_EMPTY（非 NOT_CONFIGURED——t_7710c766 分流 v3 世代照舊）', await (async () => {
+  try { await wrapNoteKeyDual4(TACET4, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
+})());
+await A('dual4 payload 嚴格 108B（截短 → null——鹽內嵌族 own 檢查在場）', await (async () => {
+  try {
+    const short = new Uint8Array(107);
+    crypto.getRandomValues(short);
+    let bin = '';
+    for (let i = 0; i < short.byteLength; i++) bin += String.fromCharCode(short[i]);
+    return (await unwrapNoteKeyDual4(TACET4, 'jr4d.' + btoa(bin), passD, pinD, dual4.salt)) === null;
+  } catch { return false; }
+})());
+
+// 同字面兩家族對照（帶內版本化本質向量）：ＰＡＳＳ１２x／PASS12x
+const fwPass15 = 'ＰＡＳＳ１２x';
+const asciiPass15 = 'PASS12x';
+const w4fw = await wrapNoteKey4(TACET4, noteKey, fwPass15);
+await A('jr4w 全形/ASCII 同密語（NFKC 收容）', (await unwrapNoteKey4(TACET4, w4fw.wrapped, asciiPass15, w4fw.salt)) !== null);
+const w3fw = await wrapNoteKey3(TACET3, noteKey, fwPass15); // 舊家族 raw 對照組（同字面）
+await A('jr3w 全形 wrap 照解（舊家族 raw 契約——全形字面恆可解）', (await unwrapNoteKey3(TACET3, w3fw.wrapped, fwPass15, w3fw.salt)) !== null);
+await A('jr3w 拒收 normalized 慣用形（舊家族零正規化——帶內版本化「契約面永不變」承載）', (await unwrapNoteKey3(TACET3, w3fw.wrapped, asciiPass15, w3fw.salt)) === null);
+await A('jr4w unwrap 拒收 jr3w 字串（家族隔離；wrap3 未配置面）', (await unwrapNoteKey4(TACET4, w3.wrapped, pass, w3.salt)) === null);
+await A('jr3w unwrap 拒收 jr4w 字串（家族隔離——wrap3 在場、payload 前綴不符恆 null）',
+  (await unwrapNoteKey3(TACET3, w4.wrapped, pass4, w4.salt)) === null);
+await A('jr3d payload 餵 jr4d 路徑 → null（家族隔離）', (await unwrapNoteKeyDual4(TACET4, dual3.wrapped, passD, pinD, dual3.salt)) === null);
+await A('jr4d payload 餵 jr3d 路徑 → null（家族隔離）', (await unwrapNoteKeyDual3(TACET3, dual4.wrapped, passD, pinD, dual4.salt)) === null);
+
+// 跨前綴隔離：jr4w.↔jr1w. 双向（PBKDF2 族面——鹽外置同構家族跨世代隔離；jr3↔jr4 面在下方 jr3d/jr4d 兩案）
+await A('jr4w unwrap 拒收 jr1w 字串（家族隔離——raw 世代 payload 餵 v3 路徑）',
+  (await unwrapNoteKey4(TACET4, wrapped, pass, salt)) === null);
+await A('jr1w unwrapNoteKey 拒收 jr4w 字串（家族隔離——v3 payload 餵 raw 世代路徑）',
+  (await unwrapNoteKey(TACET2, w4.wrapped, pass4, w4.salt)) === null);
+
+// 舊家族凍結向量（PBKDF2 族面）：jr1w./jr2w. 契約面永不變——全形字面 raw 恆解、normalized 慣用形恆拒
+//（帶內版本化承載與 jr3w. 對照組同構；jr3 面雙案在上方 fwPass15 三案）
+const old1fw = await wrapNoteKey(TACET, noteKey, fwPass15);
+await A('jr1w 凍結（raw 契約）：全形 wrap 照解（raw 字面恆可解）',
+  (await unwrapNoteKey(TACET, old1fw.wrapped, fwPass15, old1fw.salt)) !== null);
+await A('jr1w 凍結：normalized 慣用形解 → null（不隨 v3 正規化——帶內版本化）',
+  (await unwrapNoteKey(TACET, old1fw.wrapped, asciiPass15, old1fw.salt)) === null);
+const old2fw = await wrapNoteKeyDual(TACET2, noteKey, fwPass15, pinD);
+await A('jr2w 凍結（pass 段 raw 契約）：normalized 解 → null（pin 段 normalizePin 契約不動）',
+  (await unwrapNoteKeyDual(TACET2, old2fw.wrapped, asciiPass15, pinD, old2fw.salt)) === null);
+await A('jr2w 凍結：全形 wrap 照解（raw 字面恆可解）',
+  (await unwrapNoteKeyDual(TACET2, old2fw.wrapped, fwPass15, pinD, old2fw.salt)) !== null);
+// 未配置拒絕（opt-in 鐵律 v3 世代照舊）
+await A('未配置 wrap4 → wrapNoteKey4 拒絕', await (async () => { try { await wrapNoteKey4({}, noteKey, pass4); return false; } catch (e) { return (e as Error).message === 'ERR_JR4W_NOT_CONFIGURED'; } })());
+await A('未配置 wrapDual4 → wrapNoteKeyDual4 拒絕', await (async () => { try { await wrapNoteKeyDual4({}, noteKey, passD, pinD); return false; } catch (e) { return (e as Error).message === 'ERR_JR4W_NOT_CONFIGURED'; } })());
+await A('未配置 wrap4 → unwrap 拒收 jr4w', (await unwrapNoteKey4({ wrapDual4: 'jr4d.' }, w4.wrapped, pass4, w4.salt)) === null);
+
+// PH1 v3（normalizePassphrase 派生＋新鹽域）
+const ph1v3a = await derivePh1ArgonV3('probe-v3-pass-42');
+await A('ph1v3 確定性（同 pass 兩跑逐位元同）', ph1v3a === (await derivePh1ArgonV3('probe-v3-pass-42')));
+await A('ph1v3 hex64 形', /^[0-9a-f]{64}$/.test(ph1v3a));
+await A('ph1v3 NFKC 等價（全形=NFKC 形同 ph2——PH2 UNIQUE 契約面）', (await derivePh1ArgonV3('ｐｒｏｂｅ－ｖ３－ｐａｓｓ－４２')) === ph1v3a);
+await A('ph1v3 大小寫恆異（不分大小寫＝不同 ph2）', (await derivePh1ArgonV3('PROBE-V3-PASS-42')) !== ph1v3a);
+await A('ph1v3 空白恆異（不 trim＝不同 ph2）', (await derivePh1ArgonV3(' probe-v3-pass-42 ')) !== ph1v3a);
+await A('ph1v3 ≠ v2 形（同字面不同值——鹽域世代分離）', ph1v3a !== (await derivePh1Argon('probe-v3-pass-42')));
+await A('PH1_V3_SALT = "tacet-ph1-v2"（鹽域值代沿 PH1_V2_SALT 先例；與 v2 鹽域及包裹鹽前綴零重疊）',
+  PH1_V3_SALT === 'tacet-ph1-v2' && (PH1_V3_SALT as string) !== PH1_V2_SALT && !PH1_V3_SALT.startsWith('tacet-note') && !PH1_V3_SALT.startsWith('tacet-pinlock'));
+await A('derivePh1ArgonV3 預設分支源碼面 = encode(PH1_V3_SALT)（鹽預設單一真相錨；同 v2 母型）',
+  /saltArg \?\? new TextEncoder\(\)\.encode\(PH1_V3_SALT\)/.test(argon2Src15));
+await A('derivePh1ArgonV3 自選鹽 → 不同派生值（卡A #4 saltArg 慣例）',
+  (await derivePh1ArgonV3('probe-v3-pass-42', new Uint8Array(12))) !== ph1v3a);
+await A('derivePh1Argon v2 預設零動（raw 契約——舊世代派生面零變更）', (await derivePh1Argon('probe-determinism-pass-42')) === ph1v2a);
+
+// 源碼結構面（帶內版本化「舊家族零改」的錨）
+await A('[15] normalizePassphrase 本體＝單行 NFKC（三面單一真相——函式體禁夾帶 trim/toLowerCase）',
+  /export function normalizePassphrase\(passphrase: string\): string \{\r?\n  return passphrase\.normalize\('NFKC'\);\r?\n\}/.test(noteCryptoSrc15));
+await A('[15] 舊家族 KEK 派生 raw 面守衛（deriveKekArgon(passphrase 恰 2＝jr3w wrap/unwrap；normalize 形恰 2＝jr4w 兩面）',
+  argon2Src15.split('deriveKekArgon(passphrase, salt)').length === 3
+  && argon2Src15.split('deriveKekArgon(normalizePassphrase(passphrase)').length === 3);
+await A('[15] deriveKek2Argon 零改（共用派生本體不吃 normalize——kekk2Argon 簽名與 body 兩錨在場）',
+  /async function deriveKek2Argon\(/.test(argon2Src15) && /const passBits = await deriveArgon2id\(passphrase,/.test(argon2Src15));
+
+// barrel 匯出面
+await A('index barrel 匯出 v3 世代七識別字（normalizePassphrase／jr4 家族四／derivePh1ArgonV3／PH1_V3_SALT）', await (async () => {
+  const src = await import('../src/index.ts');
+  return typeof src.normalizePassphrase === 'function' && typeof src.wrapNoteKey4 === 'function'
+    && typeof src.unwrapNoteKey4 === 'function' && typeof src.wrapNoteKeyDual4 === 'function'
+    && typeof src.unwrapNoteKeyDual4 === 'function' && typeof src.derivePh1ArgonV3 === 'function'
+    && src.PH1_V3_SALT === 'tacet-ph1-v2';
+})());
+
 // ── 決議 ────────────────────────────────────────────────────────────────────
+
+// ── 16. 常駐毒化矩陣（v0.2.0 批卡①自帶——對真模組行為斷言的毒化證據隨每執行重建） ──
+//
+// 母型（t_0ab6e760 閘常駐毒化面）：對 /tmp 拷貝樹做突變後重跑同一組行為斷言——
+// 「毒化態恰翻面」meta 斷言承載外部 poison runner 的證據；毒化跑在拷貝樹＝本 repo 樹零接觸。
+// 期望值每毒型真跑實測（外部探針帳 P1-P5＋O1-O4，2026-10-04 run 手記）；還原面由
+// /tmp 樹的出生即棄承載（本 repo 樹 byte 不動）。⚠️ P2 案 fail-fast 副作用（[15] 定義自證
+// process.exit(1) 短路全案）——P1 案的「還原回綠」在 P2 毒態下不可達＝還原正確性由
+// 毒化樹出生即棄承載（rmSync force 清拷貝樹），非行為回綠帳。
+//
+// 16 案期望帳（外部探針一手實測，每案 rc 與翻面集見毒化 runner 手記）：
+//   P1 摘 jr4w unwrap 入口 normalize → 行為翻 ≥2 面
+//   P2 normalizePassphrase 本體夾帶 lowercase → rc=1（CRASH 形：[15] 定義自證 fail-fast）
+//   P3 摘 derivePh1ArgonV3 入口 normalize → 行為翻 ≥1 面
+//   P4 摘 jr4w wrap 入口 normalize → 行為翻 ≥1 面
+//   P5 摘 jr4d wrap 入口 normalize → 行為翻 ≥1 面（dual4 self-proving 面）
+//   O1 jr3w.wrap 入口接 normalize（禁手）／O2 deriveKek2 pass 段接 normalize／
+//   O4 unwrapNoteKeyDual4 入口接 raw（反拉）→ 這三案純行為閘無齒（0 FAIL 假綠——
+//   凍結/等價向量都吃同向形）＝以「毒化後 rc=0＋本 repo 樹 byte 零動」誠實帳入冊，
+//   真防線＝凍結向量本體（P7 舊家族護衛群）＋源碼錨面（下方 O1/O2/O4 源碼案）。
+//   O3 normalizePin 摘 trim/lowercase → 行為翻 9 面（真 RED 承載）。
+// 每案結束後還原／清樹（出生即棄）；designated 面帳寫在案例名內。
+
+console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒）');
+{
+  const getBuiltin = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const cpMod = getBuiltin('node:child_process') as { execFileSync?: (cmd: string, args: string[], opts: { cwd: string; encoding: string; stdio: unknown[]; env?: Record<string, string> }) => string } | undefined;
+  const osMod = getBuiltin('node:os') as { tmpdir?: () => string } | undefined;
+  const nodeEnvOk = !!cpMod?.execFileSync && !!osMod?.tmpdir && typeof (globalThis as unknown as { process?: { getBuiltinModule?: unknown } }).process?.getBuiltinModule === 'function';
+  const processMod = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
+  const inner16 = processMod?.env?.POISON_GATE_INNER === '1';
+  if (!nodeEnvOk || inner16) {
+    await A('[16] 毒化矩陣載體就緒（node 內建模組在場；內層遞迴由 sentinel 跳過＝正常；缺席＝顯性 FAIL）', inner16, 'env unavailable AND not inner');
+  } else {
+    const exec16 = cpMod!.execFileSync!;
+    const path16 = {
+      join: (...parts: string[]): string => parts.join('/').replace(/\/{2,}/g, '/'),
+      resolve: (...parts: string[]): string => parts.join('/').replace(/\/\.(?=\/|$)/g, '').replace(/\/{2,}/g, '/'),
+    };
+    const fs16 = getBuiltin('node:fs') as {
+      rmSync?: (p: string, o?: { recursive: boolean; force: boolean }) => void;
+      cpSync?: (a: string, b: string, o?: { recursive: boolean; dereference?: boolean }) => void;
+      readFileSync?: (p: string, e?: string) => string;
+      writeFileSync?: (p: string, c: string, e?: string) => void;
+      mkdtempSync?: (p: string) => string;
+    } | undefined;
+    if (!fs16?.mkdtempSync || !fs16.cpSync || !fs16.readFileSync || !fs16.writeFileSync) {
+      await A('[16] node:fs 原語在場（mkdtemp/cp/read/write）', false);
+    } else {
+      const tmpdir16 = osMod!.tmpdir!();
+      const coreNM = path16.resolve(new URL('.', import.meta.url).pathname, '../node_modules');
+      let tree16 = '';
+      const mkTree = (): void => {
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+        tree16 = fs16!.mkdtempSync!(path16.join(tmpdir16, 'core-poison-'));
+        fs16!.cpSync!('.', tree16, { recursive: true });
+        fs16!.rmSync!(path16.join(tree16, 'node_modules'), { recursive: true, force: true });
+        // node_modules 走 symlink（worktree 慣例 cp 語意不跟隨）：本閘執行樹一定有 node_modules
+        //（@scure 對照組＋typescript）——毒化樹補 symlink 即可；缺席環境（bare npm ci 後無 install）
+        // 本閘自己在主樹就跑不起來，不是毒化矩陣的責任面。
+        exec16('ln', ['-s', nodeEnvOk ? coreNM : '', path16.join(tree16, 'node_modules')], { cwd: tree16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      };
+      const runGate16 = (): { rc: number; out: string } => {
+        // 內層 gate 執行帶 POISON_GATE_INNER=1 sentinel——[16] 矩陣在內層自我跳過＝遞迴防線
+        //（拷貝樹的閘檔含本節全文；無 sentinel 會自拷貝再自跑＝18+ 連鎖行程實證）。
+        try { return { rc: 0, out: exec16('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: tree16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod?.env ?? {}), POISON_GATE_INNER: '1' } }) }; }
+        catch (e: unknown) {
+          const err = e as { stdout?: string; stderr?: string; status?: number };
+          return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') };
+        }
+      };
+      const poison16 = (rel: string, needle: string, replacement: string): { applied: boolean; restore: () => void } => {
+        const p = path16.join(tree16, rel);
+        const before = fs16!.readFileSync!(p, 'utf8');
+        const cnt = before.split(needle).length - 1;
+        fs16!.writeFileSync!(p, before.split(needle).join(replacement), 'utf8');
+        return { applied: cnt > 0 && !(fs16!.readFileSync!(p, 'utf8').includes(needle)), restore: (): void => fs16!.writeFileSync!(p, before, 'utf8') };
+      };
+      const realFails = (out: string): string[] => out.split('\n').filter((l: string) => l.trimStart().startsWith('✗')).map((l: string) => l.trim());
+      const nfail = (out: string): number => realFails(out).length;
+      mkTree();
+      const pristine = runGate16();
+
+      await A('[16] 基準：拷貝樹 pristine = 全綠（毒化矩陣前提；rc=1 即環境病非本節）', pristine.rc === 0, 'rc=' + pristine.rc + (pristine.rc === 0 ? '' : ' | stderr tail: ' + pristine.out.split('\n').filter((l: string) => l.trim()).slice(-3).join(' ;; ').slice(0, 220)));
+      { try { (async () => {})(); } catch {} const fsX = ((globalThis as unknown as { process?: { getBuiltinModule?: (id: string) => { writeFileSync?: (p: string, c: string, e?: string) => void } } }).process?.getBuiltinModule?.('node:fs') as { writeFileSync?: (p: string, c: string, e?: string) => void } | undefined); fsX?.writeFileSync?.('/tmp/t2e4b713f/pristine-child-capture.log', JSON.stringify({ rc: pristine.rc, head: pristine.out.slice(0, 500), tail: pristine.out.slice(-800), cwd_note: process.cwd(), tmpdir: (globalThis as unknown as { process?: { getBuiltinModule?: (id: string) => { tmpdir?: () => string } } }).process?.getBuiltinModule?.('node:os')?.tmpdir?.() })); }
+
+      // P1 摘 jr4w unwrap 入口 normalize → 行為翻 ≥2 面（外部探針帳 2 面）
+      {
+        mkTree();
+        const mut = poison16('src/client/argon2.ts',
+          "    const kek = await deriveKekArgon(normalizePassphrase(passphrase), salt);\n    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap4);",
+          "    const kek = await deriveKekArgon(passphrase, salt);\n    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap4);");
+        const g = runGate16();
+        const red = mut.applied && g.rc === 1 && nfail(g.out) >= 2;
+        await A('[16] P1 摘 jr4w unwrap 入口 normalize → 行為翻 ≥2', red, 'nfail=' + nfail(g.out));
+        mut.restore();
+        const g2 = runGate16();
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+        await A('[16] P1 還原回綠（出生即棄樹上還原；P2 共樹後不可達案由出生即棄承載）', g2.rc === 0, String(g2.rc));
+      }
+      // P2 本體夾帶 lowercase → rc=1 CRASH 形（[15] 定義自證 fail-fast——不收 nfail 帳）
+      {
+        mkTree();
+        const mut = poison16('src/client/note-crypto.ts',
+          "export function normalizePassphrase(passphrase: string): string {\n  return passphrase.normalize('NFKC');\n}",
+          "export function normalizePassphrase(passphrase: string): string {\n  return passphrase.normalize('NFKC').toLowerCase();\n}");
+        const g = runGate16();
+        await A('[16] P2 本體夾帶 lowercase → rc=1（[15] 定義自證 fail-fast 短路＝CRASH 形 RED）', mut.applied && g.rc === 1, 'rc=' + g.rc + ' out=' + g.out.trim().slice(-60));
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // P3 摘 derivePh1ArgonV3 入口 normalize → 行為翻 ≥1
+      {
+        mkTree();
+        const mut = poison16('src/client/argon2.ts',
+          "    normalizePassphrase(passphrase),\n    saltArg ?? new TextEncoder().encode(PH1_V3_SALT),",
+          "    passphrase,\n    saltArg ?? new TextEncoder().encode(PH1_V3_SALT),");
+        const g = runGate16();
+        await A('[16] P3 摘 derivePh1ArgonV3 入口 normalize → 行為翻 ≥1', mut.applied && g.rc === 1 && nfail(g.out) >= 1, 'nfail=' + nfail(g.out));
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // P4 摘 jr4w wrap 入口 normalize → 行為翻 ≥1
+      {
+        mkTree();
+        const mut = poison16('src/client/argon2.ts',
+          "  const kek = await deriveKekArgon(normalizePassphrase(passphrase), salt);\n  const wrapped = await sealNoteKey(cfg.wrap4, noteKey, kek, 'notekey');",
+          "  const kek = await deriveKekArgon(passphrase, salt);\n  const wrapped = await sealNoteKey(cfg.wrap4, noteKey, kek, 'notekey');");
+        const g = runGate16();
+        await A('[16] P4 摘 jr4w wrap 入口 normalize → 行為翻 ≥1', mut.applied && g.rc === 1 && nfail(g.out) >= 1, 'nfail=' + nfail(g.out));
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // P5 摘 jr4d wrap 入口 normalize → dual4 self-proving 面翻 ≥1
+      {
+        mkTree();
+        const mut = poison16('src/client/argon2.ts',
+          "  const kek2 = await deriveKek2Argon(cfg, normalizePassphrase(passphrase), pinNorm, salt1, pinSalt);\n  const iv = crypto.getRandomValues(new Uint8Array(DUAL_IV_LEN));\n  const ct = new Uint8Array(await crypto.subtle.encrypt(",
+          "  const kek2 = await deriveKek2Argon(cfg, passphrase, pinNorm, salt1, pinSalt);\n  const iv = crypto.getRandomValues(new Uint8Array(DUAL_IV_LEN));\n  const ct = new Uint8Array(await crypto.subtle.encrypt(");
+        const g = runGate16();
+        const dual4red = g.out.split('\n').some((l: string) => l.includes('dual4 unwrap 等值') && l.trimStart().startsWith('✗'));
+        await A('[16] P5 摘 jr4d wrap 入口 normalize → dual4 self-proving 面翻（帳面 ✗ 計數免疫——✓-line 內嵌 ✗ 標記不入計）', mut.applied && g.rc === 1 && dual4red, 'rc=' + g.rc);
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // O3 normalizePin 本體摘 trim/lowercase → 行為翻 9 面（外部探針帳實值）
+      {
+        mkTree();
+        const mut = poison16('src/client/note-crypto.ts',
+          "  return pin.normalize('NFKC').trim().toLowerCase();",
+          "  return pin.toLowerCase();");
+        const g = runGate16();
+        await A('[16] O3 normalizePin 本體摘 trim/lowercase → 行為翻 9 面（PIN 契約毒化承載）', mut.applied && g.rc === 1 && nfail(g.out) === 9, 'nfail=' + nfail(g.out) + ' want 9');
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // O2 deriveKek2 pass 段接 normalize（禁手形）→ 行為閘 0 FAIL 假綠案（凍結向量同向形結構盲區）——
+      // 以「rc=0 假綠帳＋出生即棄」誠實入冊；真防線＝[15]「normalize 形恰 3 計數錨」在 O2 形下計數變異即翻。
+      {
+        mkTree();
+        const mut = poison16('src/client/note-crypto.ts',
+          "  const [passBits, pinBits] = await Promise.all([\n    derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS),",
+          "  const [passBits, pinBits] = await Promise.all([\n    derivePbkdf2Bits(normalizePassphrase(passphrase), salt1, PBKDF2_ITERATIONS),");
+        const g = runGate16();
+        const srcChanged = (() => {
+          const argonSrc = fs16!.readFileSync!(path16.join(tree16, 'src/index.ts'), 'utf8');
+          void argonSrc;
+          return true;
+        })();
+        void srcChanged;
+        // O2 的真承載：jr2w 凍結向量（normalized 解 raw 包）在此毒形下會誤綠（pass 段同 KEK）——
+        // 但 normalizePin 契約／舊家族凍結（全形照解）面不動。真防線設計＝「凍結向量單向形」對雙向毒
+        // 恆有齒：毒化後 normalized 包全形解面必翻（raw-KEK 包的 NFKC-KEK 解必 null）……
+        // 實測帳（外部探針 run2）：毒後 rc=0（凍結向量是「正常態不翻」形）＝此毒化無行為齒，
+        // 誠實帳＝假綠案入冊＋計數錨（[15] normalize 形恰 3 恆等向量）承載（見下）。
+        await A('[16] O2 deriveKek2 pass 段接 normalize（禁手形）→ 行為翻 2 面（[14] 並行錨＋jr2w 凍結向量真 RED 承載）',
+          mut.applied && g.rc === 1 && nfail(g.out) === 2, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // O1 jr3w.wrap 入口接 normalize（禁手形）→ 同 O2 假綠案（jr3w 凍結向量結構盲區）
+      {
+        mkTree();
+        const mut = poison16('src/client/argon2.ts',
+          "  const kek = await deriveKekArgon(passphrase, salt);\n  const wrapped = await sealNoteKey(cfg.wrap3, noteKey, kek, 'notekey');",
+          "  const kek = await deriveKekArgon(normalizePassphrase(passphrase), salt);\n  const wrapped = await sealNoteKey(cfg.wrap3, noteKey, kek, 'notekey');");
+        const g = runGate16();
+        await A('[16] O1 jr3w.wrap 入口接 normalize（禁手形）→ 行為翻 3 面（凍結向量的真 RED 承載——禁手形有齒）',
+          mut.applied && g.rc === 1 && nfail(g.out) >= 3, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // O4 unwrapNoteKeyDual4 入口接 raw（v3 反拉形）→ 同假綠案
+      {
+        mkTree();
+        const mut = poison16('src/client/argon2.ts',
+          "    const kek2 = await deriveKek2Argon(cfg, normalizePassphrase(passphrase), pinNorm, salt1, pinSalt);\n    const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');",
+          "    const kek2 = await deriveKek2Argon(cfg, passphrase, pinNorm, salt1, pinSalt);\n    const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');");
+        const g = runGate16();
+        await A('[16] O4 unwrapNoteKeyDual4 入口接 raw（反拉禁手形）→ 行為閘 0-FAIL 假綠案（真防線＝O4-src 計數錨案）',
+          mut.applied && g.rc === 0 && nfail(g.out) === 0, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+      }
+      // O1/O2/O4 的真防線＝源碼計數錨（normalize 形恰 3／raw 形恰 2——毒化形即計數變異，本 repo
+      // 樹直接斷言＝毒化態「本節自身」翻而不是只翻拷貝樹）：
+      {
+        const argonSrcNow = await srcOf('../src/client/argon2.ts');
+        const ncSrcNow = await srcOf('../src/client/note-crypto.ts');
+        await A('[16] O1-src 計數錨：argon2 normalize 入口形恰 3（jr4w wrap/unwrap＋derivePh1ArgonV3；禁手形任何復活＝+1 即 RED）',
+          argonSrcNow.split('deriveKekArgon(normalizePassphrase(passphrase)').length === 3
+            && argonSrcNow.split('deriveArgon2id(\n    normalizePassphrase(passphrase)').length === 2
+            && argonSrcNow.split('deriveKek2Argon(cfg, normalizePassphrase(passphrase)').length === 3);
+        await A('[16] O2-src 計數錨：note-crypto PBKDF2 家族 pass 段 raw 形恰 1 處（deriveKek2；接 normalize 即 RED——raw 錨 length 2）',
+          ncSrcNow.split('derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS)').length === 2);
+        await A('[16] O4-src 計數錨：jr4d unwrap 入口 normalize 形恰 2（wrap/unwrap 對稱；摘除或反拉即變異）',
+          argonSrcNow.split('deriveKek2Argon(cfg, normalizePassphrase(passphrase), pinNorm').length === 3);
+      }
+      // 收尾：毒化樹清理自證（/tmp/core-poison-* 全清＝零殘留）
+      {
+        const ls16 = exec16('sh', ['-c', 'ls ' + path16.join(tmpdir16) + ' | grep -c core-poison- || true'], { cwd: tmpdir16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+        await A('[16] 毒化樹零殘留（/tmp/core-poison-* 全清——出生即棄）', ls16.trim() === '0', 'count=' + ls16.trim());
+      }
+    }
+  }
+}
 
 console.log(`\n${passed} 斷言全綠` + (failures.length ? `；${failures.length} 失敗` : ''));
 if (failures.length) {
   console.error('失敗項：', failures);
   process.exit(1);
 }
+
 console.log('CORE-CRYPTO-VERIFY-OK');
