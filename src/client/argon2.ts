@@ -36,9 +36,11 @@ import {
 
 /** KDF 派生輸入正規化收口（mirror normalizePin 先例）：v3 入口 = normalizePassphrase(pass)；raw 世代入口 = 原密語。
  *  正規化永不進共用派生本體：deriveKekArgon/deriveKek2Argon 吃的是「派生輸入」——
- *  raw 契約（jr3d./jr2w.…）不經此面（帶內版本化「契約面永不變」的結構保證）。 */
+ *  raw 契約（jr3d./jr2w.…）不經此面（帶內版本化「契約面永不變」的結構保證）。
+ *  三面單一真相（r2 CRITICAL-1）：本體**委派** normalizePassphrase（語意唯一真相在
+ *  note-crypto.ts 本體，本函式只是入口收口位命名）——禁自帶 .normalize 實作（閘形錨咬住）； */
 function deriveInput(passphrase: string): string {
-  return passphrase.normalize('NFKC');
+  return normalizePassphrase(passphrase);
 }
 
 /** RFC 9106 無 secret/ad 標準向量（Argon2id v=0x13, t=3, m=32, p=4, T=32, pwd=32B 0x01, salt=16B 0x00）。 */

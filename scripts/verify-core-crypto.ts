@@ -1005,7 +1005,7 @@ const argon2Src14 = await srcOf('../src/client/argon2.ts');
 const corsSrc14 = await srcOf('../src/server/cors.ts');
 await A('[14] buildBindPayload 兩段共用 Promise.all 並行錨（wrapNoteKey＋wrapNoteKeyWithRecToken）',
   /await Promise\.all\(\[\r?\n\s*wrapNoteKey\(cfg, noteKey, passphrase\),\r?\n\s*wrapNoteKeyWithRecToken\(cfg, noteKey, recToken, identity\)/.test(noteCryptoSrc14));
-await A('[14] deriveKek2 pass/pin 兩段 PBKDF2 共用 Promise.all 並行錨（RHS 指令序面）',
+await A('[14] deriveKek2 輸入順序錨（pass 段 raw 收口形＋Promise.all 相鄰形——O2 毒形即本錨翻面）',
   /await Promise\.all\(\[\r?\n\s*derivePbkdf2Bits\(passphrase, salt1, PBKDF2_ITERATIONS\),\r?\n\s*derivePbkdf2Bits\(pin,/.test(noteCryptoSrc14));
 await A('[14] deriveKek2Argon 正向串行錨（pass/pin 兩段 deriveArgon2id 串行在場）',
   /const passBits = await deriveArgon2id\(/.test(argon2Src14) && /const pinBits = await deriveArgon2id\(/.test(argon2Src14));
@@ -1146,15 +1146,15 @@ const argon2Src15 = await srcOf('../src/client/argon2.ts');
 const TACET4: Argon3Config = { wrap4: 'jr4w.', wrapDual4: 'jr4d.', pinSalt3Prefix: 'tacet-note-pin3:' };
 const pass4 = 'v3-generation-passphrase-42';
 const passD4 = 'ｄｕａｌ－ｆａｃｔｏｒ－ｐａｓｓｐｈｒａｓｅ－４２'; // NFKC → passD 的全形形
-const passD4_NFKC = normalizePassphrase(passD4); // 與 passD 恆等（NFKC 收容）——正確性自證錨
-if (passD4_NFKC !== passD) { failures.push('passD4_NFKC 定義自證'); console.error('  ✗ passD4_NFKC !== passD'); process.exit(1); }
+const passD4_NFKC = normalizePassphrase(passD4); // 與 passD 恆等（NFKC 收容）——P2 毒化翻面本體（r2 CRITICAL-1：毒形即收口形計數錨翻＋毒翻 = NFKC-effective 帳面翻，雙承載）
 
 // 函式契約面（單一真相本體：normalizePassphrase 與 normalizePin 並存不混）
 await A('normalizePassphrase NFKC 契約：全形收容（ｐａｓｓ=pass）', normalizePassphrase('ｐａｓｓ') === 'pass');
 await A('normalizePassphrase NFKC 契約：結合序列合成（カ+U+3099=ガ——NFD/NFC 裝置差收容）',
   normalizePassphrase('カ\u3099x') === 'ガx');
 await A('normalizePassphrase 分離向量一：不 trim（首尾空白保留）', normalizePassphrase(' pass ') === ' pass ');
-await A('normalizePassphrase 分離向量二：不分大小寫（PaSs 恆 PaSs）', normalizePassphrase('PaSs') === 'PaSs');
+await A('normalizePassphrase 分離向量二：大小寫恆異（大小寫摺疊禁絕——大小寫差＝不同 KEK/ph2）',
+  normalizePassphrase('PaSs') === 'PaSs' && normalizePassphrase('PaSs') !== normalizePassphrase('pass') && normalizePassphrase('PaSs') !== normalizePassphrase('PASS'));
 await A('normalizePassphrase 與 normalizePin 契約並存不混（同輸入兩形＝兩輸出）',
   normalizePin(' Ｐｉｎ42 ') === 'pin42' && normalizePassphrase(' Ｐｉｎ42 ') === ' Pin42 ');
 
@@ -1165,7 +1165,7 @@ await A('jr4w salt = 16B hex', /^[0-9a-f]{32}$/.test(w4.salt));
 const unwrapped4 = await unwrapNoteKey4(TACET4, w4.wrapped, pass4, w4.salt);
 await A('jr4w unwrap 等值 noteKey（extractable 再 export）',
   unwrapped4 !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrapped4))) === origRaw);
-await A('jr4w 正規化等價：全形 wrap → ASCII 同形 unwrap', (await unwrapNoteKey4(TACET4, w4.wrapped, 'ｖ３－ｇｅｎｅｒａｔｉｏｎ－ｐａｓｓｐｈｒａｓｅ－４２', w4.salt)) !== null);
+await A('jr4w 正規化等價：ASCII wrap → 全形 unwrap（unwrap 入口 NFKC 承載）', (await unwrapNoteKey4(TACET4, w4.wrapped, 'ｖ３－ｇｅｎｅｒａｔｉｏｎ－ｐａｓｓｐｈｒａｓｅ－４２', w4.salt)) !== null);
 const w4Nfd = await wrapNoteKey4(TACET4, noteKey, 'カ\u3099ｘｙ');
 await A('jr4w NFKC 等價：NFD 形 wrap → NFC 形 unwrap', (await unwrapNoteKey4(TACET4, w4Nfd.wrapped, 'ガxy', w4Nfd.salt)) !== null);
 const w4Case = await wrapNoteKey4(TACET4, noteKey, 'V3-Generation-Pass-42');
@@ -1186,7 +1186,7 @@ const dual4NfkEq = unwrappedD4 !== null
   && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrappedD4))) === origRaw; // 全形 wrap → NFKC 形：unwrap 真救回（null 恆 false＝normalize 摘除不可藏）
 await A('dual4 unwrap 等值 noteKey（extractable 再 export；全形 wrap 面 NFKC 等價自證——not-null 恆 false 恆真盲區免疫）', dual4NfkEq);
 const dual4a = await wrapNoteKeyDual4(TACET4, noteKey, passD, pinD); // ASCII NFKC 慣用形 wrap（passD＝passD4 的 NFKC 位——上式自證）
-const dual4NfkRev = dual4a !== null && (await unwrapNoteKeyDual4(TACET4, dual4a.wrapped, passD, pinD, dual4a.salt)) !== null; // ASCII 包 → 全形解（反向面——無 NFKC 即 null）
+const dual4NfkRev = dual4a !== null && (await unwrapNoteKeyDual4(TACET4, dual4a.wrapped, passD4, pinD, dual4a.salt)) !== null; // ASCII 包 → 全形解（MAJOR-1 修真向：feed passD4；無 NFKC 即 null）
 await A('dual4 pass 段 NFKC 反向等價（ASCII wrap → 全形 unwrap；PIN 段契約不動）', dual4NfkRev === true);
 await A('dual4 PIN 大小寫不敏感（normalizePin 契約 v3 世代照舊）', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '2580AB', dual4.salt)) !== null);
 await A('dual4 PIN 全形 NFKC 等價', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '２５８０ＡＢ', dual4.salt)) !== null);
@@ -1213,7 +1213,7 @@ await A('jr4d unwrap 配置面 {wrapDual4 有、pinSalt3Prefix 無} → null（�
 // 同字面兩家族對照（帶內版本化本質向量）：ＰＡＳＳ１２x／PASS12x
 const fwPass15 = 'ＰＡＳＳ１２x';
 const asciiPass15 = 'PASS12x';
-await A('fwPass15 literal 是 asciiPass15 的 NFKC-effective 全形（self-proving 錨——字面漂移即本面 RED）',
+await A('[15] NFKC 契約向量（fwPass15 ＝ asciiPass15 的 NFKC-effective 全形——self-proving 錨：字面漂移即本面 RED）',
   normalizePassphrase(fwPass15) === asciiPass15);
 const w4fw = await wrapNoteKey4(TACET4, noteKey, fwPass15);
 await A('jr4w 全形/ASCII 同密語（NFKC 收容）', (await unwrapNoteKey4(TACET4, w4fw.wrapped, asciiPass15, w4fw.salt)) !== null);
@@ -1299,26 +1299,21 @@ await A('index barrel 匯出 v3 世代七識別字（normalizePassphrase／jr4 �
 //
 // 母型（t_0ab6e760 閘常駐毒化面）：對 /tmp 拷貝樹做突變後重跑同一組行為斷言——
 // 「毒化態恰翻面」meta 斷言承載外部 poison runner 的證據；毒化跑在拷貝樹＝本 repo 樹零接觸。
-// 期望值每毒型真跑實測（外部探針帳 P1-P5＋O1-O4，2026-10-04 run 手記）；還原面由
-// /tmp 樹的出生即棄承載（本 repo 樹 byte 不動）。⚠️ P2 案 fail-fast 副作用（[15] 定義自證
-// process.exit(1) 短路全案）——P1 案的「還原回綠」在 P2 毒態下不可達＝還原正確性由
-// 毒化樹出生即棄承載（rmSync force 清拷貝樹），非行為回綠帳。
+// 期望值每毒型真跑實測（r2 本 run /tmp 拷貝樹一手實測，見各案 comment 歸屬帳）；還原面由
+// /tmp 樹的出生即棄承載（本 repo 樹 byte 不動）。每案還原後重跑回綠（還原正確性的行為帳）。
 //
-// 16 案期望帳（外部探針一手實測，每案 rc 與翻面集見毒化 runner 手記）：
-//   P1 摘 jr4w unwrap 入口 normalize → 行為翻 ≥2 面
-//   P2 normalizePassphrase 本體夾帶 lowercase → rc=1（CRASH 形：[15] 定義自證 fail-fast）
-//   P3 摘 derivePh1ArgonV3 入口 normalize → 行為翻 ≥1 面
-//   P4 摘 jr4w wrap 入口 normalize → 行為翻 ≥1 面
-//   P5 摘 jr4d wrap 入口 normalize → 行為翻 ≥1 面（dual4 self-proving 面）
-//   O1 jr3w.wrap 入口接 normalize（禁手）→ 行為翻 ≥3 面（真 RED——凍結向量「normalized 慣用形
-//   恆拒」單向形有齒：毒化後 jr3w 全形包 normalized 解翻非-null 面）。
-//   O2 deriveKek2 pass 段接 normalize（禁手）→ 恰 2 面（真 RED——[14] Promise.all 錨＋jr2w 凍結
-//   normalized 面各自翻；恰數帳=2，本 run /tmp 拷貝樹一手實測）。
-//   O3 normalizePin 摘 trim/lowercase → 行為翻 9 面（真 RED 承載；≥ 帽——MINOR-3 帳面韌性）。
-//   O4 摘 jr4d unwrap 入口 normalize（反拉禁手）→ rc=1 真 RED（dual4 NFKC 載體面＋大小寫/
-//   空白行為面——[17] KAT 修正後有毒化齒）。
-//   O1-src/O2-src/O4-src 源碼計數錨：v3 家族入口 normalize 收口形恰 3×3＋PBKDF2 raw 恰 1——
-//   毒化形即計數變異，本 repo 樹直接斷言（真防線）；期望值外部探針一手實測帳。
+// 案期望值（r2 修正後程式碼上 /tmp 毒化重測，本 run 一手帳——還原後重跑回綠帶）：
+//   P1 摘 jr4w unwrap 入口 normalize → nfail=4 帳（正規化等價面＋KAT 慣用形帳面＋兩 [15] 錨跟隨）
+//   P2 本體夾帶 lowercase → nfail=11 帳（NFKC-effective 帳面翻面集；P3/P4/P5 針毒形零匹配＝全格向量化）
+//   P3 摘 derivePh1ArgonV3 入口 normalize → nfail=2 帳（ph1v3 NFKC 等價面＋[15] 收口形錨）
+//   P4 摘 jr4w wrap 入口 normalize → nfail=4 帳（NFD 收容面＋全形/ASCII 同密語面＋兩 [15] 錨）
+//   P5 摘 jr4d wrap 入口 normalize → nfail=5 帳（dual4 等值面＋PIN 兩面＋兩 [15] 錨）
+//   O1 jr3w.wrap 入口接 normalize（禁手）→ nfail=4 帳（jr3w 凍結兩面＋兩 [15] 錨）
+//   O2 deriveKek2 pass 段接 normalize（禁手）→ nfail=2 帳（[14] 輸入順序錨＋jr2w 凍結 normalized 面）
+//   O3 normalizePin 摘 trim/lowercase → nfail=9 帳（>=帽——MINOR-3 韌性；PIN 契約毒化真 RED）
+//   O4 摘 jr4d unwrap 入口 normalize（反拉禁手）→ nfail=4 帳（NFKC 反向等價面＋KAT 慣用形帳面＋兩 [15] 錨）
+//   O1-src/O2-src/O4-src 源碼計數錨（[15] 同形複寫——防單點誤删，NIT-3）：
+//   v3 家族入口 normalize 收口形恰 3×3＋PBKDF2 raw 恰 1——毒化形即計數變異，本 repo 樹直接斷言。
 // 每案結束後還原／清樹（出生即棄）；designated 面帳寫在案例名內。
 
 console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒）');
@@ -1352,13 +1347,14 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
       const treePaths16: string[] = []; // MINOR-2 修正：殘留判準只看本 run 喚出的 tree16 路徑（跨執行/跨 host 零耦合）
       const tmpdir16 = osMod!.tmpdir!();
       const coreNM = path16.resolve(new URL('.', import.meta.url).pathname, '../node_modules');
+      const repoRoot16 = path16.resolve(new URL('.', import.meta.url).pathname, '..'); // MINOR-4：repo root 錨定（禁 cwd 依賴——自 repo 外呼叫 cp 樹也恆真）
       const gitIgnoreSkip = (src: string): boolean => src === '.git' || src.endsWith('/.git') || src.includes('/.git/') || src === 'node_modules' || src.endsWith('/node_modules') || src.includes('/node_modules/');
       let tree16 = '';
       const mkTree = (): void => {
         fs16!.rmSync!(tree16, { recursive: true, force: true });
         tree16 = fs16!.mkdtempSync!(path16.join(tmpdir16, 'core-poison-'));
         treePaths16.push(tree16); // 本 run 喚出記帳（MINOR-2：收尾殘留判準的封閉集）
-        fs16!.cpSync!('.', tree16, { recursive: true, filter: (src: string) => !gitIgnoreSkip(src) }); // MINOR-6：零 .git/零 node_modules 實拷（repo root 錨定＋CI 冷複製成本歸零——毒化樹 node_modules 走下方 symlink）
+        fs16!.cpSync!(repoRoot16, tree16, { recursive: true, filter: (src: string) => !gitIgnoreSkip(src) }); // MINOR-6＋r2 MINOR-4：零 .git/零 node_modules 實拷（repo root 錨定——非 cwd；CI 冷複製成本歸零——毒化樹 node_modules 走下方 symlink）
         fs16!.rmSync!(path16.join(tree16, 'node_modules'), { recursive: true, force: true });
         // node_modules 走 symlink（worktree 慣例 cp 語意不跟隨）：本閘執行樹一定有 node_modules
         //（@scure 對照組＋typescript）——毒化樹補 symlink 即可；缺席環境（bare npm ci 後無 install）
@@ -1388,51 +1384,69 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
 
       await A('[16] 基準：拷貝樹 pristine = 全綠（毒化矩陣前提；rc=1 即環境病非本節）', pristine.rc === 0, 'rc=' + pristine.rc + (pristine.rc === 0 ? '' : ' | stderr tail: ' + pristine.out.split('\n').filter((l: string) => l.trim()).slice(-3).join(' ;; ').slice(0, 220)));
 
-      // P1 摘 jr4w unwrap 入口 normalize → 行為翻 ≥2 面（外部探針帳 2 面）
+      // P1 摘 jr4w unwrap 入口 normalize → 行為翻 4 面帳（本 run 毒化重測：jr4w 正規化等價面＋[15] raw
+      // 守衛錨＋[15] 收口形錨＋[17] jr4w NFKC 慣用形帳面）——名單面 designated＝正規化等價面＋dual4 等值面（案內檢）。
       {
         mkTree();
         const mut = poison16('src/client/argon2.ts',
           "    const kek = await deriveKekArgon(deriveInput(passphrase), salt);\n    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap4);",
           "    const kek = await deriveKekArgon(passphrase, salt);\n    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap4);");
         const g = runGate16();
-        const red = mut.applied && g.rc === 1 && nfail(g.out) >= 2;
-        await A('[16] P1 摘 jr4w unwrap 入口 normalize → 行為翻 ≥2', red, 'nfail=' + nfail(g.out));
+        // P1 名單面 designated（r2 MAJOR-2，本 run 重測帳）：jr4w 正規化等價面＋[17] jr4w NFKC 慣用形
+        // 帳面兩面真翻——摘除 unwrap 入口 normalize 時 normalized 形失去收容（dual4 等值面不翻＝wrap 端
+        // normalize 仍承載，P1 針只咬 unwrap 面——P5 已咬 wrap 面；兩針分工面帳）。
+        const p1eqRed = g.out.split('\n').some((l: string) => l.includes('jr4w 正規化等價') && l.trimStart().startsWith('✗'));
+        const p1katRed = g.out.split('\n').some((l: string) => l.includes('NFKC-effective 全形 unwrap = 原始 noteKey（v3 契約收容自己——全形 wrap 的 KAT 慣用形）') && l.trimStart().startsWith('✗'));
+        const red = mut.applied && g.rc === 1 && nfail(g.out) >= 2 && p1eqRed && p1katRed;
+        await A('[16] P1 摘 jr4w unwrap 入口 normalize → 正規化等價面＋KAT 慣用形帳面真翻（nfail=4 帳——非錨影）', red, 'nfail=' + nfail(g.out));
         mut.restore();
         const g2 = runGate16();
         fs16!.rmSync!(tree16, { recursive: true, force: true });
         await A('[16] P1 還原回綠（出生即棄樹上還原；P2 共樹後不可達案由出生即棄承載）', g2.rc === 0, String(g2.rc));
       }
-      // P2 本體夾帶 lowercase → rc=1 CRASH 形（[15] 定義自證 fail-fast——不收 nfail 帳）
+      // P2 本體夾帶 lowercase → NFKC-effective 行為翻面集（r2 CRITICAL-1 重測：nfail=11 帳——非 crash 形）
       {
         mkTree();
         const mut = poison16('src/client/note-crypto.ts',
           "export function normalizePassphrase(passphrase: string): string {\n  return passphrase.normalize('NFKC');\n}",
           "export function normalizePassphrase(passphrase: string): string {\n  return passphrase.normalize('NFKC').toLowerCase();\n}");
         const g = runGate16();
-        await A('[16] P2 本體夾帶 lowercase → rc=1（[15] 定義自證 fail-fast 短路＝CRASH 形 RED）', mut.applied && g.rc === 1, 'rc=' + g.rc + ' out=' + g.out.trim().slice(-60));
+        // P2 名單面 designated（r2 CRITICAL-1 重測帳）：NFKC-effective 帳面翻面集（分離向量二＋並存不混＋jr4w
+        // raw 大小寫不折疊＋dual4 case/space＋[15] NFKC 契約向量＋ph1v3 大小寫恆異＋[17] 大寫兩形 null 四面＋本體
+        // 單行形錨）＝11 面帳；同 P3/P4/P5 毒形零匹配（全格向量化——毒化矩陣單點真值面）。
+        const p2normRed = g.out.split('\n').some((l: string) => l.includes('分離向量二') && l.trimStart().startsWith('✗'));
+        await A('[16] P2 本體夾帶 lowercase → NFKC-effective 帳面翻面集（nfail>=11 帳＋分離向量二名單面）', mut.applied && g.rc === 1 && nfail(g.out) >= 11 && p2normRed, 'rc=' + g.rc + ' nfail=' + nfail(g.out));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
-      // P3 摘 derivePh1ArgonV3 入口 normalize → 行為翻 ≥1
+      // P3 摘 derivePh1ArgonV3 入口 normalize → 行為翻 2 面帳（本 run 毒化重測：ph1v3 NFKC 等價面＋[15] 收口形
+      // 錨跟隨）——名單面 designated＝ph1v3 NFKC 等價面（案內檢）；P3 毒形＝derivePh1Argon v2 名同型不匹配（全格向量化）。
       {
         mkTree();
         const mut = poison16('src/client/argon2.ts',
           "    deriveInput(passphrase),\n    saltArg ?? new TextEncoder().encode(PH1_V3_SALT),",
           "    passphrase,\n    saltArg ?? new TextEncoder().encode(PH1_V3_SALT),");
         const g = runGate16();
-        await A('[16] P3 摘 derivePh1ArgonV3 入口 normalize → 行為翻 ≥1', mut.applied && g.rc === 1 && nfail(g.out) >= 1, 'nfail=' + nfail(g.out));
+        // P3 名單面 designated（r2 MAJOR-2）：ph1v3 NFKC 等價面（全形 vs ASCII 同 ph2）真翻。
+        const p3red = g.out.split('\n').some((l: string) => l.includes('ph1v3 NFKC 等價') && l.trimStart().startsWith('✗'));
+        await A('[16] P3 摘 derivePh1ArgonV3 入口 normalize → ph1v3 NFKC 等價面真翻（名單級承載）', mut.applied && g.rc === 1 && nfail(g.out) >= 1 && p3red, 'nfail=' + nfail(g.out));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
-      // P4 摘 jr4w wrap 入口 normalize → 行為翻 ≥1
+      // P4 摘 jr4w wrap 入口 normalize → 行為翻 4 面帳（本 run 毒化重測：NFD wrap→NFC unwrap 面＋全形/ASCII 同
+      // 密語面＋[15] raw 守衛錨＋[15] 收口形錨）——名單面 designated＝全形/ASCII 同密語面（案內檢）。
       {
         mkTree();
         const mut = poison16('src/client/argon2.ts',
           "  const kek = await deriveKekArgon(deriveInput(passphrase), salt);\n  const wrapped = await sealNoteKey(cfg.wrap4, noteKey, kek, 'notekey');",
           "  const kek = await deriveKekArgon(passphrase, salt);\n  const wrapped = await sealNoteKey(cfg.wrap4, noteKey, kek, 'notekey');");
         const g = runGate16();
-        await A('[16] P4 摘 jr4w wrap 入口 normalize → 行為翻 ≥1', mut.applied && g.rc === 1 && nfail(g.out) >= 1, 'nfail=' + nfail(g.out));
+        // P4 名單面 designated（r2 MAJOR-2）：jr4w 全形/ASCII 同密語面（全形 wrap 的 NFKC 收容）真翻。
+        const p4red = g.out.split('\n').some((l: string) => l.includes('jr4w 全形/ASCII 同密語') && l.trimStart().startsWith('✗'));
+        await A('[16] P4 摘 jr4w wrap 入口 normalize → 全形/ASCII 同密語面真翻（名單級承載）', mut.applied && g.rc === 1 && nfail(g.out) >= 1 && p4red, 'nfail=' + nfail(g.out));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
-      // P5 摘 jr4d wrap 入口 normalize → dual4 self-proving 面翻 ≥1
+      // P5 摘 jr4d wrap 入口 normalize → 行為翻 5 面帳（本 run 毒化重測：dual4 等值面＋PIN 兩面＋[15] 收口形
+      // 錨＋[15] HKDF info 錨）——名單面 designated＝dual4 等值面（dual4red 檈）；PIN 兩面翻＝毒化 wrap 端
+      // normalize 摘除的帳面（wrap 端 NFKC-effective 面倒灌 PIN 段）。
       {
         mkTree();
         const mut = poison16('src/client/argon2.ts',
@@ -1453,31 +1467,36 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
         await A('[16] O3 normalizePin 本體摘 trim/lowercase → 行為翻 9 面（PIN 契約毒化承載）', mut.applied && g.rc === 1 && nfail(g.out) >= 9, 'nfail=' + nfail(g.out) + ' want >=9');
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
-      // O2 deriveKek2 pass 段接 normalize（禁手形）→ 行為閘 0 FAIL 假綠案（凍結向量同向形結構盲區）——
-      // 以「rc=0 假綠帳＋出生即棄」誠實入冊；真防線＝[15]「normalize 收口形計數錨」在 O2 形下計數變異即翻
-      //（本行為閘段無 O2 齒＝結構盲區誠實帳；毒化案只承載「毒形存在時行為面不翻」的證據紀律）。
+      // O2 deriveKek2 pass 段接 normalize（禁手形）→ 真翻面案（r2 MAJOR-2 名單級承載；本 run 重測帳＝
+      // [14] 輸入順序錨翻＋jr2w 凍結 normalized 面翻，恰 2 面——兩面各自 designated，帳寫在案斷言內）。
       {
         mkTree();
         const mut = poison16('src/client/note-crypto.ts',
           "  const [passBits, pinBits] = await Promise.all([\n    derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS),",
           "  const [passBits, pinBits] = await Promise.all([\n    derivePbkdf2Bits(normalizePassphrase(passphrase), salt1, PBKDF2_ITERATIONS),");
         const g = runGate16();
-        // O2 真承載（本 run /tmp 拷貝樹一手實測帳）：毒後 rc=1 恰 2 FAIL＝[14] deriveKek2
-        // Promise.all 錨（毒形不匹配 regex）＋jr2w 凍結 normalized 解翻面（毒化 wrap 也 normalize
-        // → ascii 形同 KEK）——兩面各自 designated（行為翻面與靜態錨翻面分工；恰數帳=2）。
-        await A('[16] O2 deriveKek2 pass 段接 normalize（禁手形）→恰 2 面（[14] Promise.all 錨＋jr2w 凍結 normalized 面各自翻）',
-          mut.applied && g.rc === 1 && nfail(g.out) === 2, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
+        // O2 行為翻 2 面帳（本 run 毒化重測）：[14] 輸入順序錨（毒形不匹配 raw 收口形恰-1 形）＋jr2w 凍結
+        // normalized 解翻面（毒化 wrap 也 normalize → ascii 形同 KEK）——名單級承載＝[14] 輸入順序錨面（案內檢）；
+        // nfail 精確 2 帳＝P5/P1 形的錨翻面恰補位（姊妹卡新增 PIN/dual 覆蓋時 >= 帽韌性——MINOR-3）。
+        const o2rawRed = g.out.split('\n').some((l: string) => l.includes('[14] deriveKek2 輸入順序錨') && l.trimStart().startsWith('✗'));
+        await A('[16] O2 deriveKek2 pass 段接 normalize（禁手形）→ raw 收口形錨翻＋jr2w 凍結面翻（nfail>=2；名單級承載）',
+          mut.applied && g.rc === 1 && nfail(g.out) >= 2 && o2rawRed, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
-      // O1 jr3w.wrap 入口接 normalize（禁手形）→ 同 O2 形（jr3w 凍結向量結構盲區——raw 族）
+      // O1 jr3w.wrap 入口接 normalize（禁手形）→ 行為翻 4 面帳（本 run 毒化重測：jr3w 全形照解面翻＋normalized
+      // 恆拒面翻＋[15] raw 守衛錨＋[15] 收口形錨）——行為 designated＝凍結兩面（raw 入口契約復活即翻）。
       {
         mkTree();
         const mut = poison16('src/client/argon2.ts',
           "  const kek = await deriveKekArgon(passphrase, salt);\n  const wrapped = await sealNoteKey(cfg.wrap3, noteKey, kek, 'notekey');",
           "  const kek = await deriveKekArgon(deriveInput(passphrase), salt);\n  const wrapped = await sealNoteKey(cfg.wrap3, noteKey, kek, 'notekey');");
         const g = runGate16();
-        await A('[16] O1 jr3w.wrap 入口接 normalize（禁手形）→ 行為翻 3 面（凍結向量的真 RED 承載——禁手形有齒）',
-          mut.applied && g.rc === 1 && nfail(g.out) >= 3, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
+        // O1 名單面 designated（r2 MAJOR-2，本 run 重測帳）：jr3w 凍結兩面（全形照解面翻＋normalized 恆拒
+        // 面翻）＝raw 入口契約復活的行為齒；4 面帳＝兩行為面＋兩 [15] 錨跟隨。
+        const o1fwRed = g.out.split('\n').some((l: string) => l.includes('jr3w 全形 wrap 照解') && l.trimStart().startsWith('✗'));
+        const o1normRed = g.out.split('\n').some((l: string) => l.includes('jr3w 拒收 normalized 慣用形') && l.trimStart().startsWith('✗'));
+        await A('[16] O1 jr3w.wrap 入口接 normalize（禁手形）→ 凍結兩面真翻（nfail=4 帳；名單級承載）',
+          mut.applied && g.rc === 1 && nfail(g.out) >= 2 && o1fwRed && o1normRed, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
       // O4 unwrapNoteKeyDual4 入口接 raw（v3 反拉形）→ 「毒態」行為面翻轉樣本（MAJOR-2 面修正後真有齒）
@@ -1487,8 +1506,13 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
           "    const kek2 = await deriveKek2Argon(cfg, deriveInput(passphrase), pinNorm, salt1, pinSalt, 'journal-kek2-v1:' + cfg.wrapDual4);\n    const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');",
           "    const kek2 = await deriveKek2Argon(cfg, passphrase, pinNorm, salt1, pinSalt, 'journal-kek2-v1:' + cfg.wrapDual4);\n    const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');");
         const g = runGate16();
-        await A('[16] O4 unwrapNoteKeyDual4 入口接 raw（反拉禁手形）→ rc=1（NFKC 載體面真翻面——毒形有齒）',
-          mut.applied && g.rc === 1, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
+        // O4 名單面 designated（r2 MAJOR-2，本 run 重測帳）：dual4 pass 段 NFKC 反向等價面（MAJOR-1 修正後
+        // unwrap 餵 passD4 的真反向）＋[17] jr4d NFKC 慣用形帳面——反拉 normalize 時 unwrap 餵 normalized 形
+        // 失去收容 = 該面 null = 行為齒（非只 rc 計數）；行為翻 4 面帳＝反向等價面＋兩 [15] 錨＋[17] 帳面。
+        const o4red = g.out.split('\n').some((l: string) => l.includes('dual4 pass 段 NFKC 反向等價') && l.trimStart().startsWith('✗'));
+        const o4katRed = g.out.split('\n').some((l: string) => l.includes('NFKC-effective 全形 unwrap = 原始 noteKey（v3 契約收容自己；info=jr4d 域）') && l.trimStart().startsWith('✗'));
+        await A('[16] O4 unwrapNoteKeyDual4 入口接 raw（反拉禁手形）→ NFKC 反向等價面＋KAT 慣用形帳面真翻（nfail=4 帳）',
+          mut.applied && g.rc === 1 && nfail(g.out) >= 2 && o4red && o4katRed, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
       // O1/O2/O4 的真防線＝源碼計數錨（normalize 收口形恰 3／raw 形恰 2——毒化形即計數變異，本 repo
@@ -1496,13 +1520,14 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
       {
         const argonSrcNow = await srcOf('../src/client/argon2.ts');
         const ncSrcNow = await srcOf('../src/client/note-crypto.ts');
-        await A('[16] O1-src 計數錨：argon2 normalize 收口入口形恰 3（v3 家族入口；禁手形任何復活＝計數變異即 RED）',
+        // 與 [15] 同形計數錨＝「複寫防單點誤删」（NIT-3：[16] 內層保留 O-案源碼錨——[15] 錨被未來誤删時本段仍咬）。
+        await A('[16] O1-src 計數錨（[15] 同形複寫——防單點誤删）：argon2 normalize 收口入口形恰 3（禁手形任何復活＝計數變異即 RED）',
           argonSrcNow.split('deriveKekArgon(deriveInput(passphrase)').length === 3
             && argonSrcNow.split('deriveArgon2id(\n    deriveInput(passphrase)').length === 2
             && argonSrcNow.split('deriveKek2Argon(cfg, deriveInput(passphrase)').length === 3);
         await A('[16] O2-src 計數錨：note-crypto PBKDF2 家族 pass 段 raw 形恰 1 處（deriveKek2；接 normalize 即 RED——raw 錨 length 2）',
           ncSrcNow.split('derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS)').length === 2);
-        await A('[16] O4-src 計數錨：jr4d unwrap 入口 normalize 形恰 2（wrap/unwrap 對稱；摘除或反拉即變異）',
+        await A('[16] O4-src 計數錨（[15] 同形複寫）：jr4d unwrap 入口 normalize 形恰 2（wrap/unwrap 對稱；摘除或反拉即變異）',
           argonSrcNow.split('deriveKek2Argon(cfg, deriveInput(passphrase), pinNorm').length === 3);
       }
       // 收尾：毒化樹清理自證（MINOR-2 修正：封閉集——只核對本 run 喚出的 tree16 路徑；跨執行/
@@ -1532,7 +1557,8 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
 // 凍結值：fixed rawKey 'c3'×32；jr3w/jr3d＝全形 RAW 樣本 blob（舊族 raw 承載）；jr4w/jr4d＝
 // 全形 NFKC 載體 blob（v3 契約收容態）；pin '2580ab'；salt/pinSalt 逐值自 baked 資料（外探針實測入冊）。
 // 大小寫摺疊禁絕帳：ASCII 大寫與全形大寫兩形 → null（全形面上限非 NFKC-only 帳面缺口——大小寫
-// 摺疊是另一禁絕面，兩形各自承載）。重放＝按定值重建 KEK 派生比對 unwrap。
+// 摺疊是另一禁絕面，兩形各自承載）。凍結 blob 逐字面恆定（非動態重演）——驗證期重放＝以 unwrap 端
+// KEK 派生（凍結參數）比對 blob 內 baked 密文；「重放」語意＝派生確定性重驗，blob 本體恆凍結。
 const KAT17_PASS_NORM = pass4; // v3 段 ASCII 慣用形（NFKC-effective：normalizePassphrase(pass4)==pass4）
 const KAT17 = {
   raw: 'c3'.repeat(32),
