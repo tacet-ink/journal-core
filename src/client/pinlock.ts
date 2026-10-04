@@ -87,8 +87,9 @@ export async function wrapNoteKeyPinLock(cfg: PinLockConfig, noteKey: CryptoKey,
 }
 
 /** jr1p. 解包：全自描述；任何不符（前綴/長度/PIN 空/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 1）。
- *  t_7710c766：嚴格檢查收口 openNoteKey 一本體（payload 嚴格 108B＋rawHex hex 形檢查；
- *  hexToBytes fail-closed 由 try/catch 承接＝行為不變）。 */
+ *  t_7710c766：嚴格檢查為鹽內嵌族自有（payload 嚴格 108B＋rawHex hex 形檢查；
+ *  hexToBytes fail-closed 由 try/catch 承接＝行為不變）——不經 openNoteKey 本體
+ *  （openNoteKey 是鹽外置家族 92B 形，pinSalt 前綴不在其契約內）。 */
 export async function unwrapNoteKeyPinLock(cfg: PinLockConfig, wrapped: string, pin: string): Promise<CryptoKey | null> {
   try {
     if (!cfg.pinLock || !cfg.pinLockSaltPrefix || !cfg.pinLockAad) return null;
