@@ -157,6 +157,20 @@ export function normalizePin(pin: string): string {
   return pin.normalize('NFKC').trim().toLowerCase();
 }
 
+/**
+ * 密語正規化契約 v3（v0.2.0 批卡①；卡D 裁定 NFKC-only）：NFKC——**大小寫摺疊禁絕：區分大小寫
+ * （大小寫差＝不同 KEK/ph2）＋首尾空白保留（不 trim）**。
+ * 消費面只有 v3 世代：jr4w./jr4d. 包裹家族與 PH1 v3（derivePh1ArgonV3）——
+ * 舊前綴家族（jr1w./jr3w./jr2w./jr3d.）契約面永不變（raw pass 派生，帶內版本化＝
+ * KEK 輸入契約改變＝換新前綴，禁原地改語意），禁把本函式接進舊家族入口。
+ * 與 normalizePin 契約並存不混（NFKC→trim→lowercase，pinlock/dual 面不動）：
+ * 兩函式是正交契約，閘有「同輸入不同輸出」行為向量承載分離。
+ * 三面單一真相：本體（此處）＋README 家族表＋驗證閘 [15] 行為向量——改 NFKC 語意＝帶內版本化（換世代），禁原地改。
+ */
+export function normalizePassphrase(passphrase: string): string {
+  return passphrase.normalize('NFKC');
+}
+
 async function derivePbkdf2Bits(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
   const km = await importKeyRawForKdf(password);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' }, km, 256);
