@@ -1759,8 +1759,9 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
   // ── 源碼窗靜態錨（本地段結構——毒化形即計數/窗錨變異） ──
   const ncSrc18 = await srcOf('../src/client/note-crypto.ts');
   const localWin18 = ncSrc18.slice(ncSrc18.indexOf('── 本機包裹'), ncSrc18.indexOf('── 日記密文入口'));
-  await A('[18] 源碼窗：本機段零 throw 面（ERR_WRAP_NOT_CONFIGURED 退場——未配置＝無寫入無拋）',
-    localWin18.length > 1910 && !localWin18.includes('ERR_WRAP_NOT_CONFIGURED'));
+  await A('[18] 源碼窗：窗尾 floor 三值帳（真窗 1984B／Δ_p18b≈70B→摘後 1933 持／餘裕 +74B——floor 是帳漂移承重件，隨窗漂移即帳錯）', localWin18.length > 1910);
+  await A('[18] 源碼窗：本機段零 throw 面（ERR_WRAP_NOT_CONFIGURED 禁令——未配置＝無寫入無拋；P18d 毒化咬復活）',
+    !localWin18.includes('ERR_WRAP_NOT_CONFIGURED'));
   await A('[18] 源碼窗：寫面唯 cfg.wrapLocal seal＋舊借形零殘留（v1 借用面復活即反）',
     localWin18.split('sealNoteKey(cfg.wrapLocal').length === 2 && !localWin18.includes('sealNoteKey(cfg.wrap,'));
   await A('[18] 源碼窗：回落三元恰 1（收口形——自癒腿與未配置態同走單一 cfg.wrap 面；借用形復活即 2+）＋自癒接線（if legacy → storeLocalWrap identity legacy 恰 1）',
@@ -1807,7 +1808,12 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
           return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') };
         }
       };
-      // 毒化窗（同字面點數律——needlePA18/PB18/PC18 毒化前點數自檢在 withPoisonRun18 內）。
+      // 毒化窗（同字面點數律——needlePA18/PB18/PC18/P18d 毒化前點數自檢在 withPoisonRun18 內）。
+      // byte-exact 帳（NIT-4）：srcBefore sha256 毒前釘死；srcAfter 同值＝毒化零突變本樹。
+      const sha18 = (s: string): string =>
+        (getBuiltin18('node:crypto') as { createHash?: (a: string) => { update: (s: string) => { digest: (e: string) => string } } } | undefined)?.createHash?.('sha256')!.update(s)!.digest('hex')!;
+      const srcBefore18 = await srcOf('../src/client/note-crypto.ts');
+      const shaBefore18 = sha18(srcBefore18);
       const trees18: string[] = [];
 
       // 三案改 gate-rerun 形（t_42626eda 審查 MINOR-1 follow-up——改形照 [16] runGate16 母型）：
@@ -1832,16 +1838,17 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
           await A(label + '→ [18] 名單真紅 ' + want + '（designated-FAIL 帳：實測 ' + designated18.length + '/' + want +
             '；' + account18.slice(0, 110) + '；others=' + others18.length + '）',
             g.rc === 1 && designated18.length === want && failLines18.length === want
-            && others18.every((l: string) => l.includes('bip39')),
+            && others18.length === 1 && others18[0]!.includes('與 @scure/bip39 參照 200 組雙向一致')
+            && cases.every((kw) => failLines18.filter((l: string) => l.includes(kw)).length === 1),
             'rc=' + g.rc + ' n18=' + failLines18.length + ' d=' + designated18.length + ' others=' + others18.length);
         } finally {
           fs18!.rmSync!(dir, { recursive: true, force: true });
         }
       };
-      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋源碼窗 throw 面錨翻（自癒腿獨立承載在 [18] 名單外）
+      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋源碼窗 floor 面翻（窗 shrink 1833<1910；throw 禁令面由 P18d 獨立承載）
       await withPoisonRun18('[18] 毒化 P18 gate-rerun（P18：摘 fresh-face 三元→null）',
         needlePA18, '\n    const fresh = null;',
-        ['空-held decrypt 經本機包裹通路', '自癒後二次讀回', '本機段零 throw 面'], 3);
+        ['空-held decrypt 經本機包裹通路', '自癒後二次讀回', '窗尾 floor 三值帳'], 3);
       // P18b 摘自癒回寫 → 讀面照解（通路讀面不依賴回寫線）＋回寫線計數窗錨翻面
       await withPoisonRun18('[18] 毒化 P18b gate-rerun（P18b：摘自癒回寫）',
         needlePB18, '      return legacy;',
@@ -1850,14 +1857,23 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
       await withPoisonRun18('[18] 毒化 P18c gate-rerun（P18c：寫面接回借用形）',
         needlePC18, 'sealNoteKey(cfg.wrap,',
         ['寫前綴 jr1l.', '寫入 payload unwrap', '自癒回寫恆新前綴', '自癒 blob unwrap 等值', '自癒 blob 舊形恆拒', '二次讀不自癒二次', '寫面唯 cfg.wrapLocal seal'], 7);
-      // 真樹 needle 對位錨（t_06c666a6 改名——NIT-3：restoreS 回呼從未在 gate-rerun 形被呼叫；
-      // 本錨實質＝「真樹 needle 恰 1×3」的 byte-exact 防線：毒化全程跑在拷貝樹，真樹 needle
-      // 計數變異（誤改斷言窗本體）即 RED）。
+      // P18d 本機段禁令復活（MINOR-1 ERR 半邊——長度中性＋36B）：storeLocalWrap 守衛 return→throw
+      //（storeLocalWrap 自身 try/catch 吸收＝行為面零變；可觀察面＝本窗禁令錨，毒後窗 +36B）。
+      await withPoisonRun18('[18] 毒化 P18d gate-rerun（P18d：storeLocalWrap 守衛復活 throw）',
+        '    if (!cfg.wrapLocal) return;',
+        "    if (!cfg.wrapLocal) throw new Error('ERR_WRAP_NOT_CONFIGURED');",
+        ['本機段零 throw 面'], 1);
+      // 真樹 needle 對位錨＋byte-exact（t_ce675413 NIT-4——t_06c666a6 改名同續：毒化全程跑
+      // 拷貝樹，真樹 sha256 毒前毒後恆等＝零突變帳；needle 恰 1×4 計數防線＝誤改斷言窗本體
+      // （含守衛行）即 RED——T3 restoreS 回呼面已退場＝名實一致帳）。
       const srcAfter18 = await srcOf('../src/client/note-crypto.ts');
-      await A('[18] 真樹 needle 對位錨（恰 1×3——真樹零突變的行程帶）',
-        srcAfter18.split(needlePA18).length === 2 && srcAfter18.split(needlePB18).length === 2 && srcAfter18.split(needlePC18).length === 2);
+      await A('[18] 還原 byte-exact 對照（真樹 sha256 毒前毒後恆等——' + shaBefore18.slice(0, 12) + '…）', sha18(srcAfter18) === shaBefore18);
+      await A('[18] 真樹 needle 對位錨（恰 1×4——真樹零突變的行程帶）',
+        srcAfter18.split(needlePA18).length === 2 && srcAfter18.split(needlePB18).length === 2
+        && srcAfter18.split(needlePC18).length === 2
+        && srcAfter18.split('    if (!cfg.wrapLocal) return;').length === 2);
       await A('[18] 毒化樹零殘留（本 run 喚出 ' + trees18.length + ' 棵全清——封閉集判準）',
-        trees18.length === 3 && trees18.every((t) => !fs18!.rmSync || !existsSync18(t)));
+        trees18.length === 4 && trees18.every((t) => !fs18!.rmSync || !existsSync18(t)));
     }
   }
 }
@@ -2227,7 +2243,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
     // 還原自證：毒化樹零殘留（本 run 喚出 6 棵全清——封閉集判準；出生即棄拷貝樹＋真樹 needle 計數自證，r1 T3 label 對齊）
     const srcAfter20 = (getBuiltin20('node:fs') as { readFileSync?: (p: string, e?: string) => string })!.readFileSync!(
       new URL('../src/client/note-crypto.ts', import.meta.url).pathname, 'utf8');
-    await A('[20] 毒化還原自證（真樹 needle 恰 1 對照——byte-exact 毒化可逆帳）',
+    await A('[20] 真樹 needle 對位錨（t_ce675413 命名同款——真樹零突變的行程帶）',
       srcAfter20.split(needleR1).length === 2 && srcAfter20.split(needleR3).length === 2
       && srcAfter20.split("const info = 'journal-kek-rec-v1:'").length === 2 && srcAfter20.split(needleR5).length === 2);
     const existsSync20 = (p: string): boolean =>
