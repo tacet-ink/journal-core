@@ -40,8 +40,8 @@ export interface NoteCryptoConfig {
   wrap: string;
   /** 本機包裹前綴（jr1l.，v0.2.0 批卡③：本機包裹不再借用 cfg.wrap——「一個前綴一份契約」
    *  的第二違例收口）。未配置 = storeLocalWrap/loadLocalWrap 退場（無寫入／讀取照走
-   *  舊形回落——cipherLocal opt-in 母型；寫面功能退場——v1 可用者升級後需配置 wrapLocal
-   *  才保留本機包裹寫入）。 */
+   *  舊形回落，零資料損失——cipherLocal opt-in 母型；寫面功能退場——v1 可用者升級後
+   *  需配置 wrapLocal 才保留本機包裹寫入）。 */
   wrapLocal?: string;
   /** 復原套件專用前綴（jr1r.，v0.2.0 批卡⑤：wrappedRec 不再借用 cfg.wrap——同前例收口）。
    *  AAD 亦帶內切換 'notekey'→'notekey-rec'（共用 AAD 收口）。與 recKekHkdf **兩欄一體**
