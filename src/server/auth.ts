@@ -133,6 +133,17 @@ export interface AuthStore {
   getByUserKey(key: string): Promise<AuthRow | null>;
   getByRecHash(recHash: string): Promise<AuthRow | null>;
   setWrapped(userKey: string, ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
+  /** v3 重鑰（v0.2.0 批卡② t_ce216a63）：舊值入 ladder 表＋ph2/wrapped/salt/wrappedRec/rec_hash
+   *  五欄同列覆蓋（rec 欄在場才覆蓋——四欄形契約面不動；fork 實作三語句批面）。 */
+  rekeyWithLadder?(userKey: string, oldPh2: string, oldKind: 'legacy' | 'v2', ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
+  /** ladder 查表（v0.2.0 批卡② t_ce216a63）：以「舊 ph2 值」（v2/legacy 形）查 ladder 表，
+   *  命中回帳戶 id（login route 的「不建幽靈、回舊帳＋ph2Kind='legacy' 語意」守衛面）；
+   *  未配置（optional）＝查表面退場（fork 離線/無表態，行為不變）。 */
+  ladderLookup?(oldPh2: string): Promise<string | null>;
+  /** ladder 入表（遷移線用；upsert冪等）。 */
+  ladderInsert?(accountId: string, oldPh2: string, oldKind: 'legacy' | 'v2'): Promise<void>;
+  /** ladder 刪列（直銷面；遷移批次同批或後續呼叫端承擔）。 */
+  ladderDelete?(accountId: string): Promise<void>;
   revokeAllSessions(userKey: string): Promise<void>;
   insertSession(tokenHash: string, userKey: string, expiresAt: number): Promise<void>;
 }

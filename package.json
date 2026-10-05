@@ -1,6 +1,6 @@
 {
   "name": "@tacet-ink/journal-core",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Zero-knowledge journal core — e2e crypto, passphrase-only auth, transport, ratelimit. The server never sees plaintext.",
   "homepage": "https://tacet.ink",
   "repository": {
@@ -26,7 +26,8 @@
     "./server/ratelimit": "./src/server/ratelimit.ts",
     "./server/cors": "./src/server/cors.ts",
     "./server/hash": "./src/server/hash.ts",
-    "./server/env": "./src/server/env.ts"
+    "./server/env": "./src/server/env.ts",
+    "./server/ladder": "./src/server/ladder.ts"
   },
   "files": [
     "src",

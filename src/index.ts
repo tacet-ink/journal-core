@@ -95,3 +95,10 @@ export {
   timingSafeEq,
 } from './server/hash.ts';
 export type { Env } from './server/env.ts';
+export {
+  PH2_LADDER_TABLE,
+  PH2_LADDER_KIND_LEGACY,
+  PH2_LADDER_KIND_V2,
+  type Ph2LadderKind,
+  type Ph2LadderRow,
+} from './server/ladder.ts';
