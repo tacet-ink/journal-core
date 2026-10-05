@@ -25,7 +25,9 @@
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
 - **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal／
   wrap4／wrapDual4／wrapLocal／wrapRec＋recKekHkdf（兩欄一體——同缺同在，部分配置拒寫）／recKekSalt）未配置＝回落語意（wrapRec 系照走舊契約面；其他面拒絕或退場），各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
-  解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。
+  解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。wrapLocal 為選配：
+  未配置＝寫面功能退場——v1 可用者（借用期部署）升級後需配置 wrapLocal 才保留本機包裹寫入
+  （讀取面照走舊形回落，零資料損失面）。
 
 ## 模組（Modules）
 
@@ -37,7 +39,7 @@
 | `src/client/bip39.ts` | 復原套件 24 詞 ⇄ hex64 轉寫層（BIP39，零依賴自製） |
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
 | `src/server/auth.ts` | 零知識 auth 核心：PH1→PH2 login 動線、入庫格式驗證、包裹欄組成對（pair 檢查 pickKeyPackage）；PH2 UNIQUE 衝突與 session 撤銷＝呼叫端職責 |
-| `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）——幽靈守衛的資料承载位（查表接線在 fork route） |
+| `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）——幽靈守衛的資料承載位（查表接線在 fork route） |
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
@@ -204,7 +206,9 @@ and salted hashes, and never learns your passphrase or the content of any note.
 `recKekHkdf`: configured together or not at all; partial configuration is rejected on write) /
 `recKekHkdf` / `recKekSalt`): the wrapRec family falls back to the legacy face when unconfigured,
 so forks that don't use a primitive are unaffected. Unknown or malformed strings never
-decrypt to plaintext.
+decrypt to plaintext. `wrapLocal` is opt-in: unconfigured means the write face retires —
+v1-era deployments (borrow-period) must configure `wrapLocal` after upgrading to keep local
+key-wrap writes (the read face still falls back to the legacy blob; no data is lost).
 
 **Modules.** Client: two-era crypto (`note-crypto.ts`), Argon2id wrapping (`argon2.ts`, dual
 carrier: `node:crypto` ≥ Node 24.7 / hash-wasm in browsers, RFC 9106 test vectors), local PIN lock
