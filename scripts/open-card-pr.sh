@@ -13,7 +13,8 @@
 set -euo pipefail
 
 REPO_URL="https://api.github.com/repos/tacet-ink/journal-core/pulls"
-ENV_FILE="/srv/dropbox/csoft/tacet/.env"
+# 位置面：預設為本機絕對路徑（host-specific）；其他環境以 ENV_FILE 覆寫（t_046fe36f r2）
+: "${ENV_FILE:=/srv/dropbox/csoft/tacet/.env}"
 
 BRANCH="${1:?usage: open-card-pr.sh <branch> <title> <body-file>}"
 TITLE="${2:?missing PR title}"
