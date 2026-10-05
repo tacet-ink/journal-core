@@ -28,7 +28,10 @@
  * ⚠️ deriveArgon2id 禁 fallback（零知識）：無載體即 throw，禁降級 PBKDF2 或 zeros 兜底。
  * ⚠️ wrappedRec（復原套件）v0.2.0 批卡⑤世代化：KEK_rec 派生世代（HKDF，recKekHkdf 配置面）
  * ＋專用前綴 jr1r.（wrapRec）落地在 note-crypto.ts；本檔 recToken 256-bit 實體因子、
- * KEK 強度無意義的原判不變（世代收的是派生域＋契約面分離）。
+ * KEK 強度無意義的原判不變（世代收的是派生域＋契約面分離）。修正輪收口：wrapRec＋
+ * recKekHkdf 兩欄一體（部分配置＝ERR_REC_CFG_PARTIAL 拒寫）；HKDF 世代前綴面專屬 jr1r.
+ * ＋AAD 'notekey-rec'，jr1w. 前綴回歸僅 carrying passphrase-PBKDF2 派生（未配置世代
+ * wrappedRec 續走 jr1w.＋PBKDF2＋'notekey'）。
  */
 
 import { normalizePin, normalizePassphrase } from './note-crypto.ts';

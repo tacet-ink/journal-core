@@ -24,7 +24,7 @@
 - **extractable 鐵律**：要被 exportKey/wrap 的 key（noteKey 全部產生路徑），
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
 - **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal／
-  wrap4／wrapDual4／wrapLocal／wrapRec／recKekHkdf）未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
+  wrap4／wrapDual4／wrapLocal／wrapRec＋recKekHkdf（兩欄一體——同缺同在，部分配置拒寫）／recKekSalt）未配置＝回落語意（wrapRec 系照走舊契約面；其他面拒絕或退場），各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
   解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。
 
 ## 模組（Modules）
@@ -53,8 +53,8 @@ Tacet 部署實例（config 傳入）：
 | `jr1c.` | 附件密文（image attachments；選配） | 同筆記金鑰（noteKey／guest key 由呼叫端決定） | AES-GCM，AAD `jr1a:<noteId>:<attachId>` |
 | `jr1d.` | 本機 IDB stored 密文（notes store；選配） | 同筆記金鑰（呼叫端注入） | AES-GCM，AAD 綁 note_id，payload 自帶 `v` 欄 |
 | `jr1l.` | 本機包裹（PWA session 期免重打密語；選配） | deriveGuestKey＝K_u 同 guest 面（identity 派生、passphrase-free） | 同 jr1w. 形，AAD `notekey-local` |
-| `jr1r.` | 復原套件包裹（wrappedRec 專用；v0.2.0 批卡⑤，選配） | HKDF-SHA256(ikm=recToken, salt=recKekSalt？, info=`journal-kek-rec-v1:`+recKekHkdf) | 同 jr1w. 形，AAD `notekey-rec`（舊契約面 jr1w.＋PBKDF2＋AAD `notekey` 永不變——新世代讀舊寫新雙試） |
-| `jr1w.` | passphrase 包裹 | PBKDF2-SHA256 600k | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey` |
+| `jr1r.` | 復原套件包裹（wrappedRec 專用；v0.2.0 批卡⑤，選配，與 recKekHkdf 兩欄一體） | HKDF-SHA256(ikm=recToken, salt=recKekSalt？, info=`journal-kek-rec-v1:`+recKekHkdf)——兩欄齊備才寫 jr1r. 面 | 同 jr1w. 形，AAD `notekey-rec`（部分配置拒寫；舊契約面 jr1w.＋PBKDF2＋AAD `notekey` 永不變——新世代讀舊寫新雙試） |
+| `jr1w.` | passphrase 包裹＋復原套件包裹（未配置世代） | PBKDF2-SHA256 600k（復原套件 KEK＝PBKDF2(recToken, recSaltPrefix‖identity)） | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey`（復原套件與 passphrase 同 AAD 慣例＝未配置世代借形） |
 | `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
 | `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形，AAD `notekey` |
 | `jr3d.` | PIN 第二因子合鑰（Argon2id 版） | Argon2id(pass)＋Argon2id(pin) → HKDF-SHA256 | 同 jr2w. 形，108B，AAD `notekey2` |
@@ -119,7 +119,8 @@ const cfg = {
   wrap: 'jr1w.',
   wrapLocal: 'jr1l.',       // 選配：本機包裹專用前綴（未配置 = 讀舊形回落、寫面退場）
   // 復原套件 v0.2.0 世代（選配）：wrapRec+jr1r. 專用前綴＋recKekHkdf HKDF 派生
-  // （info='journal-kek-rec-v1:'+recKekHkdf；recKekSalt 16B hex 鹽域）。未配置 =
+  // （info='journal-kek-rec-v1:'+recKekHkdf；recKekSalt 16B hex 鹽域）。兩欄一體：
+  // 要開就兩欄一起配（部分配置＝ERR_REC_CFG_PARTIAL 拒寫）。兩欄皆缺席 =
   // 行為不變態（jr1w.＋PBKDF2＋AAD 'notekey' 舊契約面照走，舊 blob 永遠可解）。
   store: makeKeyStore({ brand: 'myapp' }),
   // cipherGuest / wrapDual / wrapShare / pinLock / cipherAttach / cipherLocal：選配，未配置即拒絕
@@ -199,9 +200,10 @@ and salted hashes, and never learns your passphrase or the content of any note.
   KEK and guest keys are permanently non-extractable.
 
 **Opt-in primitives.** Optional contracts (`cipherGuest` / `wrapDual` / `wrapShare` / `pinLock` /
-`cipherAttach` / `cipherLocal` / `wrap4` / `wrapDual4` / `wrapLocal` / `wrapRec` / `recKekHkdf` /
-`recKekSalt`) are rejected unless explicitly
-configured, so forks that don't use a primitive are unaffected. Unknown or malformed strings never
+`cipherAttach` / `cipherLocal` / `wrap4` / `wrapDual4` / `wrapLocal` / `wrapRec` (paired with
+`recKekHkdf`: configured together or not at all; partial configuration is rejected on write) /
+`recKekHkdf` / `recKekSalt`): the wrapRec family falls back to the legacy face when unconfigured,
+so forks that don't use a primitive are unaffected. Unknown or malformed strings never
 decrypt to plaintext.
 
 **Modules.** Client: two-era crypto (`note-crypto.ts`), Argon2id wrapping (`argon2.ts`, dual
@@ -212,7 +214,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 384 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 431 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
