@@ -24,7 +24,7 @@
 - **extractable 鐵律**：要被 exportKey/wrap 的 key（noteKey 全部產生路徑），
   import 當下就必須 `extractable=true`；KEK/guest key 恆 nonextractable。
 - **opt-in 原語**：選配契約（cipherGuest／wrapDual／wrapShare／pinLock／cipherAttach／cipherLocal／
-  wrap4／wrapDual4／wrapLocal）未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
+  wrap4／wrapDual4／wrapLocal／wrapRec／recKekHkdf）未配置即拒絕，各 fork 未選用的原語行為不受影響（cipherGuest 未配置時 bound 路徑不受牽連，
   解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。
 
 ## 模組（Modules）
@@ -53,7 +53,8 @@ Tacet 部署實例（config 傳入）：
 | `jr1c.` | 附件密文（image attachments；選配） | 同筆記金鑰（noteKey／guest key 由呼叫端決定） | AES-GCM，AAD `jr1a:<noteId>:<attachId>` |
 | `jr1d.` | 本機 IDB stored 密文（notes store；選配） | 同筆記金鑰（呼叫端注入） | AES-GCM，AAD 綁 note_id，payload 自帶 `v` 欄 |
 | `jr1l.` | 本機包裹（PWA session 期免重打密語；選配） | deriveGuestKey＝K_u 同 guest 面（identity 派生、passphrase-free） | 同 jr1w. 形，AAD `notekey-local` |
-| `jr1w.` | passphrase 包裹＋復原套件包裹 | PBKDF2-SHA256 600k | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey` |
+| `jr1r.` | 復原套件包裹（wrappedRec 專用；v0.2.0 批卡⑤，選配） | HKDF-SHA256(ikm=recToken, salt=recKekSalt？, info=`journal-kek-rec-v1:`+recKekHkdf) | 同 jr1w. 形，AAD `notekey-rec`（舊契約面 jr1w.＋PBKDF2＋AAD `notekey` 永不變——新世代讀舊寫新雙試） |
+| `jr1w.` | passphrase 包裹 | PBKDF2-SHA256 600k | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey` |
 | `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
 | `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形，AAD `notekey` |
 | `jr3d.` | PIN 第二因子合鑰（Argon2id 版） | Argon2id(pass)＋Argon2id(pin) → HKDF-SHA256 | 同 jr2w. 形，108B，AAD `notekey2` |
@@ -78,11 +79,12 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 384 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 414 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
                  # + 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫新自癒）
+                 # ＋復原套件專用前綴與 HKDF 世代 [20]（wrapRec=jr1r.＋recKekHkdf opt-in＋讀舊寫新雙試＋KAT）
                  # ＋ladder 表與重取鹽面 [19]（ph2_ladder 原語／upsert 值主權威行為面／unwrapNoteKeyDual4WithSalt）
                  # ＋常駐毒化矩陣 [16][18]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
@@ -116,6 +118,9 @@ const cfg = {
   cipherBound: 'jr1b.',
   wrap: 'jr1w.',
   wrapLocal: 'jr1l.',       // 選配：本機包裹專用前綴（未配置 = 讀舊形回落、寫面退場）
+  // 復原套件 v0.2.0 世代（選配）：wrapRec+jr1r. 專用前綴＋recKekHkdf HKDF 派生
+  // （info='journal-kek-rec-v1:'+recKekHkdf；recKekSalt 16B hex 鹽域）。未配置 =
+  // 行為不變態（jr1w.＋PBKDF2＋AAD 'notekey' 舊契約面照走，舊 blob 永遠可解）。
   store: makeKeyStore({ brand: 'myapp' }),
   // cipherGuest / wrapDual / wrapShare / pinLock / cipherAttach / cipherLocal：選配，未配置即拒絕
 };
@@ -194,7 +199,8 @@ and salted hashes, and never learns your passphrase or the content of any note.
   KEK and guest keys are permanently non-extractable.
 
 **Opt-in primitives.** Optional contracts (`cipherGuest` / `wrapDual` / `wrapShare` / `pinLock` /
-`cipherAttach` / `cipherLocal` / `wrap4` / `wrapDual4` / `wrapLocal`) are rejected unless explicitly
+`cipherAttach` / `cipherLocal` / `wrap4` / `wrapDual4` / `wrapLocal` / `wrapRec` / `recKekHkdf` /
+`recKekSalt`) are rejected unless explicitly
 configured, so forks that don't use a primitive are unaffected. Unknown or malformed strings never
 decrypt to plaintext.
 

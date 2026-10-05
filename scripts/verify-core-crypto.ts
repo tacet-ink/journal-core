@@ -1947,6 +1947,205 @@ console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2
   await A('[19] WithSalt 未配置 cfg（wrapDual4 缺）→ null（opt-in 鐵律同向）',
     (await unwrapNoteKeyDual4WithSalt({ pinSalt3Prefix: 'tacet-note-pin3:' }, rewrapD4.wrapped, passD, pinD, rewrapD4.salt)) === null);
 }
+// ── 20. 復原套件專用前綴＋HKDF 派生世代（v0.2.0 批卡⑤ t_8bb68356；卡D 議題二搭車案） ──
+//
+// 裁定（records-2026-09-15-to-20 :736）：採但搭車——wrappedRec 專用前綴＋KEK_rec 改
+// HKDF-SHA256（jr3d KEK2 HKDF 為先例）；「一個前綴一份契約」第二違例（wrappedRec 共用
+// cfg.wrap＋同 AAD）同步收口；單獨開卡否決。收口三面：
+//   ①專用前綴 cfg.wrapRec（jr1r.；命名＝語意後綴軸，沿 jr1l. 卡④定案）＋專屬 AAD
+//     'notekey-rec'（帶內版本化：payload 契約面綁派生世代）。未配置＝legacy 契約面
+//     照走（cfg.wrap＋PBKDF2＋AAD 'notekey'）＝行為不變態（r3 承諾：舊 blob 永遠可解）。
+//   ②KEK_rec 派生世代 cfg.recKekHkdf：HKDF-SHA256( ikm = recToken（256-bit 實體因子——
+//     卡D 文字：KDF 強度無意義，世代收的是派生域分離）, salt = recKekSalt？16B hex
+//     （未配置＝零鹽）, info = 'journal-kek-rec-v1:' + recKekHkdf, L = 32 )。info 合成名
+//     沿 argon2 家族慣例（tce r1 CRITICAL-1 定形：HKDF info 呼叫端帶入）。
+//   ③讀舊寫新雙試：新世代 unwrap 新面（jr1r.＋notekey-rec）先行、未中→舊面
+//     （cfg.wrap＋notekey＋PBKDF2）回落雙試（報告 §wrappedRec 場景：救回動線順向雙試＝
+//     裁定過渡保護涵蓋；摘雙試＝遷移率裁定非日曆）。舊 cfg＝單試舊面（行為不變）。
+console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec HKDF 世代（recKekHkdf opt-in）');
+{
+  const recSalt20 = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+  const TACET5 = { ...TACET, wrapRec: 'jr1r.', recKekHkdf: 'jr1r.', recKekSalt: recSalt20 };
+  const raw20 = hex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
+  const eqNoteKey20 = async (k: CryptoKey | null): Promise<boolean> =>
+    k !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) === raw20;
+  const rawKat20 = '57c72afacd486194c41227f42311600e287a7d48baa7a3e9de32fa460c089699'; // KAT 凍結 noteKey（外探針實測入冊）
+  const eqRawKat20 = async (k: CryptoKey | null): Promise<boolean> =>
+    k !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) === rawKat20;
+  const recToken20 = generateRecToken();
+
+  // P1 寫面：HKDF 世代 write＝jr1r.＋專屬 AAD；cfg.wrap 腿（passphrase 包裹）不受牽連
+  const freshRec20 = await wrapNoteKeyWithRecToken(TACET5, noteKey, recToken20, identityA);
+  await A('[20] 新世代 wrappedRec 前綴 jr1r.（寫面契約——借用期 cfg.wrap 形＝反）', freshRec20.startsWith('jr1r.'));
+  await A('[20] KAT 自洽前置（live wrap 樣本可重放）：jr1r. blob＋同 identity → 原 noteKey',
+    eqNoteKey20(await unwrapNoteKeyWithRecToken(TACET5, freshRec20, recToken20, identityA)));
+  await A('[20] 寫面 jr1w. 腿不受牽連（passphrase 包裹照走本前綴）',
+    (await wrapNoteKey(TACET5, noteKey, pass)).wrapped.startsWith('jr1w.'));
+
+  // P2 舊契約面凍結：未配置世代 wrap/unwrap（byte 不變承載——函式體零改面）
+  const legacyRec20 = await wrapNoteKeyWithRecToken(TACET, noteKey, recToken20, identityA);
+  await A('[20] 未配置世代 wrappedRec 前綴 jr1w.（契約面永不變——借用面凍結）', legacyRec20.startsWith('jr1w.'));
+  await A('[20] 未配置世代 unwrap = 原 noteKey（PBKDF2 舊派生契約原樣）',
+    eqNoteKey20(await unwrapNoteKeyWithRecToken(TACET, legacyRec20, recToken20, identityA)));
+  await A('[20] KAT 凍結 blob（舊 PBKDF2 契約面）：凍結 recToken＋凍結 identity 鹽域＋凍結 blob 逐位可解（凍結常數計算式構造——t_7361b68c KAT 母型；對錨＝凍結 noteKey raw 非本段活金鑰）',
+    eqRawKat20(await unwrapNoteKeyWithRecToken(TACET, 'jr1w.a4xchJ+EPui8iQy5dKpQyGjalu0nlJMsDd0LaLyRrY3mt+6112Se4NvaibymRFHsMg1LgOYsBVy15t0CiU1ipf9g8rniqBmdf1R5LzVXQdNJDCzbAfubPUKc/FE=', '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')));
+  await A('[20] seal 未配置守衛：cfg.wrap 缺席 legacy 路徑直呼 → ERR_WRAP_NOT_CONFIGURED（呼叫端亦可先行拒絕——雙防線外層）',
+    (async () => {
+      const noWrap20 = { ...TACET, wrap: undefined } as unknown as NoteCryptoConfig;
+      try { await wrapNoteKeyWithRecToken(noWrap20, noteKey, recToken20, identityA); return false; }
+      catch { return true; }
+    })());
+  await A('[20] 帳面 92B 錨（鹽內嵌面契約）：jr1r. payload 嚴格 92B（hex64 64B＋iv 12＋tag 16——HKDF 鹽屬「派生面內嵌 cfg、payload 零內嵌」，pinSalt 前綴不在 rec 鹽形契約內）',
+    freshRec20.length > 'jr1r.'.length && unb64Mod(freshRec20.slice('jr1r.'.length)).length === 92);
+
+  // P3 新世代讀舊寫新（雙試）＋跨世代互斥（family isolation 對稱面）
+  await A('[20] 新世代讀舊 blob（r3 過渡保護）：舊 PBKDF2/AAD/前綴面回落雙試 → 原 noteKey',
+    eqNoteKey20(await unwrapNoteKeyWithRecToken(TACET5, legacyRec20, recToken20, identityA)));
+  await A('[20] 跨世代互斥：jr1r. blob 餵未配置世代 cfg → null（新面恆拒——家族隔離對稱面）',
+    (await unwrapNoteKeyWithRecToken(TACET, freshRec20, recToken20, identityA)) === null);
+  await A('[20] KAT 凍結 blob：cfg 鹽域變更 → 恆拒（HKDF salt 入派生域——鹽域世代分離）',
+    (await unwrapNoteKeyWithRecToken({ ...TACET5, recKekSalt: 'ffeeddccbbaa99887766554433221100' }, 'jr1r.bkvBFdKjNVfidHcfn0WoyyRJLkajWhXF7WmPdc3Q9FCNNxDz+7PgN0x25BjuAZPFi1oP3t+8dblrnSQEltkieBh33xoyChcGKe1wEfaStQF6ITBNb6vBZKVXDEQ=', '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')) === null);
+  await A('[20] KAT 凍結 blob：jr1r. 逐位重放（凍結 recToken/salt/identity/blob 恆定——HKDF 世代派生確定性重驗；對錨＝凍結 noteKey raw 非本段活金鑰）',
+    eqRawKat20(await unwrapNoteKeyWithRecToken(TACET5, 'jr1r.bkvBFdKjNVfidHcfn0WoyyRJLkajWhXF7WmPdc3Q9FCNNxDz+7PgN0x25BjuAZPFi1oP3t+8dblrnSQEltkieBh33xoyChcGKe1wEfaStQF6ITBNb6vBZKVXDEQ=', '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')));
+  await A('[20] HKDF 正交面：僅 recKekHkdf（wrapRec 缺席）單試舊前綴舊 AAD——jr1r. blob 零殘留接納面',
+    (await unwrapNoteKeyWithRecToken({ ...TACET, recKekHkdf: 'jr1r.' }, freshRec20, recToken20, identityA)) === null);
+  await A('[20] HKDF 正交面：cfg.wrap 缺席而 wrapRec＋HKDF 在場——jr1r. blob 照解（HKDF 腿零前綴借用——KEK 源頭試錯成本零）',
+    eqNoteKey20(await unwrapNoteKeyWithRecToken({ ...TACET, wrap: undefined, wrapRec: 'jr1r.', recKekHkdf: 'jr1r.', recKekSalt: recSalt20 } as unknown as NoteCryptoConfig, freshRec20, recToken20, identityA)));
+  await A('[20] HKDF 腿守衛面：wrapRec 與 wrap 皆缺席（僅 recKekHkdf）→ null（無接納前綴面——open 拒 undefined 前綴形）',
+    (await unwrapNoteKeyWithRecToken({ recKekHkdf: 'jr1r.', recKekSalt: recSalt20, guestKdfPrefix: 't', recSaltPrefix: 'r:', cipherBound: 'b.', store: TACET.store } as unknown as NoteCryptoConfig, freshRec20, recToken20, identityA)) === null);
+
+  // identity 參數語意（HKDF 族零接觸面——docstring 斷言自證化）
+  const freshB20 = await wrapNoteKeyWithRecToken(TACET5, noteKey, recToken20, 'acct-bbbbbbbbbbbbbbbb');
+  await A('[20] identity HKDF 族零接觸（docstring 契約自證化——誤接線即 RED）',
+    freshB20.startsWith('jr1r.') && eqNoteKey20(await unwrapNoteKeyWithRecToken(TACET5, freshB20, recToken20, 'acct-cccccccccccccccc')));
+  await A('[20] identity 互斥面（舊契約面）：錯 identity unwrap → null（rec 鹽＝recSaltPrefix‖identity 定值——同 recToken 異 KEK）',
+    (await unwrapNoteKeyWithRecToken(TACET, legacyRec20, recToken20, 'acct-bbbbbbbbbbbbbbbb')) === null);
+
+  // P4 契約面守衛（形檢 fail-closed）
+  await A('[20] 壞 recKekSalt fail-closed：unwrap → null（HKDF 腿 throw→catch，零 legacy 回落——cfg 誤配整面 fail-closed）',
+    (await unwrapNoteKeyWithRecToken({ ...TACET5, recKekSalt: 'xyz123' }, freshRec20, recToken20, identityA)) === null);
+  await A('[20] 壞 recKekSalt wrap 面拋 ERR_REC_KEK_SALT（fail-closed 拒寫——派生世代誤配即禁寫）',
+    (async () => { try { await wrapNoteKeyWithRecToken({ ...TACET5, recKekSalt: 'xyz123' }, noteKey, recToken20, identityA); return false; } catch (e) { return (e as Error).message === 'ERR_REC_KEK_SALT'; } })());
+
+  // 源碼窗（計數錨——接線漂移即 RED；needle+1 式對照 [14][15][16] 母型；錨為敘述形且 docstring 零咬）
+  const noteCryptoSrc20 = await srcOf('../src/client/note-crypto.ts');
+  await A('[20] 源碼窗：專屬 AAD 接線恰 2（wrap seal 面與 unwrap open 面各恰 1——回收共用面復活/錯位接線即變異）',
+    noteCryptoSrc20.split("kek, 'notekey-rec')").length === 2 && noteCryptoSrc20.split("'notekey-rec', cfg.wrapRec)").length === 2);
+  await A('[20] 源碼窗：世代面守衛恰 2（deriveRecKek 開關 1＋unwrap HKDF 腿 1——敘述形精確錨）',
+    noteCryptoSrc20.split('if (!cfg.recKekHkdf) return deriveKek').length === 2
+    && noteCryptoSrc20.split('if (cfg.recKekHkdf) {').length === 2);
+  await A('[20] 源碼窗：cfg.wrapRec 敘述形恰 2（wrap seal＋unwrap open——借用面復活即變異）',
+    noteCryptoSrc20.split('if (cfg.wrapRec) {').length === 3);
+  await A('[20] 源碼窗：deriveRecLegacyKek def＋call 恰 2（legacy 面獨立本體）',
+    noteCryptoSrc20.split('deriveRecLegacyKek(').length === 3);
+
+  // R 系毒化（自毒化驗齒——/tmp 拷貝樹 fresh import，出生即棄；期望值真跑後定值，帳面直覺禁沿）
+  const getBuiltin20 = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const fs20 = getBuiltin20('node:fs') as {
+    rmSync?: (p: string, o?: { recursive: boolean; force?: boolean }) => void;
+    cpSync?: (a: string, b: string, o?: { recursive: boolean; filter?: (s: string) => boolean }) => void;
+    readFileSync?: (p: string, e?: string) => string;
+    writeFileSync?: (p: string, c: string, e?: string) => void;
+    mkdtempSync?: (p: string) => string;
+    existsSync?: (p: string) => boolean;
+  } | undefined;
+  const os20 = getBuiltin20('node:os') as { tmpdir?: () => string } | undefined;
+  const inner20 = (getBuiltin20('node:process') as { env?: Record<string, string | undefined> } | undefined)?.env?.POISON_GATE_INNER === '1';
+  const ready20 = !!os20?.tmpdir && !!fs20?.mkdtempSync && !!fs20?.cpSync && !!fs20?.readFileSync && !!fs20?.writeFileSync && !!fs20?.rmSync;
+  const needleR1 = "    return sealNoteKey(cfg.wrapRec, noteKey, kek, 'notekey-rec');";
+  const needleR2 = "        const fresh = await openNoteKey(wrapped, recKek, 'notekey-rec', cfg.wrapRec);";
+  const needleR3 = "    const legacyKek = await deriveRecLegacyKek(cfg, recToken, identity);";
+  if (inner20 || !ready20) {
+    await A('[20] 毒化矩陣載體就緒（node 內建模組在場；內層遞迴由 sentinel 跳過＝正常；缺席＝顯性 FAIL）',
+      inner20 && !ready20 ? false : inner20, 'env unavailable AND not inner');
+  } else {
+    const repoRoot20 = new URL('..', import.meta.url).pathname;
+    const skip20 = (s: string): boolean => s.endsWith('/.git') || s.includes('/.git/') || s.includes('/node_modules') || s.split('/').pop() === 'node_modules';
+    const trees20: string[] = [];
+    const withPoison20 = async (applyS: (s: string) => string, restoreS: (s: string) => string, probe: (dir: string) => Promise<void>): Promise<void> => {
+      const dir = fs20!.mkdtempSync!(os20!.tmpdir!() + '/t20-')!;
+      trees20.push(dir);
+      try {
+        fs20!.cpSync!(repoRoot20, dir, { recursive: true, filter: (s: string) => !skip20(s) });
+        const p = dir + '/src/client/note-crypto.ts';
+        const s0 = fs20!.readFileSync!(p, 'utf8');
+        fs20!.writeFileSync!(p, applyS(s0), 'utf8');
+        await probe(dir);
+      } finally {
+        fs20!.rmSync!(dir, { recursive: true, force: true });
+      }
+    };
+    const freshImport20 = async (dir: string): Promise<Record<string, unknown>> => await import('file://' + dir + '/src/client/note-crypto.ts') as Record<string, unknown>;
+    const baseCfg20 = (): NoteCryptoConfig => ({ ...TACET, wrapRec: 'jr1r.', recKekHkdf: 'jr1r.', recKekSalt: recSalt20 });
+
+    // R1 摘專屬 AAD（寫面接回共用 'notekey'）→ jr1r. 新面 unwrap 死＝單純換前綴假收口（designated）
+    await withPoison20(
+      (s: string) => s.replace(needleR1, "    return sealNoteKey(cfg.wrapRec, noteKey, kek, 'notekey');"),
+      (s: string) => s.replace("    return sealNoteKey(cfg.wrapRec, noteKey, kek, 'notekey');", needleR1),
+      async (dir: string) => {
+        const mod = (await freshImport20(dir)) as typeof import('../src/client/note-crypto.ts');
+        const cfg = baseCfg20();
+        const nk = await mod.generateNoteKey();
+        const rt = mod.generateRecToken();
+        const blob = await mod.wrapNoteKeyWithRecToken(cfg, nk, rt, identityA);
+        const back = await mod.unwrapNoteKeyWithRecToken(cfg, blob, rt, identityA);
+        await A('[20] 毒化 R1 摘專屬 AAD → 新面 unwrap 死（blob 內 AAD 舊契約形——designated）', back === null, String(back !== null));
+      });
+    // R2 HKDF 腿本體退化（KEK 位改吃 recToken 直入）→ 新面 unwrap 死＝KDF 世代收口有齒（designated）
+    await withPoison20(
+      (s: string) => s.replace(needleR2, "        const fresh = await openNoteKey(wrapped, recToken, 'notekey-rec', cfg.wrapRec);"),
+      (s: string) => s.replace("        const fresh = await openNoteKey(wrapped, recToken, 'notekey-rec', cfg.wrapRec);", needleR2),
+      async (dir: string) => {
+        const mod = (await freshImport20(dir)) as typeof import('../src/client/note-crypto.ts');
+        const cfg = baseCfg20();
+        const nk = await mod.generateNoteKey();
+        const rt = mod.generateRecToken();
+        const blob = await mod.wrapNoteKeyWithRecToken(cfg, nk, rt, identityA);
+        const back = await mod.unwrapNoteKeyWithRecToken(cfg, blob, rt, identityA);
+        await A('[20] 毒化 R2 HKDF 腿 KEK 位退化 recToken 直入 → 新面 unwrap 死（blob KEK 形≠——designated）', back === null, String(back !== null));
+      });
+    // R3 摘舊面雙試（legacy 派生錯鹽）→ 新世代讀舊 blob 死（r3 過渡保護有齒）＋舊 cfg 面同死（同一本體）
+    await withPoison20(
+      (s: string) => s.replace(needleR3, "    const legacyKek = await deriveRecLegacyKek(cfg, recToken, identity + 'x');"),
+      (s: string) => s.replace("    const legacyKek = await deriveRecLegacyKek(cfg, recToken, identity + 'x');", needleR3),
+      async (dir: string) => {
+        const mod = (await freshImport20(dir)) as typeof import('../src/client/note-crypto.ts');
+        const cfg = baseCfg20();
+        const nk = await mod.generateNoteKey();
+        const rt = mod.generateRecToken();
+        const legacy = await mod.wrapNoteKeyWithRecToken(TACET, nk, rt, identityA);
+        const back = await mod.unwrapNoteKeyWithRecToken(cfg, legacy, rt, identityA);
+        await A('[20] 毒化 R3 摘舊面雙試 → 新世代讀舊 blob 死（designated——過渡保護有齒）', back === null, String(back !== null));
+        const backOld = await mod.unwrapNoteKeyWithRecToken(TACET, legacy, rt, identityA);
+        await A('[20] 毒化 R3 舊 cfg 面同死（legacy 派生本體單一真相——摘腿兩代同翻）', backOld === null, String(backOld !== null));
+      });
+    // R4 前綴借用面復活（wrapRec 面接回 cfg.wrap）→ 寫面 fallback jr1w.（專用前綴收口行為翻轉——designated）
+    await withPoison20(
+      (s: string) => s.replace(needleR1, "    return sealNoteKey(cfg.wrap, noteKey, kek, 'notekey-rec');"),
+      (s: string) => s.replace("    return sealNoteKey(cfg.wrap, noteKey, kek, 'notekey-rec');", needleR1),
+      async (dir: string) => {
+        const mod = (await freshImport20(dir)) as typeof import('../src/client/note-crypto.ts');
+        const cfg = baseCfg20();
+        const nk = await mod.generateNoteKey();
+        const rt = mod.generateRecToken();
+        const blob = await mod.wrapNoteKeyWithRecToken(cfg, nk, rt, identityA);
+        await A('[20] 毒化 R4 前綴借用面復活 → 寫面 fallback jr1w.（designated——專用前綴契約翻轉）',
+          typeof blob === 'string' && blob.startsWith('jr1w.'), String(blob ?? '').slice(0, 8));
+      });
+    // 還原自證：毒化樹零殘留（本 run 喚出 4 棵全清——封閉集判準）＋ needle 消除式毒化可逆帳
+    const srcAfter20 = (getBuiltin20('node:fs') as { readFileSync?: (p: string, e?: string) => string })!.readFileSync!(
+      new URL('../src/client/note-crypto.ts', import.meta.url).pathname, 'utf8');
+    await A('[20] 毒化還原自證（真樹 needle 恰 1×3——byte-exact 還原的行程帳；R1/R4 共錨各逆還原＝4 行程）',
+      srcAfter20.split(needleR1).length === 2 && srcAfter20.split(needleR2).length === 2
+      && srcAfter20.split(needleR3).length === 2);
+    const existsSync20 = (p: string): boolean =>
+      typeof fs20!.existsSync === 'function' ? fs20!.existsSync!(p) : false;
+    await A('[20] 毒化樹零殘留（本 run 喚出 ' + trees20.length + ' 棵全清——封閉集判準）',
+      trees20.length === 4 && trees20.every((t) => !existsSync20(t)));
+  }
+}
+
 console.log(`\n${passed} 斷言全綠` + (failures.length ? `；${failures.length} 失敗` : ''));
 if (failures.length) {
   console.error('失敗項：', failures);
