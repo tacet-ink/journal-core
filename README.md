@@ -1,4 +1,5 @@
 # @tacet-ink/journal-core
+<!-- [e2e t_046fe36f M1b] no-op probe — reverted in next commit -->
 
 [![npm](https://img.shields.io/npm/v/@tacet-ink/journal-core.svg)](https://www.npmjs.com/package/@tacet-ink/journal-core)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
