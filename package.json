@@ -59,6 +59,6 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260831.1",
     "@scure/bip39": "^2.4.0",
-    "typescript": "~6.0.2"
+    "typescript": "~7.0.2"
   }
 }
