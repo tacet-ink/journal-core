@@ -33,3 +33,15 @@ tacet.ink 產品面（部署實例）的漏洞屬產品 fork 的職責範圍，�
 
 - 沒有賞金（bounty）計畫。
 - 沒有 PGP key，因此不提供 PGP 加密回報管道——請透過上述信箱回報。
+
+## English Summary
+
+This policy covers the cryptographic core primitives of this repository
+(`@tacet-ink/journal-core`); vulnerabilities in the tacet.ink product instance belong to the
+product fork — contact those maintainers separately. Reports go to
+[tacetink.csd@gmail.com](mailto:tacetink.csd@gmail.com) with a subject prefixed `[security]`;
+we acknowledge within 72 hours and agree on fix timelines case-by-case. Supported: 0.2.x
+(0.1.x best-effort). Honest limits: no third-party audit yet; a lost passphrase is
+unrecoverable by design (zero knowledge means the server cannot hold a key you don't have);
+guest-era encryption is obfuscation-grade, not E2E. No bug-bounty program and no PGP
+reporting channel — please use the email above.
