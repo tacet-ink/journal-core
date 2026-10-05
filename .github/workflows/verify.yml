@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    # self-hosted runner（t_046fe36f）：labels 自訂 journal-core ＋預設 self-hosted
+    runs-on: [self-hosted, journal-core]
     steps:
       # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定 t_b91ed07f：密碼學套件 repo
       # 的 CI 不吃浮動 tag）
