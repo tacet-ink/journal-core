@@ -1333,7 +1333,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
 {
   const getBuiltin = (id: string): unknown =>
     (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
-  const cpMod = getBuiltin('node:child_process') as { execFileSync?: (cmd: string, args: string[], opts: { cwd: string; encoding: string; stdio: unknown[]; env?: Record<string, string> }) => string } | undefined;
+  const cpMod = getBuiltin('node:child_process') as { execFileSync?: (cmd: string, args: string[], opts: { cwd: string; encoding: string; stdio: unknown[]; env?: Record<string, string>; timeout?: number }) => string } | undefined;
   const osMod = getBuiltin('node:os') as { tmpdir?: () => string } | undefined;
   const nodeEnvOk = !!cpMod?.execFileSync && !!osMod?.tmpdir && typeof (globalThis as unknown as { process?: { getBuiltinModule?: unknown } }).process?.getBuiltinModule === 'function';
   const processMod = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
@@ -1377,7 +1377,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
       const runGate16 = (): { rc: number; out: string } => {
         // 內層 gate 執行帶 POISON_GATE_INNER=1 sentinel——[16] 矩陣在內層自我跳過＝遞迴防線
         //（拷貝樹的閘檔含本節全文；無 sentinel 會自拷貝再自跑＝18+ 連鎖行程實證）。
-        try { return { rc: 0, out: exec16('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: tree16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod?.env ?? {}), POISON_GATE_INNER: '1' } }) }; }
+        try { return { rc: 0, out: exec16('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: tree16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 240000 }) }; }
         catch (e: unknown) {
           const err = e as { stdout?: string; stderr?: string; status?: number };
           return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') };
@@ -1760,7 +1760,7 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
   const ncSrc18 = await srcOf('../src/client/note-crypto.ts');
   const localWin18 = ncSrc18.slice(ncSrc18.indexOf('── 本機包裹'), ncSrc18.indexOf('── 日記密文入口'));
   await A('[18] 源碼窗：本機段零 throw 面（ERR_WRAP_NOT_CONFIGURED 退場——未配置＝無寫入無拋）',
-    localWin18.length > 1900 && !localWin18.includes('ERR_WRAP_NOT_CONFIGURED'));
+    localWin18.length > 1910 && !localWin18.includes('ERR_WRAP_NOT_CONFIGURED'));
   await A('[18] 源碼窗：寫面唯 cfg.wrapLocal seal＋舊借形零殘留（v1 借用面復活即反）',
     localWin18.split('sealNoteKey(cfg.wrapLocal').length === 2 && !localWin18.includes('sealNoteKey(cfg.wrap,'));
   await A('[18] 源碼窗：回落三元恰 1（收口形——自癒腿與未配置態同走單一 cfg.wrap 面；借用形復活即 2+）＋自癒接線（if legacy → storeLocalWrap identity legacy 恰 1）',
@@ -1769,7 +1769,7 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
     && /if \(legacy\) \{\s*await storeLocalWrap\(cfg, identity, legacy\);/.test(localWin18));
   await A('[18] 界面欄：wrapLocal? 宣告恰 1（note-crypto 全檔——NoteCryptoConfig 選配欄）',
     ncSrc18.split('wrapLocal?: string;').length === 2);
-  // ── [18] 常駐毒化矩陣（本機段結構毒三案——母型 [16]：/tmp 拷貝突變＋fresh import＋出生即棄） ──
+  // ── [18] 常駐毒化矩陣（本機段結構毒三案——母型 [16] gate-rerun 形：/tmp 拷貝突變＋內層整組閘重跑＋出生即棄） ──
   {
     const getBuiltin18 = (id: string): unknown =>
       (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
@@ -1795,81 +1795,66 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
         const fsx18 = getBuiltin18('node:fs') as { existsSync?: (p: string) => boolean } | undefined;
         return typeof fsx18?.existsSync === 'function' ? fsx18.existsSync(p) : false;
       };
+      const cp18 = getBuiltin18('node:child_process') as { execFileSync?: (cmd: string, args: string[], opts: { cwd: string; encoding: string; stdio: unknown[]; env?: Record<string, string>; timeout: number }) => string } | undefined;
+      const runGate18 = (workDir: string): { rc: number; out: string } => {
+        // 內層 gate 執行帶 POISON_GATE_INNER=1 sentinel——三毒化節在內層自我跳過＝遞迴防線
+        //（[16] runGate16 同形；拷貝樹的閘檔含三節全文，無 sentinel 會自拷貝再自跑）。
+        try {
+          const out = cp18!.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: workDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...((globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 240000 });
+          return { rc: 0, out };
+        } catch (e: unknown) {
+          const err = e as { stdout?: string; stderr?: string; status?: number };
+          return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') };
+        }
+      };
+      // 毒化窗（同字面點數律——needlePA18/PB18/PC18 毒化前點數自檢在 withPoisonRun18 內）。
       const trees18: string[] = [];
-      const withPoison18 = async (applyS: (s: string) => string, restoreS: (s: string) => string, probe: (dir: string) => Promise<void>): Promise<void> => {
+
+      // 三案改 gate-rerun 形（t_42626eda 審查 MINOR-1 follow-up——改形照 [16] runGate16 母型）：
+      // 拷貝樹突變 src/client/note-crypto.ts 後重跑內層整組閘（POISON_GATE_INNER=1 遞迴
+      // 防線——內層三毒化節自我跳過），數 [18] 名單 ✗ 真紅：designated-FAIL 帳＝毒化不只
+      // 翻面，更要咬「未來有人把 [18] 主斷言改弱」——弱化後毒化名單帳不齊即 RED。
+      const withPoisonRun18 = async (label: string, needle: string, replacement: string, cases: string[], want: number): Promise<void> => {
         const dir = fs18!.mkdtempSync!(os18!.tmpdir!() + '/t18-lw-')!;
         trees18.push(dir);
         try {
           fs18!.cpSync!(repoRoot18, dir, { recursive: true, filter: (s: string) => !skip18(s) });
           const p = dir + '/src/client/note-crypto.ts';
           const s0 = fs18!.readFileSync!(p, 'utf8');
-          fs18!.writeFileSync!(p, applyS(s0), 'utf8');
-          await probe(dir);
+          const cnt = s0.split(needle).length - 1;
+          if (cnt !== 1) { await A(label + '（毒化 needle 對位自檢——錨缺席＝runner 設計錯非閘病）', false, 'needle cnt=' + cnt); return; }
+          fs18!.writeFileSync!(p, s0.split(needle).join(replacement), 'utf8');
+          const g = runGate18(dir);
+          const failLines18 = g.out.split('\n').filter((l: string) => l.trimStart().startsWith('✗') && l.includes('[18]'));
+          const others18 = g.out.split('\n').filter((l: string) => l.trimStart().startsWith('✗') && !l.includes('[18]'));
+          const designated18 = cases.filter((kw) => failLines18.some((l: string) => l.includes(kw)));
+          const account18 = failLines18.map((l: string) => l.replace(/^\s*✗\s*/, '').slice(0, 40)).join(';;');
+          await A(label + '→ [18] 名單真紅 ' + want + '（designated-FAIL 帳：實測 ' + designated18.length + '/' + want +
+            '；' + account18.slice(0, 110) + '；others=' + others18.length + '）',
+            g.rc === 1 && designated18.length === want && failLines18.length === want
+            && others18.every((l: string) => l.includes('bip39')),
+            'rc=' + g.rc + ' n18=' + failLines18.length + ' d=' + designated18.length + ' others=' + others18.length);
         } finally {
           fs18!.rmSync!(dir, { recursive: true, force: true });
         }
       };
-      const freshImport18 = async (dir: string): Promise<Record<string, unknown>> => await import('file://' + dir + '/src/client/note-crypto.ts') as Record<string, unknown>;
-      const mapStore18 = () => { const m = new Map<string, string>(); return {
-        get: (k: string): string | null => (m.has(k) ? m.get(k)! : null),
-        set: (k: string, v: string): void => { m.set(k, v); },
-        remove: (k: string): void => { m.delete(k); },
-        noteKeyWrap: (soul: string): string => 't18p_notekey:' + soul,
-      }; };
-      const baseCfg18 = (store: ReturnType<typeof mapStore18>): NoteCryptoConfig => ({ ...TACET, wrapLocal: 'jr1l.', store: store as unknown as NoteCryptoConfig['store'] });
-
-      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋自癒腿（舊形服務）仍活
-      await withPoison18(
-        (s: string) => s.replace(needlePA18, '\n    const fresh = null;'),
-        (s: string) => s.replace('\n    const fresh = null;', needlePA18),
-        async (dir: string) => {
-          const mod = (await freshImport18(dir)) as typeof import('../src/client/note-crypto.ts');
-          const FIX = mapStore18(); const CFG = baseCfg18(FIX);
-          const nk = await mod.generateNoteKey();
-          await mod.storeLocalWrap(CFG, 'acca2', nk);
-          const hp = mod.makeHeldKey(); hp.set(nk);
-          const ct = await mod.encryptNote(CFG, hp, 'plain-ct-18', 'aadz', { current: () => 'acca2y' });
-          const back = await mod.decryptNote(CFG, mod.makeHeldKey(), ct, 'aadz', { current: () => 'acca2' });
-          await A('[18] 毒化 P18 摘 fresh-face → 本機通路讀死（blob 不可讀——designated）', back === null, String(back));
-          const guestA = await mod.deriveGuestKey(CFG, 'acca2');
-          CFG.store.set(CFG.store.noteKeyWrap('acca2'), await mod.sealNoteKey('jr1w.', nk, guestA, 'notekey-local'));
-          const lback = await mod.decryptNote(CFG, mod.makeHeldKey(), ct, 'aadz', { current: () => 'acca2' });
-          await A('[18] 毒化 P18 自癒腿仍活（舊形 blob 照服務——單面隔離非互毀）', lback !== null, String(lback));
-        });
-      // P18b 摘自癒回寫 → 舊形讀回照解＋stored 殘留 jr1w.（零重寫）
-      await withPoison18(
-        (s: string) => s.replace(needlePB18, '      return legacy;'),
-        (s: string) => s.replace('      return legacy;', needlePB18),
-        async (dir: string) => {
-          const mod = (await freshImport18(dir)) as typeof import('../src/client/note-crypto.ts');
-          const FIX = mapStore18(); const CFG = baseCfg18(FIX);
-          const nk = await mod.generateNoteKey();
-          const guest = await mod.deriveGuestKey(CFG, 'accb2');
-          const legacy = await mod.sealNoteKey('jr1w.', nk, guest, 'notekey-local');
-          CFG.store.set(CFG.store.noteKeyWrap('accb2'), legacy);
-          const hp = mod.makeHeldKey(); hp.set(nk);
-          const ct = await mod.encryptNote(CFG, hp, 'plain-ct-18', 'aadz', { current: () => 'accb2y' });
-          const back = await mod.decryptNote(CFG, mod.makeHeldKey(), ct, 'aadz', { current: () => 'accb2' });
-          await A('[18] 毒化 P18b 摘自癒回寫 → 舊形讀回照解（讀面不依賴回寫線）', back !== null, String(back));
-          await A('[18] 毒化 P18b stored 殘留 jr1w.（零重寫——heal 條款面是唯一重寫者）',
-            typeof legacy === 'string' && legacy.startsWith('jr1w.') && (CFG.store.get(CFG.store.noteKeyWrap('accb2')) ?? '') === legacy);
-        });
-      // P18c 寫面接回借用形（禁手）→ 寫面 fallback jr1w.（v1 借用面復活的行為翻轉）
-      await withPoison18(
-        (s: string) => s.replace(needlePC18, 'sealNoteKey(cfg.wrap,'),
-        (s: string) => s.replace('sealNoteKey(cfg.wrap,', needlePC18),
-        async (dir: string) => {
-          const mod = (await freshImport18(dir)) as typeof import('../src/client/note-crypto.ts');
-          const FIX = mapStore18(); const CFG = baseCfg18(FIX);
-          const nk = await mod.generateNoteKey();
-          await mod.storeLocalWrap(CFG, 'accc2', nk);
-          const blob = CFG.store.get(CFG.store.noteKeyWrap('accc2'));
-          await A('[18] 毒化 P18c 寫面接回借用形 → 寫面 fallback jr1w.（designated——寫面契約行為翻轉）',
-            typeof blob === 'string' && blob.startsWith('jr1w.'), String(blob ?? '').slice(0, 8));
-        });
-      // 還原自證：真樹 needle 計數在所有毒化後仍恰 1×3（byte-exact 還原的行程帳）
+      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋源碼窗 throw 面錨翻（自癒腿獨立承載在 [18] 名單外）
+      await withPoisonRun18('[18] 毒化 P18 gate-rerun（P18：摘 fresh-face 三元→null）',
+        needlePA18, '\n    const fresh = null;',
+        ['空-held decrypt 經本機包裹通路', '自癒後二次讀回', '本機段零 throw 面'], 3);
+      // P18b 摘自癒回寫 → 讀面照解（通路讀面不依賴回寫線）＋回寫線計數窗錨翻面
+      await withPoisonRun18('[18] 毒化 P18b gate-rerun（P18b：摘自癒回寫）',
+        needlePB18, '      return legacy;',
+        ['自癒回寫恆新前綴', '自癒 blob unwrap 等值', '自癒 blob 舊形恆拒', '回落三元恰 1'], 4);
+      // P18c 寫面接回借用形（禁手）→ 寫面 fallback jr1w.（v1 借用面復活的行為翻轉）＋寫面唯一 seal 計數窗錨翻面
+      await withPoisonRun18('[18] 毒化 P18c gate-rerun（P18c：寫面接回借用形）',
+        needlePC18, 'sealNoteKey(cfg.wrap,',
+        ['寫前綴 jr1l.', '寫入 payload unwrap', '自癒回寫恆新前綴', '自癒 blob unwrap 等值', '自癒 blob 舊形恆拒', '二次讀不自癒二次', '寫面唯 cfg.wrapLocal seal'], 7);
+      // 真樹 needle 對位錨（t_06c666a6 改名——NIT-3：restoreS 回呼從未在 gate-rerun 形被呼叫；
+      // 本錨實質＝「真樹 needle 恰 1×3」的 byte-exact 防線：毒化全程跑在拷貝樹，真樹 needle
+      // 計數變異（誤改斷言窗本體）即 RED）。
       const srcAfter18 = await srcOf('../src/client/note-crypto.ts');
-      await A('[18] 毒化還原自證（真樹 needle 恰 1×3——毒化零殘留本樹）',
+      await A('[18] 真樹 needle 對位錨（恰 1×3——真樹零突變的行程帶）',
         srcAfter18.split(needlePA18).length === 2 && srcAfter18.split(needlePB18).length === 2 && srcAfter18.split(needlePC18).length === 2);
       await A('[18] 毒化樹零殘留（本 run 喚出 ' + trees18.length + ' 棵全清——封閉集判準）',
         trees18.length === 3 && trees18.every((t) => !fs18!.rmSync || !existsSync18(t)));

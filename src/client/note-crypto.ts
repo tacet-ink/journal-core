@@ -40,7 +40,8 @@ export interface NoteCryptoConfig {
   wrap: string;
   /** 本機包裹前綴（jr1l.，v0.2.0 批卡③：本機包裹不再借用 cfg.wrap——「一個前綴一份契約」
    *  的第二違例收口）。未配置 = storeLocalWrap/loadLocalWrap 退場（無寫入／讀取照走
-   *  舊形回落，行為不變——cipherLocal opt-in 母型）。 */
+   *  舊形回落——cipherLocal opt-in 母型；寫面功能退場——v1 可用者升級後需配置 wrapLocal
+   *  才保留本機包裹寫入）。 */
   wrapLocal?: string;
   /** 復原套件專用前綴（jr1r.，v0.2.0 批卡⑤：wrappedRec 不再借用 cfg.wrap——同前例收口）。
    *  AAD 亦帶內切換 'notekey'→'notekey-rec'（共用 AAD 收口）。與 recKekHkdf **兩欄一體**
@@ -383,10 +384,11 @@ const NOTEKEY_HEX_LEN = 64;
 
 /**
  * 共用包裹核心（目標 #1 收口）：prefix + b64(iv[12] ‖ GCM(KEK, hex(noteKey), aad))。
- * 全家族單因子包裹（jr1w./jrsw./jr3w./jr3s.）與復原套件（wrappedRec：未配置世代借用
- * cfg.wrap 前綴＝legacy 面；HKDF 世代＝專用前綴 cfg.wrapRec＋AAD 'notekey-rec'，接線在
- * wrapNoteKeyWithRecToken）同一本體；KDF 差異在呼叫端 KEK、payload 形狀（salt 外置 vs
- * 內嵌）由各家族維持。
+ * 鹽外置家族字首家系清點（v0.2.0 批卡③④同步——七呼叫端）：jr1w.（wrapNoteKey）/jrsw.
+ *（wrapNoteKeyShare）/jr3w.（wrapNoteKey3）/jr4w.（wrapNoteKey4）/jr3s.
+ *（wrapNoteKeyShare3）/jr1l.（storeLocalWrap）/jr1r.＋jr1w.（wrapNoteKeyWithRecToken——
+ * HKDF 世代專用前綴＋AAD 'notekey-rec'、未配置世代 legacy 面＝cfg.wrap＋AAD 'notekey'）
+ * 同一本體；KDF 差異在呼叫端 KEK、payload 形狀（salt 外置 vs 內嵌）由各家族維持。
  * prefix null/undefined＝未配置拒絕（呼叫端亦可先行拒絕，帶自家錯誤碼形；雙防線）。
  */
 export async function sealNoteKey(prefix: string | null | undefined, noteKey: CryptoKey, kek: CryptoKey, aad: string): Promise<string> {
@@ -401,11 +403,13 @@ export async function sealNoteKey(prefix: string | null | undefined, noteKey: Cr
  * GCM（金鑰/AAD/密文損壞）、rawHex 長度/hex 形——恆回 null 不拋。
  * round 1 審查 MINOR-5：atob 對非法字元會拋、原 docstring「不拋」與實作不符——
  * 本體吞收 null（公開原語誠實契約；呼叫端 unwrap 家族 try/catch 是雙防線非依賴面）。
- * 家族嚴格度收口實況（round 1 審查 MINOR-2 校正＋r2 MINOR-1 殘餘校正 t_580f9c54）：
- * 鹽外置 6 點由本體嚴格 92B 終結——note-crypto 四點（unwrapNoteKey＝jr1w／
+ * 家族嚴格度收口實況（round 1 審查 MINOR-2 校正＋r2 MINOR-1 殘餘校正 t_580f9c54；
+ * 七呼叫端帳同步 v0.2.0 批卡③④——鹽外置家族字首家系清點，6 點帳已過期）：
+ * 本體嚴格 92B 終結七呼叫端＝note-crypto 四點（unwrapNoteKey＝jr1w／
  * unwrapNoteKeyShare＝jrsw／unwrapNoteKeyWithRecToken（legacy 面 jr1w.／HKDF 面 jr1r.）
- * ／loadLocalWrap）
- * ＋argon2 兩點（unwrapNoteKey3＝jr3w／unwrapNoteKeyShare3＝jr3s；own 92B 檢已隨收口摘除）；
+ * ／loadLocalWrap＝jr1l.）
+ * ＋argon2 三點（unwrapNoteKey3＝jr3w／unwrapNoteKey4＝jr4w／unwrapNoteKeyShare3＝jr3s；
+ * own 92B 檢已隨收口摘除）；
  * 鹽內嵌 3 點（jr2w/jr3d/jr1p）own 108B＋rawHex 形檢——與本體同嚴格度、刻意不經本體
  * （pinSalt 前綴不在鹽外置形契約內）。維護本體時鹽內嵌三族不隨行。
  */
@@ -599,7 +603,9 @@ async function loadLocalWrap(cfg: NoteCryptoConfig, identity: string): Promise<C
     const stored = cfg.store.get(cfg.store.noteKeyWrap(identity));
     if (!stored) return null;
     const guest = await deriveGuestKey(cfg, identity);
-    // 次序契約：新形必先於舊形試——新形 blob 在舊前綴面恆拒（family isolation），次序可觀察。
+    // 次序契約：新形必先於舊形試——新形 blob 在舊前綴面恆拒（family isolation）；先新後舊
+    // 仍是要件（新形命中即不跑舊解包），但兩前綴互斥 startsWith 下單一三元只有一腿成立，
+    // 實際次序不可觀察。
     const fresh = cfg.wrapLocal
       ? await openNoteKey(stored, guest, 'notekey-local', cfg.wrapLocal) // 本體嚴格面（92B＋rawHex hex 形）
       : null;
