@@ -12,7 +12,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      # actions/checkout v4.2.2（SHA 釘選——供應鏈裁定 t_b91ed07f：密碼學套件 repo
+      # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定 t_b91ed07f：密碼學套件 repo
       # 的 CI 不吃浮動 tag）
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
