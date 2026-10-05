@@ -11,6 +11,11 @@
  *     KEK = PBKDF2(pass, salt, 600000, SHA-256) 包裹成 wrapped 上傳；復原套件 wrappedRec
  *     = 同款包裹在 KEK_rec = PBKDF2(recToken, salt = recSaltPrefix ‖ identity) 下。
  *     passphrase 從此不過線：線上憑證送 PH1（雜湊形，派生方式由各產品自定義），伺服器存 PH2。
+ *     復原套件 v0.2.0 世代（卡D 議題二搭車案）：前綴專用化（wrapRec=jr1r.）＋KEK_rec 派生
+ *     世代化（recKekHkdf 配置＝HKDF-SHA256，info='journal-kek-rec-v1:'+recKekHkdf）＋
+ *     AAD 帶內切換（'notekey'→'notekey-rec'）；新世代讀舊寫新——unwrap 新面先行、回落
+ *     舊契約面（PBKDF2＋AAD 'notekey'）雙試（r3 過渡保護承諾：舊 blob 永遠可解；摘雙試
+ *     時點＝遷移率裁定非日曆）。
  *
  * 前綴全部可配置（帶內版本化：升級 KDF 參數 = 換新前綴）。AAD 由呼叫端傳入——
  * 例如綁 `noteId`（跨列搬移必解密失敗）、`lifeId:day`（逐日日記）或留言綁 `tst:<lifeId>`。
@@ -37,6 +42,27 @@ export interface NoteCryptoConfig {
    *  的第二違例收口）。未配置 = storeLocalWrap/loadLocalWrap 退場（無寫入／讀取照走
    *  舊形回落，行為不變——cipherLocal opt-in 母型）。 */
   wrapLocal?: string;
+  /** 復原套件專用前綴（jr1r.，v0.2.0 批卡⑤：wrappedRec 不再借用 cfg.wrap——同前例收口）。
+   *  AAD 亦帶內切換 'notekey'→'notekey-rec'（共用 AAD 收口）。與 recKekHkdf **兩欄一體**
+   *  （同缺同在；部分配置＝ERR_REC_CFG_PARTIAL 拒寫——世代配對門，fail-closed 禁寫出
+   *  「前綴面 jr1r.×派生面 PBKDF2」跨契約 blob）。兩欄皆缺席 = wrap/unwrap 復原套件面
+   *  照走舊契約（cfg.wrap＋PBKDF2＋AAD 'notekey'）＝行為不變態（r3 承諾面：配置形正確
+   *  時舊 wrappedRec blob 永遠可解——HKDF 腿誤配拋點整面 fail-closed 既有契約）。 */
+  wrapRec?: string;
+  /** 復原套件「KEK 派生」世代開關（v0.2.0 批卡⑤）：KEK_rec = HKDF-SHA256(
+   *  ikm = recToken（256-bit 實體因子）， salt = recKekSalt？:16B hex（未配置＝零鹽），
+   *  info = 'journal-kek-rec-v1:' + recKekHkdf, L = 32 )——info 合成名沿 argon2 家族
+   *  慣例（呼叫端帶入；KEK 派生世代空間由前綴＋info 承載）。HKDF 世代 identity 不入
+   *  KEK（identity-free by design——256-bit 實體因子足綁，卡D 議題二；identity 綁域由
+   *  舊契約面 recSaltPrefix‖identity 專屬承載，兩世代綁域刻意分離）。與 wrapRec 兩欄
+   *  一體（同缺同在；部分配置＝ERR_REC_CFG_PARTIAL 拒寫）。未配置 = PBKDF2 舊世代
+   *  （卡D 議題二裁定：HKDF 強化搭車 v0.2.0；強度差異對 256-bit recToken 無意義，
+   *  收的是「派生域＋前綴契約面分離」的語意收口）。 */
+  recKekHkdf?: string;
+  /** HKDF salt（v0.2.0 批卡⑤）：16B hex 專屬鹽域（與 PBKDF2 面 recSaltPrefix 前綴域分離
+   *  ——KEK 派生世代鹽）。未配置 = HKDF 零鹽（HKDF salt 欄位本就 optional；語意不變，
+   *  域由 info 承載）。 */
+  recKekSalt?: string;
   /** 雙因子合鑰包裹前綴（jr2w.，PIN 第二因子）。未配置 = dual API 拒絕（未配置行為不變）。 */
   wrapDual?: string;
   /** 雙因子 pin 段 PBKDF2 salt 前綴，如 'journal-note-pin1:'（pinSalt 內嵌 payload 後拼接）。 */
@@ -357,8 +383,10 @@ const NOTEKEY_HEX_LEN = 64;
 
 /**
  * 共用包裹核心（目標 #1 收口）：prefix + b64(iv[12] ‖ GCM(KEK, hex(noteKey), aad))。
- * 全家族單因子包裹（jr1w./jrsw./jr3w./jr3s.）與復原套件（wrappedRec，前綴共用 cfg.wrap）
- * 同一本體；KDF 差異在呼叫端 KEK、payload 形狀（salt 外置 vs 內嵌）由各家族維持。
+ * 全家族單因子包裹（jr1w./jrsw./jr3w./jr3s.）與復原套件（wrappedRec：未配置世代借用
+ * cfg.wrap 前綴＝legacy 面；HKDF 世代＝專用前綴 cfg.wrapRec＋AAD 'notekey-rec'，接線在
+ * wrapNoteKeyWithRecToken）同一本體；KDF 差異在呼叫端 KEK、payload 形狀（salt 外置 vs
+ * 內嵌）由各家族維持。
  * prefix null/undefined＝未配置拒絕（呼叫端亦可先行拒絕，帶自家錯誤碼形；雙防線）。
  */
 export async function sealNoteKey(prefix: string | null | undefined, noteKey: CryptoKey, kek: CryptoKey, aad: string): Promise<string> {
@@ -375,7 +403,8 @@ export async function sealNoteKey(prefix: string | null | undefined, noteKey: Cr
  * 本體吞收 null（公開原語誠實契約；呼叫端 unwrap 家族 try/catch 是雙防線非依賴面）。
  * 家族嚴格度收口實況（round 1 審查 MINOR-2 校正＋r2 MINOR-1 殘餘校正 t_580f9c54）：
  * 鹽外置 6 點由本體嚴格 92B 終結——note-crypto 四點（unwrapNoteKey＝jr1w／
- * unwrapNoteKeyShare＝jrsw／unwrapNoteKeyWithRecToken＝jr1wRec 同本體／loadLocalWrap）
+ * unwrapNoteKeyShare＝jrsw／unwrapNoteKeyWithRecToken（legacy 面 jr1w.／HKDF 面 jr1r.）
+ * ／loadLocalWrap）
  * ＋argon2 兩點（unwrapNoteKey3＝jr3w／unwrapNoteKeyShare3＝jr3s；own 92B 檢已隨收口摘除）；
  * 鹽內嵌 3 點（jr2w/jr3d/jr1p）own 108B＋rawHex 形檢——與本體同嚴格度、刻意不經本體
  * （pinSalt 前綴不在鹽外置形契約內）。維護本體時鹽內嵌三族不隨行。
@@ -444,24 +473,75 @@ export async function unwrapNoteKeyShare(cfg: NoteCryptoConfig, wrapped: string,
   }
 }
 
-/** 復原套件包裹：KEK_rec = PBKDF2(recToken, salt = recSaltPrefix ‖ identity)。 */
-async function deriveRecKek(cfg: NoteCryptoConfig, recToken: string, identity: string): Promise<CryptoKey> {
-  return deriveKek(recToken, new TextEncoder().encode(cfg.recSaltPrefix + identity));
+/** 復原套件 KEK 派生（v0.2.0 批卡⑤）：HKDF 專責（本體只承載 recKekHkdf 配置世代——
+ *  呼叫端須先過世代配對門）。KEK_rec = HKDF-SHA256(
+ *    ikm = recToken（TextEncoder UTF-8；recToken 恆 hex64 256-bit 實體因子），
+ *    salt = recKekSalt？(16B hex → 16 raw bytes；未配置＝零鹽)，
+ *    info = 'journal-kek-rec-v1:' + recKekHkdf, L = 32 )——輸出 AES-GCM 256 nonextractable。
+ *  HKDF 世代 identity 不入 KEK（identity-free by design——256-bit 實體因子足綁，卡D 議題二；
+ *  identity 綁域由舊契約面 recSaltPrefix‖identity 專屬承載，兩世代綁域刻意分離）。
+ *  強度語意（卡D 議題二文字）：recToken 256-bit 實體因子，KDF 強度無意義——收的是
+ *  派生域（HKDF info）＋前綴契約面（jr1r.）的世代分離；非防爆破強化帳。
+ *  鹽域二分（t_7710c766 鹽家族）：HKDF salt 屬「派生面內嵌 cfg、payload 零內嵌」——
+ *  92B 帳純粹來自 hex(noteKey) 64B＋iv 12＋tag 16（pinSalt 內嵌 payload 是 jr2w./jr3d.
+ *  鹽內嵌族的事，不入此帳）。PBKDF2 舊世代派生＝deriveRecLegacyKek（單一本體，修正輪
+ *  收口：deriveRecKek 禁 PBKDF2 fallback——派生源雙模＝C2 缺口形）。 */
+async function deriveRecKek(cfg: NoteCryptoConfig, recToken: string): Promise<CryptoKey> {
+  const hkdfTail = cfg.recKekHkdf as string;
+  const info = 'journal-kek-rec-v1:' + hkdfTail;
+  if (cfg.recKekSalt && !HEX32_RE.test(cfg.recKekSalt)) throw new Error('ERR_REC_KEK_SALT');
+  const salt = cfg.recKekSalt ? hexToBytes(cfg.recKekSalt) : new Uint8Array(0);
+  const hkdfBase = await crypto.subtle.importKey('raw', new TextEncoder().encode(recToken) as BufferSource, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: salt as BufferSource, info: new TextEncoder().encode(info) as BufferSource },
+    hkdfBase,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
 }
 
 export async function wrapNoteKeyWithRecToken(cfg: NoteCryptoConfig, noteKey: CryptoKey, recToken: string, identity: string): Promise<string> {
-  const kek = await deriveRecKek(cfg, recToken, identity);
+  // 世代配對門（v0.2.0 批卡⑤修正輪——reviewer C1/C2 收口）：一前綴一份契約補完。
+  // 禁寫面＝「前綴面 jr1r.×派生面 PBKDF2」（wrapRec-only，C1：寫得出讀不回）與
+  // 「前綴面 jr1w.×派生面 HKDF」（HKDF-only，C2：借 jr1w. 前綴 carrying 第二派生、
+  // 升級即失資料）——兩面都由部分配置自然接線產生，門 fail-closed 拒寫。
+  if (cfg.wrapRec || cfg.recKekHkdf) {
+    if (!cfg.wrapRec || !cfg.recKekHkdf) throw new Error('ERR_REC_CFG_PARTIAL');
+    const kek = await deriveRecKek(cfg, recToken);
+    return sealNoteKey(cfg.wrapRec, noteKey, kek, 'notekey-rec');
+  }
+  // 未配置世代（兩欄皆缺席＝legacy 契約面永不變）：cfg.wrap＋PBKDF2＋AAD 'notekey'
+  //（既有向量 byte 不變；cfg.wrap 缺席由 sealNoteKey 守衛承載——雙防線）。
+  const kek = await deriveRecLegacyKek(cfg, recToken, identity);
   return sealNoteKey(cfg.wrap, noteKey, kek, 'notekey');
 }
 
 export async function unwrapNoteKeyWithRecToken(cfg: NoteCryptoConfig, wrapped: string, recToken: string, identity: string): Promise<CryptoKey | null> {
   try {
+    // 次序契約：jr1r. 面只在兩欄齊備時試（HKDF 專責派生——cfg.wrap 面零 HKDF 腿，
+    // jr1w. 前綴只 carrying passphrase-PBKDF2 派生：「一個前綴一份契約」第二違例收口）。
+    if (cfg.wrapRec && cfg.recKekHkdf) {
+      const recKek = await deriveRecKek(cfg, recToken);
+      const fresh = await openNoteKey(wrapped, recKek, 'notekey-rec', cfg.wrapRec);
+      if (fresh) return fresh;
+    }
+    // 舊面回落（r3 過渡保護）：cfg.wrap 在場即試（部分配置讀面照走——寫面已被配對門
+    // 拒，讀面寬容＝舊 blob 永遠可解的承載面）。
     if (!cfg.wrap) return null;
-    const kek = await deriveRecKek(cfg, recToken, identity);
-    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap);
+    const legacyKek = await deriveRecLegacyKek(cfg, recToken, identity);
+    return await openNoteKey(wrapped, legacyKek, 'notekey', cfg.wrap);
   } catch {
     return null;
   }
+}
+
+/** 舊契約派生本體（v0.2.0 批卡⑤修正輪：legacy 派生全案單一本體）：PBKDF2(recToken,
+ *  salt = recSaltPrefix ‖ identity)——永不變（r3 承諾面：配置形正確時既有 wrappedRec
+ *  blob 逐位可解）。寫面未配置世代與讀面回落同源呼叫本體；deriveRecKek 改 HKDF 專責
+ *  （修正輪 C2 收口：HKDF 派生禁借 cfg.wrap 前綴面，派生源不再雙模）。 */
+async function deriveRecLegacyKek(cfg: NoteCryptoConfig, recToken: string, identity: string): Promise<CryptoKey> {
+  return deriveKek(recToken, new TextEncoder().encode(cfg.recSaltPrefix + identity));
 }
 
 /**
