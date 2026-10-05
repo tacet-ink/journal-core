@@ -11,6 +11,20 @@
     "url": "https://github.com/tacet-ink/journal-core/issues"
   },
   "type": "module",
+  "keywords": [
+    "journal",
+    "diary",
+    "encryption",
+    "e2ee",
+    "end-to-end-encryption",
+    "argon2id",
+    "bip39",
+    "passphrase",
+    "zero-knowledge",
+    "webcrypto",
+    "privacy",
+    "tacet"
+  ],
   "main": "src/index.ts",
   "types": "src/index.ts",
   "sideEffects": false,

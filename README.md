@@ -13,6 +13,41 @@
 這是 [默·Tacet（tacet.ink）](https://tacet.ink) 的客戶端/伺服端核心原語層，
 從多個姊妹產品共用的密碼學本體抽取而成，以品牌前綴參數化（前綴契約見下表）。
 
+## Quickstart
+
+```sh
+git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
+npm ci
+npm run verify   # 429 assertions, all green, run against the real modules (no mocks)
+```
+
+```ts
+// example.ts
+import { makeHeldKey, generateNoteKey, encryptNote, decryptNote } from './src/index.ts';
+import { makeKeyStore } from './src/client/keys.ts';
+
+const cfg = {
+  guestKdfPrefix: 'myapp-note-u1',
+  recSaltPrefix: 'myapp-note-rec1:',
+  cipherGuest: 'jr1g.',      // your own brand prefix family (guest era, opt-in)
+  cipherBound: 'jr1b.',
+  wrap: 'jr1w.',
+  store: makeKeyStore({ brand: 'myapp' }),
+};
+
+const held = makeHeldKey();
+held.set(await generateNoteKey());             // bound era: random 256-bit noteKey
+const identity = { current: () => 'acct-xxxxxxxxxxxxxxxx' };
+
+const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'noteId:n1', identity);
+console.log(cipher.slice(0, 5));  // 'jr1b.' — ciphertext; nobody reads it without the key
+```
+
+run: `node --experimental-strip-types example.ts`
+
+Full API in [使用（Usage）](#使用usage) 節。Live product: [https://tacet.ink](https://tacet.ink)
+（驗證頁：[https://tacet.ink/verify](https://tacet.ink/verify)）。
+
 ## 設計（Design）
 
 - **兩時代金鑰模型**：未綁定（guest）時代以 `K_u = SHA-256(guestKdfPrefix ‖ identity)`
@@ -172,7 +207,9 @@ hash-wasm 並以 `setArgonLoader()` 注入（詳 `src/client/argon2.ts` 檔頭�
 
 ## 授權
 
-MIT。安全問題聯絡 tacetink.csd@gmail.com。
+版本歷史見 [CHANGELOG.md](./CHANGELOG.md)。
+
+MIT。安全問題聯絡 tacetink.csd@gmail.com（安全回報流程見 [SECURITY.md](./SECURITY.md)）。
 
 ## English Summary
 
@@ -218,7 +255,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 431 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 429 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
