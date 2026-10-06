@@ -58,7 +58,7 @@ export function makePh2LadderStore(env: Env): {
     async insert(accountId: string, oldPh2: string, oldKind: Ph2LadderKind): Promise<void> {
       // upsert ON CONFLICT(ph2)（值主權威，PK 定形）：同一舊值恰一列，最新持有者勝——
       // A 遷移落 (V→A) 後 V 值幽靈帳戶後建並遷移＝覆蓋為 (V→B)。無 DELETE 語句：行留存
-      // 續供幽靈守衛（行隨帳戶刪除由 FK CASCADE 清）；fork 批面另備 ladderDelete 給
+      // 續供幽靈守衛（行隨帳戶刪除由 FK CASCADE 清）；fork 寫入面另備 ladderDelete 給
       // delete-account 清場面。
       // fail-open（遷移率聚合面）：插表失敗只讓下一輪 login 重試同一 upsert
       //（v3 查表 miss 再走 ladder miss → 建 v2 幽靈的行為面）──遷移本體不因本表故障回退。

@@ -134,7 +134,7 @@ export interface AuthStore {
   getByRecHash(recHash: string): Promise<AuthRow | null>;
   setWrapped(userKey: string, ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
   /** v3 重鑰：舊值入 ladder 表＋ph2/wrapped/salt/wrappedRec/rec_hash
-   *  五欄同列覆蓋（rec 欄在場才覆蓋——四欄形契約面不動；fork 實作三語句批面）。 */
+   *  五欄同列覆蓋（rec 欄在場才覆蓋——四欄形契約面不動；fork 實作三語句同批寫入）。 */
   rekeyWithLadder?(userKey: string, oldPh2: string, oldKind: 'legacy' | 'v2', ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
   /** ladder 查表：以「舊 ph2 值」（v2/legacy 形）查 ladder 表，
    *  命中回帳戶 id（login route 的「不建幽靈、回舊帳＋ph2Kind='legacy' 語意」守衛面）；
