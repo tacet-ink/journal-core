@@ -18,7 +18,7 @@
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci
-npm run verify   # 429 assertions, all green, run against the real modules (no mocks)
+npm run verify   # 432 assertions, all green, run against the real modules (no mocks)
 ```
 
 ```ts
@@ -48,6 +48,7 @@ run: `node --experimental-strip-types example.ts`
 
 完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
 （驗證頁：[https://tacet.ink/verify](https://tacet.ink/verify)）。
+安全回報流程見 [SECURITY.md](./SECURITY.md)、版本歷史見 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 設計（Design）
 
@@ -91,7 +92,7 @@ Tacet 部署實例（config 傳入）：
 | `jr1c.` | 附件密文（image attachments；選配） | 同筆記金鑰（noteKey／guest key 由呼叫端決定） | AES-GCM，AAD `jr1a:<noteId>:<attachId>` |
 | `jr1d.` | 本機 IDB stored 密文（notes store；選配） | 同筆記金鑰（呼叫端注入） | AES-GCM，AAD 綁 note_id，payload 自帶 `v` 欄 |
 | `jr1l.` | 本機包裹（PWA session 期免重打密語；選配） | deriveGuestKey＝K_u 同 guest 面（identity 派生、passphrase-free） | 同 jr1w. 形，AAD `notekey-local` |
-| `jr1r.` | 復原套件包裹（wrappedRec 專用；v0.2.0 批卡⑤，選配，與 recKekHkdf 兩欄一體） | HKDF-SHA256(ikm=recToken, salt=recKekSalt？, info=`journal-kek-rec-v1:`+recKekHkdf)——兩欄齊備才寫 jr1r. 面 | 同 jr1w. 形，AAD `notekey-rec`（部分配置拒寫；舊契約面 jr1w.＋PBKDF2＋AAD `notekey` 永不變——新世代讀舊寫新雙試） |
+| `jr1r.` | 復原套件包裹（wrappedRec 專用；v0.2.0 世代，選配，與 recKekHkdf 兩欄一體） | HKDF-SHA256(ikm=recToken, salt=recKekSalt？, info=`journal-kek-rec-v1:`+recKekHkdf)——兩欄齊備才寫 jr1r. 面 | 同 jr1w. 形，AAD `notekey-rec`（部分配置拒寫；舊契約面 jr1w.＋PBKDF2＋AAD `notekey` 永不變——新世代讀舊寫新雙試） |
 | `jr1w.` | passphrase 包裹＋復原套件包裹（未配置世代） | PBKDF2-SHA256 600k（復原套件 KEK＝PBKDF2(recToken, recSaltPrefix‖identity)） | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey`（復原套件與 passphrase 同 AAD 慣例＝未配置世代借形） |
 | `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
 | `jr3w.` | passphrase 包裹（Argon2id 版） | Argon2id m=64MiB t=3 p=1 tag=32B | 同 jr1w. 形，AAD `notekey` |
@@ -117,7 +118,7 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 429 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 432 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -178,8 +179,8 @@ PH1 v3（密語正規化世代）：`derivePh1ArgonV3(pass, saltArg?)` 預設鹽
 （`'tacet-ph1-v2'`，新鹽域＝世代 ph2 命名空間分離——同鹽域會讓 v3 'ＰＡＳＳ' 與 v2 世代
 raw 'PASS' 撞同一 ph2）。派生輸入吃 `normalizePassphrase`（NFKC-only；大小寫摺疊禁絕＝
 大小寫差恆不同 ph2）；v2/legacy 派生面零變更（舊帳戶憑證 raw 契約）。兩代 ph2 可並存查表＝
-tacet 遷移層職責（v0.2.0 批卡②）。
-⚠️ 鹽撞位警告（MINOR-5）：`PH1_V3_SALT` 禁當 `derivePh1Argon` 的 `saltArg` 餵入（反之亦然）——
+tacet 遷移層職責（v0.2.0 世代收口）。
+⚠️ 鹽撞位警告：`PH1_V3_SALT` 禁當 `derivePh1Argon` 的 `saltArg` 餵入（反之亦然）——
 把 v3 鹽域值餵 v2 派生（或 fork 把同一 saltArg 帶到兩面）＝NFKC-effective 密語與 v2 raw 密語
 同值撞 ph2，跨世代帳戶空間混合。v3 的 `saltArg` 必須異於本 product 的 v2 鹽域值。
 
@@ -256,7 +257,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 429 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 432 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
@@ -272,4 +273,5 @@ knowledge.
 
 ## License
 
-MIT. Security contact: tacetink.csd@gmail.com.
+MIT. Security contact: tacetink.csd@gmail.com. Version history: [CHANGELOG.md](./CHANGELOG.md).
+Security reporting process: [SECURITY.md](./SECURITY.md).
