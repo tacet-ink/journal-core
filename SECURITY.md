@@ -9,7 +9,7 @@ tacet.ink 產品面（部署實例）的漏洞屬產品 fork 的職責範圍—�
 
 ## 回報管道
 
-聯絡信箱：[tacetink.csd@gmail.com](mailto:tacetink.csd@gmail.com)
+聯絡信箱：[security@tacet.ink](mailto:security@tacet.ink)
 （email 標題建議前綴 `[security]`）
 
 - 72 小時內確認收到。
@@ -40,7 +40,7 @@ tacet.ink 產品面（部署實例）的漏洞屬產品 fork 的職責範圍—�
 This policy covers the cryptographic core primitives of this repository
 (`@tacet-ink/journal-core`); vulnerabilities in the tacet.ink product instance belong to the
 product fork — report via the security contact published on tacet.ink. Reports go to
-[tacetink.csd@gmail.com](mailto:tacetink.csd@gmail.com) with a subject prefixed `[security]`;
+[security@tacet.ink](mailto:security@tacet.ink) with a subject prefixed `[security]`;
 we acknowledge within 72 hours and agree on fix timelines case-by-case. Supported: 0.2.x
 (0.1.x best-effort). Honest limits: no third-party audit yet; a lost passphrase is
 unrecoverable by design — the offline recovery package (24-word transcription layer) is the
