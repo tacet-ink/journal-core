@@ -1,15 +1,15 @@
 /**
  * ratelimit.ts — per-IP fixed-window 限流（D1 計數，跨 isolate 有效；單句 UPSERT…RETURNING）。
  *
- * 設計（2026-10-04 t_b91ed07f，外部審查 MAJOR：原 4 往返條件寫入鏈 1 往返收口）：
+ * 設計（2026-10-04 定案：原 4 往返條件寫入鏈 1 往返收口）：
  * - 限流語意是 fixed window：以 window_start 為窗錨，窗過期整窗重置。
- *   （原檔頭「滑動視窗」措辭錯誤——c7c8701 只修 README 未修本檔；本卡一併收口。）
+ *   （原檔頭「滑動視窗」措辭錯誤——c7c8701 只修 README 未修本檔；本檔一併收口。）
  * - 單條 UPSERT…RETURNING 原子完成「計數＋窗重置＋讀回放行判準」：
  *   同 IP 併發首發不再有 INSERT/輸家競態（同語句同鍵衝突時第二發原子吃到
  *   count+1；D1 實測 RETURNING 逐發回真值——同 IP 併發首發不 undercount）。
  * - fail-open 裁定不變（2026-09-06）：限流儲存故障時放行（保護面不可反噬主功能），
  *   只擋明確超額。RETURNING 異形回應（results 空／alias 斷裂）同向 fail-open
- *   並 console.error 照實回報（r2 MINOR-3：異形不反向成 deny）。
+ *   並 console.error 照實回報（異形不反向成 deny）。
  *
  * 放行判準：RETURNING 的 count <= max（窗口內超額後的每一發都回實際 count，
  * 由呼叫端以 count <= max 拒絕——計數不封頂，超額仍逐發累計）。
