@@ -21,7 +21,7 @@
  * 不變量（勿破壞）：
  * - 金鑰包裹欄組（wrapped+salt）缺一整組放棄——pair 檢查本體在 pickKeyPackage。
  * - recPkg 與 recHash 成對出現＝呼叫端（fork store）職責：本層介面兩參各自可空、
- *   不做 pair 檢查（r2 MINOR-4 照此收口；pickKeyPackage 是同職責的成對檢查先例）。
+ *   不做 pair 檢查（裁定照此收口；pickKeyPackage 是同職責的成對檢查先例）。
  */
 
 import { corsResponse } from './cors.ts';
@@ -51,11 +51,11 @@ function escapeReLiteral(s: string): string {
 }
 
 /** 前綴家族 → 密文形 regex（單一組裝點；cipherRe 死碼退場）。
- *  never-match 守衛（t_580f9c54 N-7，opt-in 鐵律面；run 574 r2 實測校正）：空字首組態會
+ *  never-match 守衛（空字首組態防線，opt-in 鐵律面）：空字首組態會
  *  組裝出 accept-all 形——`[]` 與 `['']` 組裝出 byte-identical `^()[A-Za-z0-9+/]+={0,2}$`
  *  （join('|') 同為空串），無點純 b64 串（≤200）在舊碼 validWrappedKey/pickKeyPackage 放行＝真洞；
  *  回恆不匹配 regex（`/^(?=a)b/` 正 lookahead 錨死永假）＝未配置形整面拒絕，與 opt-in 律同向。
- *  （probe 實證 /tmp/t580f9c54-r2/n7-corrected-probe.mjs：`[]` 對純 b64 樣本 NON-NULL——
+ *  （probe 實證：`[]` 對純 b64 樣本 NON-NULL——
  *  「charset 恆假自帶防線」是錯誤敘事；帶點前綴向量舊碼本就 null＝帳面無承載。） */
 function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
   const usable = cipherPrefixes.filter(p => typeof p === 'string' && p.length > 0);
@@ -67,7 +67,7 @@ function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
 /**
  * 入庫前校正：前綴密文原樣入庫；超限密文／編碼丟棄（截斷必壞）、明文截到上限照收。
  * cipherMax（UTF-16 單位）同為明文截斷帽：明文相容層無 opt-out——明文一律照收、
- * 截到 cipherMax 入庫（r2 MINOR-5：JSDoc 幽靈參數 plainMax 摘除）。
+ * 截到 cipherMax 入庫（JSDoc 幽靈參數 plainMax 已摘除）。
  */
 export function makeInboundCipher(c: CipherFormats) {
   const RE = cipherPrefixRe(c.cipherPrefixes);
@@ -89,7 +89,7 @@ export function makeInboundCipher(c: CipherFormats) {
 
 export function isCipherFor(text: string | null | undefined, c: CipherFormats): boolean {
   if (typeof text !== 'string') return false;
-  // 空字首組態同面守衛（t_580f9c54 N-7 範圍增補，run 574 r2）：'' 態 startsWith('') 恆真＝
+  // 空字首組態同面守衛（範圍增補）：'' 態 startsWith('') 恆真＝
   // 整體分類面 accept-all（cipherPrefixRe never-match 守衛不覆蓋此直讀 tuple 面——本函式是
   // 另一組裝點）。守衛形＝跳過空字首的 some() 單點承載：空集恆 false（與 never-match 家族拒絕、
   // opt-in 未配置即拒鐵律同向）、混合形只摘空槽（['','jr1b.']＝jr1b. 家族面照活）——
@@ -133,10 +133,10 @@ export interface AuthStore {
   getByUserKey(key: string): Promise<AuthRow | null>;
   getByRecHash(recHash: string): Promise<AuthRow | null>;
   setWrapped(userKey: string, ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
-  /** v3 重鑰（v0.2.0 批卡② t_ce216a63）：舊值入 ladder 表＋ph2/wrapped/salt/wrappedRec/rec_hash
+  /** v3 重鑰：舊值入 ladder 表＋ph2/wrapped/salt/wrappedRec/rec_hash
    *  五欄同列覆蓋（rec 欄在場才覆蓋——四欄形契約面不動；fork 實作三語句批面）。 */
   rekeyWithLadder?(userKey: string, oldPh2: string, oldKind: 'legacy' | 'v2', ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
-  /** ladder 查表（v0.2.0 批卡② t_ce216a63）：以「舊 ph2 值」（v2/legacy 形）查 ladder 表，
+  /** ladder 查表：以「舊 ph2 值」（v2/legacy 形）查 ladder 表，
    *  命中回帳戶 id（login route 的「不建幽靈、回舊帳＋ph2Kind='legacy' 語意」守衛面）；
    *  未配置（optional）＝查表面退場（fork 離線/無表態，行為不變）。 */
   ladderLookup?(oldPh2: string): Promise<string | null>;

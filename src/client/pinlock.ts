@@ -28,7 +28,7 @@ const IV_LEN = 12;
 const PAYLOAD_LEN = SALT_LEN + IV_LEN + 80;
 
 /** 本機鎖定 cfg（各 fork config 注入；未配置 = API 拒絕，兄弟 fork 行為不變）。
- *  t_7710c766：noteKeyExtractable 必填死欄移除——解包輸出恆 extractable（鐵律 1，
+ *  noteKeyExtractable 必填死欄移除——解包輸出恆 extractable（鐵律 1，
  *  要能再包裹／匯出）不是可調選項；tacet 消費端 TACET_PINLOCK 同步摘欄。 */
 export interface PinLockConfig {
   /** 本機鎖定包裹前綴，如 'jr1p.'. 未配置 = 拒絕。 */
@@ -65,7 +65,7 @@ async function deriveLockKek(pinNorm: string, pinSalt: Uint8Array, cfg: PinLockC
 
 /** jr1p. 包裹：payload = pinSalt[16] ‖ iv[12] ‖ GCM(KEK, hex(noteKey), aad)；全自描述（salt 內嵌）。
  *  鹽內嵌家族（jr2w./jr3d./jr1p.）自帶三段組裝——sealNoteKey 是鹽外置家族形（iv‖ct），
- *  內嵌鹽的 pinSalt 前綴不在其契約內（t_7710c766 毒化輪回歸實證：亂收口＝unwrap 恆 null）。 */
+ *  內嵌鹽的 pinSalt 前綴不在其契約內（毒化輪回歸實證：亂收口＝unwrap 恆 null）。 */
 export async function wrapNoteKeyPinLock(cfg: PinLockConfig, noteKey: CryptoKey, pin: string): Promise<string> {
   if (!cfg.pinLock || !cfg.pinLockSaltPrefix || !cfg.pinLockAad) throw new Error('ERR_PINLOCK_NOT_CONFIGURED');
   const pinNorm = normalizePin(pin);
@@ -87,7 +87,7 @@ export async function wrapNoteKeyPinLock(cfg: PinLockConfig, noteKey: CryptoKey,
 }
 
 /** jr1p. 解包：全自描述；任何不符（前綴/長度/PIN 空/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 1）。
- *  t_7710c766：嚴格檢查為鹽內嵌族自有（payload 嚴格 108B＋rawHex hex 形檢查；
+ *  嚴格檢查為鹽內嵌族自有（payload 嚴格 108B＋rawHex hex 形檢查；
  *  hexToBytes fail-closed 由 try/catch 承接＝行為不變）——不經 openNoteKey 本體
  *  （openNoteKey 是鹽外置家族 92B 形，pinSalt 前綴不在其契約內）。 */
 export async function unwrapNoteKeyPinLock(cfg: PinLockConfig, wrapped: string, pin: string): Promise<CryptoKey | null> {
