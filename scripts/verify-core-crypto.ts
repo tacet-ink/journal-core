@@ -1849,7 +1849,7 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
           fs18!.rmSync!(dir, { recursive: true, force: true });
         }
       };
-      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋源碼窗 floor 面翻（窗 shrink 1829<1910；throw 禁令面由 P18d 獨立承載）。floor 標籤插值當地量（NIT-4：窗長一變硬寫數字即靜默失真帳面）
+      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋源碼窗 floor 面翻（窗 shrink 1829<1910；throw 禁令面由 P18d 獨立承載）。floor 標籤插值當地量（窗長一變硬寫數字即靜默失真帳面——標籤插值即封口）
       await withPoisonRun18('[18] 毒化 P18 gate-rerun（P18：摘 fresh-face 三元→null）',
         needlePA18, '\n    const fresh = null;',
         ['空-held decrypt 經本機包裹通路', '自癒後二次讀回', '窗尾 floor 插值帳'], 3);
@@ -1868,9 +1868,9 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
         "    if (!cfg.wrapLocal) throw new Error('ERR_WRAP_NOT_CONFIGURED');",
         ['本機段零 ERR_WRAP_NOT_CONFIGURED 禁令面'], 1);
       // 真樹 needle 對位錨＋byte-exact：毒化全程跑拷貝樹；真樹 sha256 毒前毒後恆等＝
-      // 零突變帳——對照兩端帶 hex64 形狀條；hex64 形狀條帶 designated 毒化案（NIT-5）＝
-      // 守衛歸零即顯：shaOk18 前綴恆真形 → byte-exact 主帳對毒化守衛必紅（shaOk18(undefined)=true
-      // ＝零突變帳對「壞 digest」放行——守衛面翻的可觀察面）；守衛毒化不過 withPoisonRun18
+      // 零突變帳——對照兩端帶 hex64 形狀條；hex64 形狀條帶 designated 毒化案（卡面指定）＝
+      // 真守衛拒異形輸入（鍛造非 hex digest＋undefined——regex.test 恆 false；缺席＝斷言 RED 面，
+      // shaOk18(undefined)=false）；恆真形毒化對異形輸入放行→designated 案 RED；守衛毒化不過 withPoisonRun18
       //（拷貝樹型）——in-process 毒殺＋還原一對帳，不動 tree18 封閉集。
       // needle 恰 1×4 計數防線＝誤改斷言窗本體（含守衛行）即 RED——名實一致帳。
       const shaOk18 = (x: string): boolean => /^[0-9a-f]{64}$/.test(x);
@@ -1883,15 +1883,17 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
         && srcAfter18.split('    if (!cfg.wrapLocal) return;').length === 2);
       await A('[18] 毒化樹零殘留（本 run 喚出 ' + trees18.length + ' 棵全清——封閉集判準）',
         trees18.length === 4 && trees18.every((t) => !fs18!.rmSync || !existsSync18(t)));
-      // NIT-5 designated 毒化案（hex64 形狀條——in-process 毒殺即還原一對帳，不動 tree18 封閉集）：
+      // designated 毒化案（卡面指定——hex64 形狀條；in-process 毒殺即還原一對帳，不動 tree18 封閉集）：
       // 守衛恆真形 → byte-exact 主帳對毒化守衛判 RED 預期；還原後真守衛復活＝帳面復綠——
-      // 「形條缺席咬不到」自我證明（NIT-5：新增 conjunct 無 designated 咬痕＝對照自帶咬痕收口）。
+      // 「形條缺席咬不到」自我證明（卡面新增咬痕面＝真形 false／惡形 true 兩面都咬）。
       {
         const shaOk18Evil = (x: string): boolean => true;
         const fakeDigest = 'z'.repeat(64); // 非 hex64 鍛造 digest（守衛缺席時必放行的形）
-        const greenWithReal = shaOk18(shaBefore18) && !shaOk18(fakeDigest);
-        const redWithEvil = !shaOk18Evil(shaBefore18) || shaOk18Evil(fakeDigest);
-        await A('[18] hex64 守衛 designated 毒化（恆真形 → 鍛造非 hex digest 放行；真守衛拒——形條缺席咬不到的形證）',
+        const greenWithReal = shaOk18(shaBefore18) && !shaOk18(fakeDigest)
+          && !shaOk18(undefined as unknown as string);
+        const redWithEvil = !shaOk18Evil(shaBefore18) || shaOk18Evil(fakeDigest)
+          || shaOk18Evil(undefined as unknown as string);
+        await A('[18] hex64 守衛 designated 毒化（恆真形 → 鍛造非 hex digest＋undefined 輸入放行；真守衛拒——形條缺席咬不到的形證）',
           greenWithReal && redWithEvil,
           'green=' + String(greenWithReal) + ' red=' + String(redWithEvil));
       }
