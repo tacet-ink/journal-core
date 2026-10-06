@@ -161,8 +161,8 @@ await A('AAD 防搬移：跨身份 guest 解密失敗回 null',
 // 舊版明文相容層：無前綴 = 原樣返回
 await A('舊明文原樣返回', (await decryptNote(TACET, held, '純舊明文', 'x', { current: () => identityA })) === '純舊明文');
 
-// ── 3. 包裹三件套（pass / rec / 本機；2026-09-24 效能審查節——buildBindPayload 兩段
-//      PBKDF2 600k 已由卡C t_7361b68c 收 Promise.all 並行，node 實測 133-152ms→68-84ms） ──
+// ── 3. 包裹三件套（pass / rec / 本機；2026-09-24 效能節——buildBindPayload 兩段
+//      PBKDF2 600k 已收 Promise.all 並行，node 實測 133-152ms→68-84ms） ──
 
 console.log('\n[3] 金鑰包裹（passphrase / 復原 / 本機）');
 const pass = 'correct-horse-battery-staple-42';
@@ -255,8 +255,8 @@ await A('dual unwrapNoteKeyDual 拒收 jr1w 字串', (await unwrapNoteKeyDual(TA
 await A('既有 jr1w 包裹不受 dual 並存影響', (await unwrapNoteKey(TACET2, wrapped, pass, salt)) !== null);
 
 // payload 竄改 → 一律 null（自描述完整性：pinSalt/hksalt/iv/ct 任一區）
-// 卡C 收口：本地複製退場、直呼模組 unb64（單一真相；t_7361b68c [14] 導入面；
-// round 2 NIT-5：轉手 wrapper 本身退場——呼叫端直用模組 unb64）。
+// 收口：本地複製退場、直呼模組 unb64（單一真相；[14] 導入面；
+// 轉手 wrapper 本身退場——呼叫端直用模組 unb64）。
 const payload2 = unb64Mod(dual.wrapped.slice('jr2w.'.length));
 const tamperedAt = async (idx: number): Promise<boolean> => {
   const copy = payload2.slice();
@@ -410,7 +410,7 @@ await A('25 詞 → null', (await bip.wordsToRecToken([...kitWords, kitWords[0]]
 await A('詞表外 → null', (await bip.wordsToRecToken(kitWords.slice(0, 23).concat('notaword').join(' '))) === null);
 
 // checksum 面：錯一詞（詞表內不同詞）→ 幾乎必被 checksum 抓；固定種子 64 樣本全抓。
-// （t_d1cf3846：真隨機取樣時 P(漏 ≥2)≈0.4%＝偶發 62/64 flake 實證——改 xorshift 常數
+// （真隨機取樣時 P(漏 ≥2)≈0.4%＝偶發 62/64 flake 實證——改 xorshift 常數
 // 種子樣本集（bip39.seededSampleBytes），向量可重放、閘輸出逐輪恆定；種子窗 1..64
 // 經五窗 320 樣本探針驗證全抓後採用，非挑窗）
 const wlArr: readonly string[] = wl.wordlist;
@@ -484,7 +484,7 @@ await A('附件錯鑰匙 → null',
 // ── 11. 本機 IDB 密文（jr1d. cipherLocal opt-in）＋ guest 選配拒絕面 ──────────
 
 console.log('\n[11] 本機 IDB 密文（jr1d. cipherLocal opt-in）＋ guest 選配拒絕面');
-// 分享包裹（jrsw.，wrapShare 選配）＋ jr3s. roundtrip（t_7710c766 目標 8：閘本有 roundtrip 斷言缺席）
+// 分享包裹（jrsw.，wrapShare 選配）＋ jr3s. roundtrip（閘本有 roundtrip 斷言缺席）
 const TACET_SHARE: NoteCryptoConfig = { ...TACET, wrapShare: 'jrsw.' };
 const shareWrapped = await wrapNoteKeyShare(TACET_SHARE, noteKey, 'share-pass-42');
 await A('分享包裹前綴 jrsw.', shareWrapped.wrapped.startsWith('jrsw.'));
@@ -494,7 +494,7 @@ await A('jrsw unwrap 等值 noteKey（extractable 再 export）',
   shareUnwrapped !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', shareUnwrapped))) === origRaw);
 await A('分享錯密語 → null', (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped, 'wrong-share-pass', shareWrapped.salt)) === null);
 await A('分享錯 salt → null', (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped, 'share-pass-42', 'zz'.repeat(16))) === null);
-await A('分享 malformed salt（zz 字元）→ null（t_7710c766：salt1 hex 形檢查）',
+await A('分享 malformed salt（zz 字元）→ null（salt1 hex 形檢查）',
   (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped, 'share-pass-42', '0'.repeat(31) + 'z')) === null);
 await A('分享 payload 長度不符 → null',
   (await unwrapNoteKeyShare(TACET_SHARE, shareWrapped.wrapped.slice(0, -3) + 'abc', 'share-pass-42', shareWrapped.salt)) === null);
@@ -570,7 +570,7 @@ await A('本機 payload 竄改 iv 區 → null', await tamperLocal(3));
 await A('篡改索引越界＝顯性失敗（runner 自檢：靜默 no-op 即假紅）', await tamperLocal(-1) === false);
 await A('本機 payload 竄改 ct 尾 → null', await tamperLocal(59));
 
-// guest 選配未配置拒絕面（2026-09-19 收編：cipherGuest 轉選配；未配置即拒鐵律）
+// guest 選配未配置拒絕面（2026-09-19 定案：cipherGuest 轉選配；未配置即拒鐵律）
 const TACET_NOGUEST: NoteCryptoConfig = { ...TACET, cipherGuest: undefined };
 const guestThrowsMsg = async (): Promise<string | null> => {
   try { await encryptNote(TACET_NOGUEST, makeHeldKey(), note, 'noteId:n1', { current: () => identityA }); return null; }
@@ -588,10 +588,10 @@ await A('未配置 guest → decryptNote 不明字串 null（guest 家族整面�
   (await decryptNote(TACET_NOGUEST, makeHeldKey(), 'jr9x.somestring', 'x', { current: () => identityA })) === null);
 await A('配置 guest → decryptNote 舊明文相容層原樣（既有契約不變）',
   (await decryptNote(TACET, makeHeldKey(), '純舊明文', 'x', { current: () => identityA })) === '純舊明文');
-await A('既有 guest 配置 roundtrip 不受選配收編影響',
+await A('既有 guest 配置 roundtrip 不受選配化影響',
   (await decryptNote(TACET, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === note);
 
-// guest 空 identity 拒絕面（t_7710c766 目標 3）：K_u = SHA-256(prefix ‖ '') 靜默產出「空帳號金鑰」是誤配炸彈
+// guest 空 identity 拒絕面：K_u = SHA-256(prefix ‖ '') 靜默產出「空帳號金鑰」是誤配炸彈
 const TACET_GUESTOK: NoteCryptoConfig = { ...TACET }; // cipherGuest='jr1g.' 在場，專測 identity 面
 const emptyIdp = { current: () => '' };
 let emptyIdMsg: string | null = null;
@@ -607,7 +607,7 @@ await A('guest 解密面空 identity → null（對稱面 fail-closed）',
 await A('guest 空 identity 的既有 roundtrip 恆正常（identity 在場零新拒絕面）',
   (await decryptNote(TACET_GUESTOK, makeHeldKey(), cipherGuest, 'noteId:n1', { current: () => identityA })) === note);
 
-// 畸形配置 ''（空字串）正規化面（follow-up ②，t_44239f5f）：空字串前綴＝startsWith('') 恆真，
+// 畸形配置 ''（空字串）正規化面：空字串前綴＝startsWith('') 恆真，
 // bound 列會被誤導 guest 分支回 null。正規化後：加密面與未配置同拒、解密面 bound 照解、
 // guest 密文（他家族形）null——與「未配置」行為完全同構。
 const TACET_EMPTYGUEST: NoteCryptoConfig = { ...TACET, cipherGuest: '' };
@@ -620,14 +620,14 @@ await A("畸形 guest 前綴 '' → decryptNote guest 密文 null（guest 家族
 await A("畸形 guest 前綴 '' → decryptNote 舊明文相容層同「未配置」形（null，不當明文）",
   (await decryptNote(TACET_EMPTYGUEST, makeHeldKey(), '純舊明文', 'x', { current: () => identityA })) === null);
 
-// ── 12. 伺服器端原語（t_7710c766 目標 8：makeInboundCipher/validWrappedKey/pickKeyPackage/
-//         checkRate/timingSafeEq）＋ 本機鎖定全函式（pinlock jr1p.，目標 8） ──────────
+// ── 12. 伺服器端原語（makeInboundCipher/validWrappedKey/pickKeyPackage/
+//         checkRate/timingSafeEq）＋ 本機鎖定全函式（pinlock jr1p.） ──────────
 
 console.log('\n[12] 伺服器端原語（auth/ratelimit/hash）＋ 本機鎖定（pinlock）');
-// ratelimit 行為面（t_b91ed07f；r2 MAJOR-2 收口）：真 node:sqlite 直載 UPSERT…RETURNING 單句，
+// ratelimit 行為面（UPSERT…RETURNING 單句設計收口）：真 node:sqlite 直載 UPSERT…RETURNING 單句，
 // 行為斷言全數「真生產函式 checkRate 直驅」——D1 形 shim 包 node:sqlite 只做 D1 run() 的
 // {results} 回帶形，無測試端 glue 副本。表名直插 SQL＝注入面驗證；放行判準 count<=max
-// 單一真相。同 IP 真併發不 undercount 的 D1 活線證據見卡 comments（wrangler dev 探針：
+// 單一真相。同 IP 真併發不 undercount 的 D1 活線證據由 wrangler dev 探針承載（
 // UPSERT…RETURNING 於 wrangler 4.129.0 workerd 逐發回真值；併發首發兩發計數 1→2）。
 type RateRow = { ip: string; window_start: number; count: number };
 const RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 3 };
@@ -720,7 +720,7 @@ await A('rate：表名 \\w 合法（字母數字底線）', await (async () => {
   try { await checkRate({ DB: { prepare: () => { throw new Error('D1_DOWN_FAILOPEN'); } } } as unknown as Parameters<typeof checkRate>[0], { table: 'login_rate_2', windowMs: 1000, max: 3 }, 'ip'); return true; }
   catch (e) { return String((e as Error).message).startsWith('ERR_RATE_TABLE_NAME') === false && String((e as Error).message).includes('D1_DOWN_FAILOPEN'); }
 })());
-await A('rate：RETURNING 異形回應守衛 fail-open（results 空／alias 斷裂——與儲存故障同向，r2 MINOR-3 不反向 deny）', await (async () => {
+await A('rate：RETURNING 異形回應守衛 fail-open（results 空／alias 斷裂——與儲存故障同向，異形不反向 deny）', await (async () => {
   const mkEnv = (run: () => Promise<unknown>) =>
     ({ DB: { prepare: () => ({ bind: () => ({ run }) }) } } as unknown as Parameters<typeof checkRate>[0]);
   const empty = await checkRate(mkEnv(async () => ({ results: [] })), RATE, 'ip');
@@ -751,7 +751,7 @@ await A('inboundCipher：真明文照收', inbound('純明文') === '純明文')
 await A('inboundCipher：非字串 null', inbound(42) === null);
 await A('isCipherFor：家族前綴 true／非家族 false',
   isCipherFor('jr1b.abc', formats) && isCipherFor('jr1u.abc', formats) && !isCipherFor('jr2x.abc', formats));
-await A('isCipherFor 空字首組態 → false（\x27\x27 態 startsWith(\x27\x27) 恆真 accept-all——run 574 MINOR-3：cipherPrefixRe 守衛不覆蓋直讀 tuple 面，同向收口；非字串 false 契約照舊）',
+await A('isCipherFor 空字首組態 → false（\x27\x27 態 startsWith(\x27\x27) 恆真 accept-all——cipherPrefixRe 守衛不覆蓋直讀 tuple 面，同向收口；非字串 false 契約照舊）',
   (() => {
     const emptyTuple: CipherFormats = { cipherPrefixes: ['', ''], wrapPrefix: 'jr1w.', cipherMax: 5000 };
     const mixed: CipherFormats = { cipherPrefixes: ['', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 5000 };
@@ -760,31 +760,31 @@ await A('isCipherFor 空字首組態 → false（\x27\x27 態 startsWith(\x27\x2
       isCipherFor('jr1b.abc', mixed) === true && // 真前綴面零誤傷
       isCipherFor(null, formats) === false; // 非字串 false 面（typed 形合法態；運行時 typeof 守衛承載 unknown 呼叫端）
   })());
-await A('makeInboundCipher regex 跳脫全字面（r2 MAJOR-1 辨別形重推——探針新舊碼輸出一手實測，兩向分歧各一）',
+await A('makeInboundCipher regex 跳脫全字面（辨別形重推——探針新舊碼輸出一手實測，兩向分歧各一）',
   (() => {
     // 舊碼 .replace('.','\\.') 只跳第一個點，前綴含 regex 符號（| ( )）時家族 regex 失真，
     // 兩方向輸出分歧（一手對照探針帳面：tmp probe-d1.cjs，main 舊碼 vs 分支新碼）：
     // ①完整前綴形『a.b|c()』+A*600（真家族密文標記）：正碼辨得前綴 → >max 密文丟棄 null；
     //   舊碼 regex 辨不出自家前綴 → 誤落明文截斷（>max 密文截半損毀＝舊碼 slice(0,500)）。
     // ②點前截形『a.b』+A*600：舊碼 a\.b 殘臂（從頭起 b64 全程）誤咬 → 丟棄 null；
-    //   正碼前綴不完整非家族 → 明文截斷照收 slice(0,500)。兩形缺一即探針無齒（r1 教訓）。
+    //   正碼前綴不完整非家族 → 明文截斷照收 slice(0,500)。兩形缺一即探針無齒。
     const f: CipherFormats = { cipherPrefixes: ['a.b|c()', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 500 };
     const m = makeInboundCipher(f);
     const full = 'a.b|c()' + 'A'.repeat(600);
     const dotHead = 'a.b' + 'A'.repeat(600);
     return m(full) === null && m(dotHead) === dotHead.slice(0, 500);
   })());
-// N-7（t_580f9c54）：cipherPrefixRe 空字首組態毒形——never-match 守衛的行為面。
-// run 574 r2 校正（新舊碼組裝對照一手實測 /tmp/t580f9c54-r2/n7-corrected-probe.mjs）：舊碼
+// 空字首組態毒形防線：cipherPrefixRe never-match 守衛的行為面。
+// 校正（新舊碼組裝對照一手實測）：舊碼
 // `[]` 與 `['']` 組裝出 byte-identical `^()[A-Za-z0-9+/]+={0,2}$`（join('|') 同為空串），
 // `['','']` 僅多空首選交替 `^(|)…`＝同面——真洞＝無點純 b64 串（≤200）在舊碼
 // validWrappedKey/pickKeyPackage 放行（NON-NULL）；帶點前綴向量（'jr1w.'+b64）舊碼本就 null
-// （'.' 在 b64 charset 外）＝帳面無承載。r1 版敘事（charset 恆假自帶防線／空槽首選交替洞）經
-// run 574 一手實證俱誤——本段已按實測帳重寫（revert-poison 案為守衛還原面的直接承載）。
+// （'.' 在 b64 charset 外）＝帳面無承載。初版敘事（charset 恆假自帶防線／空槽首選交替洞）經
+// 一手實證俱誤——本段已按實測帳重寫（revert-poison 案為守衛還原面的直接承載）。
 // 守衛後（usable 過濾＋never-match）：家族/re 面整面拒絕；inboundCipher 輸出面 zero delta
 // （家族路摘除後長路徑 b64≤max 短路進 legacy 慣例層、超限丟棄、明文相容層照收——出口與舊碼
 // RE 路徑恆等，probe 33 組合實證）；混合『['','jr1b.']』形只摘空槽、真前綴家族面照活（降級非全拒）。
-await A('N-7 真洞還原面：無點純 b64 ≤200 空字首組態 → null（cipherPrefixRe never-match——守衛摘除即翻紅；三組態）',
+await A('空字首真洞還原面：無點純 b64 ≤200 空字首組態 → null（cipherPrefixRe never-match——守衛摘除即翻紅；三組態）',
   (() => {
     const pureB64 = b64(new Uint8Array(32)); // 無點 b64（44 字符）——舊碼本就放行＝真洞載體（帶點向量舊碼本就 null，無承載）
     const emptyTuple = ['', ''];
@@ -792,7 +792,7 @@ await A('N-7 真洞還原面：無點純 b64 ≤200 空字首組態 → null（c
       validWrappedKey(pureB64, emptyTuple) === null &&
       validWrappedKey(pureB64, '') === null; // string 形空前綴同面
   })());
-await A('N-7 pickKeyPackage 空字首組態 → 整組放棄（validWrappedKey never-match 傳播——wrapped/salt 同 null）',
+await A('空字首組態 pickKeyPackage → 整組放棄（validWrappedKey never-match 傳播——wrapped/salt 同 null）',
   (() => {
     const p = pickKeyPackage({ wrapped: b64(new Uint8Array(32)), salt: 'a'.repeat(32) }, ['', '']);
     return p.wrapped === null && p.salt === null;
@@ -822,7 +822,7 @@ await A('pickKeyPackage：缺 wrapped 整組放棄',
 await A('pickKeyPackage：錯前綴整組放棄',
   (() => { const p = pickKeyPackage({ wrapped: 'jr9x.' + b64(new Uint8Array(32)), salt: 'a'.repeat(32) }, 'jr1w.'); return p.wrapped === null; })());
 
-// 本機鎖定（jr1p.）：全函式 roundtrip＋嚴格檢查面（t_7710c766：pinlock 閘本有斷言缺席）
+// 本機鎖定（jr1p.）：全函式 roundtrip＋嚴格檢查面（閘本有斷言缺席）
 const PINLOCK: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'tacet-pinlock-v1:', pinLockAad: 'notekey-pinlock' };
 const pinWrapped = await wrapNoteKeyPinLock(PINLOCK, noteKey, '2580ab');
 await A('jr1p 包裹前綴 jr1p.', pinWrapped.startsWith('jr1p.'));
@@ -853,10 +853,10 @@ await A('jr1p 跨家族：jr1w. 字串餵 pinlock → null',
 await A('jr1p 跨家族：jr1p. 字串餵 jr1w unwrap → null',
   (await unwrapNoteKey(TACET2, pinWrapped, pass, salt)) === null);
 
-// ── 13. 新契約面（t_7710c766：hex fail-closed／salt hex 形收口／PH1 鹽注入／錯誤碼語意分離） ──
+// ── 13. 新契約面（hex fail-closed／salt hex 形收口／PH1 鹽注入／錯誤碼語意分離） ──
 
 console.log('\n[13] unwrap 驗證統一新契約（fail-closed ＋ 語意分離）');
-// hexToBytes fail-closed（目標 #2；note-crypto 與 bip39 同步——bip39 面是 HEX64_RE 前置自守）
+// hexToBytes fail-closed（note-crypto 與 bip39 同步——bip39 面是 HEX64_RE 前置自守）
 await A('hexToBytes 合法輸出不變（舊碼同值；新向量）', hexToBytes('00ff10').join(',') === '0,255,16');
 await A('hexToBytes 大小寫正規化（新行為，舊碼同值）', (() => { const a = Array.from(hexToBytes('AB')); const b = Array.from(hexToBytes('ab')); return a.length === b.length && a.every((v, i) => v === b[i]); })());
 await A("hexToBytes 非法字元 'zz' → throw ERR_BAD_HEX", await (async () => {
@@ -869,7 +869,7 @@ await A('hexToBytes 空字串 → throw', await (async () => {
   try { hexToBytes(''); return false; } catch (e) { return (e as Error).message === 'ERR_BAD_HEX'; }
 })());
 await A(`hexToBytes 全形正規化（'${'ｆｆ'}'）→ Bytes [255] 等值`, (() => { try { return Array.from(hexToBytes('ｆｆ')).join(',') === '255'; } catch { return false; } })());
-await A(`hexToBytes 全形數字（'２ｆ'）→ Bytes 等值（NFKC 窗殲滅——round 1 MINOR-4：parse 原始串 NaN 歸零殘形）`, (() => { try { return Array.from(hexToBytes('２ｆ')).join(',') === '47'; } catch { return false; } })());
+await A(`hexToBytes 全形數字（'２ｆ'）→ Bytes 等值（NFKC 窗殲滅——parse 原始串 NaN 歸零殘形）`, (() => { try { return Array.from(hexToBytes('２ｆ')).join(',') === '47'; } catch { return false; } })());
 await A('bip39 hexToBytes 同步（HEX64_RE 自守前提下的舊向量不變）', (await bip.recTokenToWords('ab'.repeat(32)))?.length === 24);
 await A('unwrap：鹽 hex 非法字元 → 假錯誤誘餌面 null（原碼靜默歸零會錯誤炸出成功路徑）',
   (await unwrapNoteKey(TACET2, dual.wrapped, passD, 'a'.repeat(31) + 'z')) === null);
@@ -886,19 +886,19 @@ const craftKek = (async (): Promise<CryptoKey> => {
 })();
 // 鍛造面（格式嚴格契約的可觀察承載；毒化前提）：KEK 已知者可造任意形 payload——
 // 舊碼（無 rawHex 長度/形檢）下 'zz' 前綴零化 hex 與 32-hex 假 noteKey 皆 NON-NULL＝假金鑰生產器。
-// round 1 審查 MAJOR-1 校正：鍛造 encrypt 必帶 additionalData('notekey')＝與 decryptWithKey
+// 鍛造校正：encrypt 必帶 additionalData('notekey')＝與 decryptWithKey
 // 同 AAD——缺 AAD 的鍛造 GCM 層恆拒＝rawHex 形檢從未執行（斷言空轉）。
 // craftKek 鏡像真 deriveKek（同 pass 同 salt 同 600k）＝鍛造鏈與真 unwrap 同 KEK：
 // 有效形鍛造真解開（NON-NULL 自證鏈活）、畸形形由各檢查點拒——機制面直接可觀察。
-// AAD 單一化（r2 NIT-a）：F_AAD 是四鍛造向量唯一 AAD 源（對 decryptWithKey 同 AAD 律的 helper 收口）。
+// AAD 單一化：F_AAD 是四鍛造向量唯一 AAD 源（對 decryptWithKey 同 AAD 律的 helper 收口）。
 const F_AAD: BufferSource = enc.encode('notekey');
-await A('MAJOR-1 機制面：帶 AAD 鍛造 ct 可解回 rawHex（形檢層可達＝斷言活）', await (async () => {
+await A('鍛造機制面：帶 AAD 鍛造 ct 可解回 rawHex（形檢層可達＝斷言活）', await (async () => {
   const kekC = await craftKek;
   const ivC = crypto.getRandomValues(new Uint8Array(12));
   const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC, additionalData: F_AAD }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
   return (await decryptWithKey(kekC, new Uint8Array([...ivC, ...ctC]), 'notekey')) === 'zz' + 'a'.repeat(62);
 })());
-await A('MAJOR-1 空轉形：同 payload 無 AAD 鍛造 → decryptWithKey null（GCM 層恆拒＝round 1 空轉病理）', await (async () => {
+await A('鍛造空轉形：同 payload 無 AAD 鍛造 → decryptWithKey null（GCM 層恆拒＝空轉病理）', await (async () => {
   const kekC = await craftKek;
   const ivC = crypto.getRandomValues(new Uint8Array(12));
   const ctC = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivC }, kekC, enc.encode('zz' + 'a'.repeat(62)) as BufferSource));
@@ -944,7 +944,7 @@ await A('guest 空 identity 自洽密文 → decryptNote null（「空帳號金�
   const cipherEmpty = 'jr1g.' + await encryptWithKey(kuEmpty, note, 'noteId:n1');
   return (await decryptNote(TACET_GUESTOK, makeHeldKey(), cipherEmpty, 'noteId:n1', emptyIdp)) === null;
 })());
-// 錯誤碼語意分離（目標 6）：空 PIN ≠ 未配置；jr3d 兩 case 同碼分流
+// 錯誤碼語意分離：空 PIN ≠ 未配置；jr3d 兩 case 同碼分流
 await A('wrapNoteKeyDual 空 PIN → ERR_PIN_EMPTY（非 NOT_CONFIGURED）', await (async () => {
   try { await wrapNoteKeyDual(TACET2, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
 })());
@@ -954,13 +954,13 @@ await A('wrapNoteKeyDual 空 PIN 全形空白正規化後 → ERR_PIN_EMPTY', aw
 await A('wrapNoteKeyDual 未配置 wrapDual → ERR_DUAL_NOT_CONFIGURED（契約不變）', await (async () => {
   try { await wrapNoteKeyDual(TACET, noteKey, passD, pinD); return false; } catch (e) { return (e as Error).message === 'ERR_DUAL_NOT_CONFIGURED'; }
 })());
-await A('wrapNoteKeyDual3 空 PIN → ERR_PIN_EMPTY（t_7710c766：兩 case 同碼分流）', await (async () => {
+await A('wrapNoteKeyDual3 空 PIN → ERR_PIN_EMPTY（兩 case 同碼分流）', await (async () => {
   try { await wrapNoteKeyDual3(TACET3, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
 })());
 await A('wrapNoteKeyDual3 未配置 wrapDual3 → ERR_JR3W_NOT_CONFIGURED（契約不變）', await (async () => {
   try { await wrapNoteKeyDual3({}, noteKey, passD, pinD); return false; } catch (e) { return (e as Error).message === 'ERR_JR3W_NOT_CONFIGURED'; }
 })());
-// PH1 鹽注入（目標 4）：預設舊值零行為變更
+// PH1 鹽注入：預設舊值零行為變更
 await A('derivePh1Argon 預設鹽零行為變更（同 pass 同值）',
   (await derivePh1Argon('probe-determinism-pass-42')) === ph1v2a);
 async function srcOf(rel: string): Promise<string> {
@@ -977,14 +977,14 @@ await A('derivePh1Argon 預設分支源碼面 = encode(PH1_V2_SALT)（鹽預設�
 await A('derivePh1Argon 自選鹽 → 不同派生值', (await derivePh1Argon('probe-determinism-pass-42', new Uint8Array(12))) !== ph1v2a);
 await A('derivePh1Argon 自選鹽 hex64 形', /^[0-9a-f]{64}$/.test(await derivePh1Argon('x', new Uint8Array(12))));
 await A('PH1_V2_SALT re-export 在場（index barrel；其他產品可見可注入同源鹽）', PH1_V2_SALT === 'tacet-ph1-v1');
-// index barrel 新匯出（目標 5）：clearLocalWrap/buildBindPayload（review「缺匯出」條誤差已校正＝本卡以閘承載）
+// index barrel 新匯出：clearLocalWrap/buildBindPayload（「缺匯出」條誤差已校正——以閘承載）
 await A('index barrel 匯出 clearLocalWrap/buildBindPayload', await (async () => {
   const src = await import('../src/index.ts');
   return typeof src.clearLocalWrap === 'function' && typeof src.buildBindPayload === 'function';
 })());
-// PinLockConfig 死欄退場（t_7710c766）：型別面真齒＝excess-property 探針（round 1 審查 MINOR-3：
-// 舊形 typeof cfg==='object' 恆真空轉）。r2 MINOR-2 實測校正（t_580f9c54；行號帳由 P12 毒化 tsc 輸出承載
-// 而非註解寫死——新增段推移行號＝註解行號帳漂移，NIT-a 同病禁再犯）：required 復活形＝TS2741（PINLOCK
+// PinLockConfig 死欄退場：型別面真齒＝excess-property 探針（
+// 舊形 typeof cfg==='object' 恆真空轉——實測校正；行號帳由毒化 tsc 輸出承載
+// 而非註解寫死——新增段推移行號＝註解行號帳漂移）：required 復活形＝TS2741（PINLOCK
 // 常數面）＋TS2345（未配置兩案），optional 復活形＝舊形探針未帶該欄＝excess-property 檢照不到＝tsc 0 綠——robust 形＝pristine 就在探針字面量帶 `noteKeyExtractable:
 // undefined as never`＋前置 @ts-expect-error：欄位復活任何形（required/optional/false 字面量）都多出待位錯誤＝TS2578 紅；
 // pristine 態錯誤恰由 expect-error 吸收＝全 repo tsc 0 綠（探針字面量缺 false 形欄不另生錯＝零加值面除名）。
@@ -992,7 +992,7 @@ await A('index barrel 匯出 clearLocalWrap/buildBindPayload', await (async () =
 // @ts-expect-error — 死欄退場待位錯誤面（pristine 恰此一待位錯由本指令吸收；欄位復活任何形＝本指令反噬 TS2578＝P12 案紅）
 const _cfgProbe: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'p:', pinLockAad: 'notekey-pinlock', noteKeyExtractable: undefined as never };
 void _cfgProbe;
-// 壞 b64 面向量（openNoteKey 誠實契約「任何不符恆回 null 不拋」的可觀察承載——round 1 MINOR-5）：
+// 壞 b64 面向量（openNoteKey 誠實契約「任何不符恆回 null 不拋」的可觀察承載）：
 await A('鍛造壞 base64 面字符 → unwrapNoteKey null（openNoteKey unb64 拋點吞收＝不拋契約；家族面毒化形＝頂層 crash，本面包 try/catch 收乾淨 ✗）', await (async () => {
   try {
     return (await unwrapNoteKey(TACET, 'jr1w.' + '!!not-base64!!', pass, salt)) === null;
@@ -1003,13 +1003,13 @@ await A('openNoteKey 直接呼叫：壞 base64 → null 不拋（本體吞收點
   return (await openNoteKey('jr1w.' + '!!not-base64!!', kekC, 'notekey', 'jr1w.')) === null;
 })());
 
-// ── 14. 效能形契約（卡C t_7361b68c：零行為變更——輸出 byte 等價是合約；錨面咬「形」） ──
+// ── 14. 效能形契約（零行為變更——輸出 byte 等價是合約；錨面咬「形」） ──
 //
 // 效能批的閘承載物理：執行時間不能進閘（機器相依）——咬「並行形在場＋串行殘留歸零」
 // 靜態錨＋「Argon 串行刻意保留」負向＋b64 輸出等價行為面＋Max-Age/sideEffects 字面＋
 // ikm 組裝序行為向量（KAT14 凍結 blob）。執行帳（node 26.8.1 實測，2026-10-04）：
 // buildBindPayload 串行 133-152ms→並行 68-84ms；dual 串行 234→並行 179ms median；
-// b64 4MiB 132-181ms→18ms。瀏覽器帳=review 222ms→27ms。
+// b64 4MiB 132-181ms→18ms。瀏覽器實測 222ms→27ms。
 
 console.log('\n[14] 效能形契約（buildBindPayload 並行／b64 分塊／argon 禁並行／CORS Max-Age／sideEffects）');
 
@@ -1022,19 +1022,19 @@ await A('[14] deriveKek2 輸入順序錨（pass 段 raw 收口形＋Promise.all 
   /await Promise\.all\(\[\r?\n\s*derivePbkdf2Bits\(passphrase, salt1, PBKDF2_ITERATIONS\),\r?\n\s*derivePbkdf2Bits\(pin,/.test(noteCryptoSrc14));
 await A('[14] deriveKek2Argon 正向串行錨（pass/pin 兩段 deriveArgon2id 串行在場）',
   /const passBits = await deriveArgon2id\(/.test(argon2Src14) && /const pinBits = await deriveArgon2id\(/.test(argon2Src14));
-await A('[14] argon2 destructure 並行形歸零（舊串行面對稱收口——r2 MAJOR-1 防逆向回歸）',
+await A('[14] argon2 destructure 並行形歸零（舊串行面對稱收口——防逆向回歸）',
   argon2Src14.split('const [passBits, pinBits] = await Promise.all([').length === 1);
 await A('[14] buildBindPayload 舊串行形歸零（await wrapNoteKeyWithRecToken 串行殘留）',
   !noteCryptoSrc14.includes('await wrapNoteKeyWithRecToken'));
 await A('[14] deriveKek2 舊串行形歸零（串行 passBits 殘留）',
   !/const passBits = await derivePbkdf2Bits/.test(noteCryptoSrc14));
-// r2 MAJOR-1：並行錨升左手側——destructure 與 Promise.all 相鄰形恰一，對調滑接（pin‖pass）
+// 並行錨升左手側——destructure 與 Promise.all 相鄰形恰一，對調滑接（pin‖pass）
 // 即 RED（RHS 指令序不變＝原本體並行錨不動，兩錨分工：RHS 面／組件序面）。
 await A('[14] deriveKek2 destructure 左手側恰一（const [passBits, pinBits] ＋ Promise.all 相鄰形——swap 滑接即 RED）',
   noteCryptoSrc14.split('const [passBits, pinBits] = await Promise.all([').length === 2);
-// MAJOR-1 行為面：bea6ab8 逐值凍結 jr2w. blob（手工 pristine 組裝＝passBits@0‖pinBits@32 序）——
-// destructure 對調滑接產 pin‖pass ikm＝本 blob 不可解（reviewer rev-harm 雙向一手：pristine 自解
-// true／互解 null；r2 樹 A/C/B/D/E/F 六腿同帳，探針存證 kanban 工作區）。凍結定值自足：
+// 行為面：逐值凍結 jr2w. blob（手工 pristine 組裝＝passBits@0‖pinBits@32 序）——
+// destructure 對調滑接產 pin‖pass ikm＝本 blob 不可解（pristine 自解
+// true／互解 null 雙向一手實證）。凍結定值自足：
 // salt1 'a1'×16／pinSalt 0xb2+i×16／iv 0x44+i×12／raw 'c3'×32／pass/pin 明寫——重放＝按定值
 // 重建 KEK2（HKDF info 'journal-kek2-v1:jr2w.'、aad 'notekey2'）比對 unwrap=raw。
 const KAT14 = {
@@ -1042,9 +1042,9 @@ const KAT14 = {
   salt1: 'a1'.repeat(16),
   pass: 'correct-horse-battery-staple-42',
   pin: '482913',
-  raw: 'c3'.repeat(32), // 計算式構造（手打對數面禁止——r2 首跑 1 FAIL 即手打 raw 對數錯的實證）
+  raw: 'c3'.repeat(32), // 計算式構造（手打對數面禁止——首跑 1 FAIL 即手打 raw 對數錯的實證）
 };
-await A('[14] jr2w. ikm 組裝序行為向量（bea6ab8 凍結 blob unwrap=raw——destructure 對調滑接不可解）',
+await A('[14] jr2w. ikm 組裝序行為向量（凍結 blob unwrap=raw——destructure 對調滑接不可解）',
   (async () => {
     const k = await unwrapNoteKeyDual(TACET2, KAT14.blob, KAT14.pass, KAT14.pin, KAT14.salt1);
     if (k === null) return false;
@@ -1105,7 +1105,7 @@ await A('[14] corsResponse 仍完整轉發四頭（corsResponse 面帶 Max-Age�
   }).process?.getBuiltinModule?.('node:fs');
   const pkg14 = JSON.parse(fsPkg14!.readFileSync!(new URL('../package.json', import.meta.url).pathname, 'utf8')) as { sideEffects?: boolean; version: string };
   await A('[14] package.json sideEffects:false（tree-shake server 模組＋BIP39 詞表）', pkg14.sideEffects === false);
-  // sideEffects 前提（round 2 MINOR-1 升級）：src 標目 **遞迴** 枚舉（硬編碼清單退場——新模組
+  // sideEffects 前提：src 標目 **遞迴** 枚舉（硬編碼清單退場——新模組
   // 自動入掃），頂層語句白名單化＋**宣告行初始化式呼叫面檢查**（const x = fn() 形＝執行點；
   // Object.freeze(...)/純常數結構白名單——wordlist.ts:7 即此形）。
   await A('[14] sideEffects 前提：src 頂層零副作用語句＋宣告行初始化式零裸呼叫（Object.freeze 白名單）',
@@ -1132,7 +1132,7 @@ await A('[14] corsResponse 仍完整轉發四頭（corsResponse 面帶 Max-Age�
             // 頂層語句白名單：import/export＋註解＋純宣告（const/let/var/function/async/
             // interface/type/enum/class/declare）——其餘字母開頭頂層＝執行面 side effect。
             if (/^(import\b|export\b|\/\*\*|\*|\/\/|const\b|let\b|var\b|function\b|async\b|interface\b|type\b|enum\b|class\b|declare\b)/.test(line)) {
-              // 宣告行初始化面：const x = <呼叫形>()＝模組載入即執行（NIT MINOR-1 缺口）。
+              // 宣告行初始化面：const x = <呼叫形>()＝模組載入即執行（缺口面）。
               // 白名單：Object.freeze（純凍結常數）。其餘呼叫形初始化＝offender。
               if (/^(const\b|let\b|var\b|export const\b).*=.*\b[A-Za-z_$][\w$]*\(\s*[^)]/.test(line) &&
                   !/Object\.freeze\(/.test(line)) offenders++;
@@ -1144,10 +1144,10 @@ await A('[14] corsResponse 仍完整轉發四頭（corsResponse 面帶 Max-Age�
     })());
 }
 
-// ── 15. 密語正規化 v3 世代（v0.2.0 批卡①：normalizePassphrase＋jr4w./jr4d.＋PH1 v3） ──
+// ── 15. 密語正規化 v3 世代（normalizePassphrase＋jr4w./jr4d.＋PH1 v3） ──
 //
 // 帶內版本化母型實例：密語 KEK 輸入契約改變（raw → normalizePassphrase NFKC-only）＝新前綴。
-// 命名兩軸分離：卡D 文案「v3 家族」＝PH1 規格代（derivePh1ArgonV3）；前綴數字軸 jr4w./jr4d.
+// 命名兩軸分離：「v3 家族」＝PH1 規格代（derivePh1ArgonV3）；前綴數字軸 jr4w./jr4d.
 // ＝KDF 世代代（jr1w→jr2w→jr3w→jr4w，README 家族表對照）。舊家族（jr1w./jr2w./jr3w./jr3d.）
 // 函式體零改＝raw 契約永久不變——本節同字面雙家族對照向量（ＰＡＳＳ１２x／PASS12x）就是
 // 「免換前綴合約證明」的承載面：同組字串在舊家族恆異 KEK（raw 直派生）、在 v3 家族恆同 KEK（NFKC 收容）。
@@ -1159,7 +1159,7 @@ const argon2Src15 = await srcOf('../src/client/argon2.ts');
 const TACET4: Argon3Config = { wrap4: 'jr4w.', wrapDual4: 'jr4d.', pinSalt3Prefix: 'tacet-note-pin3:' };
 const pass4 = 'v3-generation-passphrase-42';
 const passD4 = 'ｄｕａｌ－ｆａｃｔｏｒ－ｐａｓｓｐｈｒａｓｅ－４２'; // NFKC → passD 的全形形
-const passD4_NFKC = normalizePassphrase(passD4); // 與 passD 恆等（NFKC 收容）——P2 毒化翻面本體（r2 CRITICAL-1：毒形即收口形計數錨翻＋毒翻 = NFKC-effective 帳面翻，雙承載）
+const passD4_NFKC = normalizePassphrase(passD4); // 與 passD 恆等（NFKC 收容）——P2 毒化翻面本體（毒形即收口形計數錨翻＋毒翻 = NFKC-effective 帳面翻，雙承載）
 
 // 函式契約面（單一真相本體：normalizePassphrase 與 normalizePin 並存不混）
 await A('normalizePassphrase NFKC 契約：全形收容（ｐａｓｓ=pass）', normalizePassphrase('ｐａｓｓ') === 'pass');
@@ -1199,13 +1199,13 @@ const dual4NfkEq = unwrappedD4 !== null
   && hex(new Uint8Array(await crypto.subtle.exportKey('raw', unwrappedD4))) === origRaw; // 全形 wrap → NFKC 形：unwrap 真救回（null 恆 false＝normalize 摘除不可藏）
 await A('dual4 unwrap 等值 noteKey（extractable 再 export；全形 wrap 面 NFKC 等價自證——not-null 恆 false 恆真盲區免疫）', dual4NfkEq);
 const dual4a = await wrapNoteKeyDual4(TACET4, noteKey, passD, pinD); // ASCII NFKC 慣用形 wrap（passD＝passD4 的 NFKC 位——上式自證）
-const dual4NfkRev = dual4a !== null && (await unwrapNoteKeyDual4(TACET4, dual4a.wrapped, passD4, pinD, dual4a.salt)) !== null; // ASCII 包 → 全形解（MAJOR-1 修真向：feed passD4；無 NFKC 即 null）
+const dual4NfkRev = dual4a !== null && (await unwrapNoteKeyDual4(TACET4, dual4a.wrapped, passD4, pinD, dual4a.salt)) !== null; // ASCII 包 → 全形解（修真向：feed passD4；無 NFKC 即 null）
 await A('dual4 pass 段 NFKC 反向等價（ASCII wrap → 全形 unwrap；PIN 段契約不動）', dual4NfkRev === true);
 await A('dual4 PIN 大小寫不敏感（normalizePin 契約 v3 世代照舊）', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '2580AB', dual4.salt)) !== null);
 await A('dual4 PIN 全形 NFKC 等價', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '２５８０ＡＢ', dual4.salt)) !== null);
 await A('dual4 錯 PIN → null', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '999999', dual4.salt)) === null);
 await A('dual4 空 PIN → null（unwrap 面）', (await unwrapNoteKeyDual4(TACET4, dual4.wrapped, passD, '', dual4.salt)) === null);
-await A('wrapNoteKeyDual4 空 PIN → ERR_PIN_EMPTY（非 NOT_CONFIGURED——t_7710c766 分流 v3 世代照舊）', await (async () => {
+await A('wrapNoteKeyDual4 空 PIN → ERR_PIN_EMPTY（非 NOT_CONFIGURED——分流語意 v3 世代照舊）', await (async () => {
   try { await wrapNoteKeyDual4(TACET4, noteKey, passD, ''); return false; } catch (e) { return (e as Error).message === 'ERR_PIN_EMPTY'; }
 })());
 await A('dual4 payload 嚴格 108B（截短 → null——鹽內嵌族 own 檢查在場）', await (async () => {
@@ -1259,7 +1259,7 @@ await A('jr2w 凍結：全形 wrap 照解（raw 字面恆可解）',
   (await unwrapNoteKeyDual(TACET2, old2fw.wrapped, fwPass15, pinD, old2fw.salt)) !== null);
 // 未配置拒絕（opt-in 鐵律 v3 世代照舊）
 await A('未配置 wrap4 → wrapNoteKey4 拒絕', await (async () => { try { await wrapNoteKey4({}, noteKey, pass4); return false; } catch (e) { return (e as Error).message === 'ERR_JR4W_NOT_CONFIGURED'; } })());
-await A('未配置 wrapDual4 → wrapNoteKeyDual4 拒絕（ERR_JR4D_NOT_CONFIGURED——語意分離同 t_7710c766）', await (async () => { try { await wrapNoteKeyDual4({}, noteKey, passD, pinD); return false; } catch (e) { return (e as Error).message === 'ERR_JR4D_NOT_CONFIGURED'; } })());
+await A('未配置 wrapDual4 → wrapNoteKeyDual4 拒絕（ERR_JR4D_NOT_CONFIGURED——錯誤碼語意分離）', await (async () => { try { await wrapNoteKeyDual4({}, noteKey, passD, pinD); return false; } catch (e) { return (e as Error).message === 'ERR_JR4D_NOT_CONFIGURED'; } })());
 await A('未配置 wrap4 → unwrap 拒收 jr4w', (await unwrapNoteKey4({ wrapDual4: 'jr4d.' }, w4.wrapped, pass4, w4.salt)) === null);
 
 // PH1 v3（normalizePassphrase 派生＋新鹽域）
@@ -1274,7 +1274,7 @@ await A('PH1_V3_SALT = "tacet-ph1-v2"（鹽域值代沿 PH1_V2_SALT 先例；與
   PH1_V3_SALT === 'tacet-ph1-v2' && (PH1_V3_SALT as string) !== PH1_V2_SALT && !PH1_V3_SALT.startsWith('tacet-note') && !PH1_V3_SALT.startsWith('tacet-pinlock'));
 await A('derivePh1ArgonV3 預設分支源碼面 = encode(PH1_V3_SALT)（鹽預設單一真相錨；同 v2 母型）',
   /saltArg \?\? new TextEncoder\(\)\.encode\(PH1_V3_SALT\)/.test(argon2Src15));
-await A('derivePh1ArgonV3 自選鹽 → 不同派生值（卡A #4 saltArg 慣例）',
+await A('derivePh1ArgonV3 自選鹽 → 不同派生值（saltArg 慣例）',
   (await derivePh1ArgonV3('probe-v3-pass-42', new Uint8Array(12))) !== ph1v3a);
 await A('derivePh1Argon v2 預設零動（raw 契約——舊世代派生面零變更）', (await derivePh1Argon('probe-determinism-pass-42')) === ph1v2a);
 
@@ -1308,14 +1308,14 @@ await A('index barrel 匯出 v3 世代七識別字（normalizePassphrase／jr4 �
 
 // ── 決議 ────────────────────────────────────────────────────────────────────
 
-// ── 16. 常駐毒化矩陣（v0.2.0 批卡①自帶——對真模組行為斷言的毒化證據隨每執行重建） ──
+// ── 16. 常駐毒化矩陣（自帶——對真模組行為斷言的毒化證據隨每執行重建） ──
 //
-// 母型（t_0ab6e760 閘常駐毒化面）：對 /tmp 拷貝樹做突變後重跑同一組行為斷言——
+// 母型（閘常駐毒化面）：對 /tmp 拷貝樹做突變後重跑同一組行為斷言——
 // 「毒化態恰翻面」meta 斷言承載外部 poison runner 的證據；毒化跑在拷貝樹＝本 repo 樹零接觸。
-// 期望值每毒型真跑實測（r2 本 run /tmp 拷貝樹一手實測，見各案 comment 歸屬帳）；還原面由
+// 期望值每毒型真跑實測（/tmp 拷貝樹一手實測，見各案歸屬帳）；還原面由
 // /tmp 樹的出生即棄承載（本 repo 樹 byte 不動）。每案還原後重跑回綠（還原正確性的行為帳）。
 //
-// 案期望值（r2 修正後程式碼上 /tmp 毒化重測，本 run 一手帳——還原後重跑回綠帶）：
+// 案期望值（修正後程式碼上 /tmp 毒化重測，本 run 一手帳——還原後重跑回綠帶）：
 //   P1 摘 jr4w unwrap 入口 normalize → nfail=4 帳（正規化等價面＋KAT 慣用形帳面＋兩 [15] 錨跟隨）
 //   P2 本體夾帶 lowercase → nfail=11 帳（NFKC-effective 帳面翻面集；P3/P4/P5 針毒形零匹配＝全格向量化）
 //   P3 摘 derivePh1ArgonV3 入口 normalize → nfail=2 帳（ph1v3 NFKC 等價面＋[15] 收口形錨）
@@ -1323,9 +1323,9 @@ await A('index barrel 匯出 v3 世代七識別字（normalizePassphrase／jr4 �
 //   P5 摘 jr4d wrap 入口 normalize → nfail=5 帳（dual4 等值面＋PIN 兩面＋兩 [15] 錨）
 //   O1 jr3w.wrap 入口接 normalize（禁手）→ nfail=4 帳（jr3w 凍結兩面＋兩 [15] 錨）
 //   O2 deriveKek2 pass 段接 normalize（禁手）→ nfail=2 帳（[14] 輸入順序錨＋jr2w 凍結 normalized 面）
-//   O3 normalizePin 摘 trim/lowercase → nfail=9 帳（>=帽——MINOR-3 韌性；PIN 契約毒化真 RED）
+//   O3 normalizePin 摘 trim/lowercase → nfail=9 帳（>=帽——韌性；PIN 契約毒化真 RED）
 //   O4 摘 jr4d unwrap 入口 normalize（反拉禁手）→ nfail=4 帳（NFKC 反向等價面＋KAT 慣用形帳面＋兩 [15] 錨）
-//   O1-src/O2-src/O4-src 源碼計數錨（[15] 同形複寫——防單點誤删，NIT-3）：
+//   O1-src/O2-src/O4-src 源碼計數錨（[15] 同形複寫——防單點誤删）：
 //   v3 家族入口 normalize 收口形恰 3×3＋PBKDF2 raw 恰 1——毒化形即計數變異，本 repo 樹直接斷言。
 // 每案結束後還原／清樹（出生即棄）；designated 面帳寫在案例名內。
 
@@ -1357,17 +1357,17 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
     if (!fs16?.mkdtempSync || !fs16.cpSync || !fs16.readFileSync || !fs16.writeFileSync) {
       await A('[16] node:fs 原語在場（mkdtemp/cp/read/write）', false);
     } else {
-      const treePaths16: string[] = []; // MINOR-2 修正：殘留判準只看本 run 喚出的 tree16 路徑（跨執行/跨 host 零耦合）
+      const treePaths16: string[] = []; // 殘留判準只看本 run 喚出的 tree16 路徑（跨執行/跨 host 零耦合）
       const tmpdir16 = osMod!.tmpdir!();
       const coreNM = path16.resolve(new URL('.', import.meta.url).pathname, '../node_modules');
-      const repoRoot16 = path16.resolve(new URL('.', import.meta.url).pathname, '..'); // MINOR-4：repo root 錨定（禁 cwd 依賴——自 repo 外呼叫 cp 樹也恆真）
+      const repoRoot16 = path16.resolve(new URL('.', import.meta.url).pathname, '..'); // repo root 錨定（禁 cwd 依賴——自 repo 外呼叫 cp 樹也恆真）
       const gitIgnoreSkip = (src: string): boolean => src === '.git' || src.endsWith('/.git') || src.includes('/.git/') || src === 'node_modules' || src.endsWith('/node_modules') || src.includes('/node_modules/');
       let tree16 = '';
       const mkTree = (): void => {
         fs16!.rmSync!(tree16, { recursive: true, force: true });
         tree16 = fs16!.mkdtempSync!(path16.join(tmpdir16, 'core-poison-'));
-        treePaths16.push(tree16); // 本 run 喚出記帳（MINOR-2：收尾殘留判準的封閉集）
-        fs16!.cpSync!(repoRoot16, tree16, { recursive: true, filter: (src: string) => !gitIgnoreSkip(src) }); // MINOR-6＋r2 MINOR-4：零 .git/零 node_modules 實拷（repo root 錨定——非 cwd；CI 冷複製成本歸零——毒化樹 node_modules 走下方 symlink）
+        treePaths16.push(tree16); // 本 run 喚出記帳（收尾殘留判準的封閉集）
+        fs16!.cpSync!(repoRoot16, tree16, { recursive: true, filter: (src: string) => !gitIgnoreSkip(src) }); // 零 .git/零 node_modules 實拷（repo root 錨定——非 cwd；CI 冷複製成本歸零——毒化樹 node_modules 走下方 symlink）
         fs16!.rmSync!(path16.join(tree16, 'node_modules'), { recursive: true, force: true });
         // node_modules 走 symlink（worktree 慣例 cp 語意不跟隨）：本閘執行樹一定有 node_modules
         //（@scure 對照組＋typescript）——毒化樹補 symlink 即可；缺席環境（bare npm ci 後無 install）
@@ -1405,7 +1405,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
           "    const kek = await deriveKekArgon(deriveInput(passphrase), salt);\n    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap4);",
           "    const kek = await deriveKekArgon(passphrase, salt);\n    return await openNoteKey(wrapped, kek, 'notekey', cfg.wrap4);");
         const g = runGate16();
-        // P1 名單面 designated（r2 MAJOR-2，本 run 重測帳）：jr4w 正規化等價面＋[17] jr4w NFKC 慣用形
+        // P1 名單面 designated（本 run 重測帳）：jr4w 正規化等價面＋[17] jr4w NFKC 慣用形
         // 帳面兩面真翻——摘除 unwrap 入口 normalize 時 normalized 形失去收容（dual4 等值面不翻＝wrap 端
         // normalize 仍承載，P1 針只咬 unwrap 面——P5 已咬 wrap 面；兩針分工面帳）。
         const p1eqRed = g.out.split('\n').some((l: string) => l.includes('jr4w 正規化等價') && l.trimStart().startsWith('✗'));
@@ -1417,14 +1417,14 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
         fs16!.rmSync!(tree16, { recursive: true, force: true });
         await A('[16] P1 還原回綠（出生即棄樹上還原；P2 共樹後不可達案由出生即棄承載）', g2.rc === 0, String(g2.rc));
       }
-      // P2 本體夾帶 lowercase → NFKC-effective 行為翻面集（r2 CRITICAL-1 重測：nfail=11 帳——非 crash 形）
+      // P2 本體夾帶 lowercase → NFKC-effective 行為翻面集（重測：nfail=11 帳——非 crash 形）
       {
         mkTree();
         const mut = poison16('src/client/note-crypto.ts',
           "export function normalizePassphrase(passphrase: string): string {\n  return passphrase.normalize('NFKC');\n}",
           "export function normalizePassphrase(passphrase: string): string {\n  return passphrase.normalize('NFKC').toLowerCase();\n}");
         const g = runGate16();
-        // P2 名單面 designated（r2 CRITICAL-1 重測帳）：NFKC-effective 帳面翻面集（分離向量二＋並存不混＋jr4w
+        // P2 名單面 designated（重測帳）：NFKC-effective 帳面翻面集（分離向量二＋並存不混＋jr4w
         // raw 大小寫不折疊＋dual4 case/space＋[15] NFKC 契約向量＋ph1v3 大小寫恆異＋[17] 大寫兩形 null 四面＋本體
         // 單行形錨）＝11 面帳；同 P3/P4/P5 毒形零匹配（全格向量化——毒化矩陣單點真值面）。
         const p2normRed = g.out.split('\n').some((l: string) => l.includes('分離向量二') && l.trimStart().startsWith('✗'));
@@ -1439,7 +1439,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
           "    deriveInput(passphrase),\n    saltArg ?? new TextEncoder().encode(PH1_V3_SALT),",
           "    passphrase,\n    saltArg ?? new TextEncoder().encode(PH1_V3_SALT),");
         const g = runGate16();
-        // P3 名單面 designated（r2 MAJOR-2）：ph1v3 NFKC 等價面（全形 vs ASCII 同 ph2）真翻。
+        // P3 名單面 designated：ph1v3 NFKC 等價面（全形 vs ASCII 同 ph2）真翻。
         const p3red = g.out.split('\n').some((l: string) => l.includes('ph1v3 NFKC 等價') && l.trimStart().startsWith('✗'));
         await A('[16] P3 摘 derivePh1ArgonV3 入口 normalize → ph1v3 NFKC 等價面真翻（名單級承載）', mut.applied && g.rc === 1 && nfail(g.out) >= 1 && p3red, 'nfail=' + nfail(g.out));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
@@ -1452,7 +1452,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
           "  const kek = await deriveKekArgon(deriveInput(passphrase), salt);\n  const wrapped = await sealNoteKey(cfg.wrap4, noteKey, kek, 'notekey');",
           "  const kek = await deriveKekArgon(passphrase, salt);\n  const wrapped = await sealNoteKey(cfg.wrap4, noteKey, kek, 'notekey');");
         const g = runGate16();
-        // P4 名單面 designated（r2 MAJOR-2）：jr4w 全形/ASCII 同密語面（全形 wrap 的 NFKC 收容）真翻。
+        // P4 名單面 designated：jr4w 全形/ASCII 同密語面（全形 wrap 的 NFKC 收容）真翻。
         const p4red = g.out.split('\n').some((l: string) => l.includes('jr4w 全形/ASCII 同密語') && l.trimStart().startsWith('✗'));
         await A('[16] P4 摘 jr4w wrap 入口 normalize → 全形/ASCII 同密語面真翻（名單級承載）', mut.applied && g.rc === 1 && nfail(g.out) >= 1 && p4red, 'nfail=' + nfail(g.out));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
@@ -1480,7 +1480,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
         await A('[16] O3 normalizePin 本體摘 trim/lowercase → 行為翻 9 面（PIN 契約毒化承載）', mut.applied && g.rc === 1 && nfail(g.out) >= 9, 'nfail=' + nfail(g.out) + ' want >=9');
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
-      // O2 deriveKek2 pass 段接 normalize（禁手形）→ 真翻面案（r2 MAJOR-2 名單級承載；本 run 重測帳＝
+      // O2 deriveKek2 pass 段接 normalize（禁手形）→ 真翻面案（名單級承載；本 run 重測帳＝
       // [14] 輸入順序錨翻＋jr2w 凍結 normalized 面翻，恰 2 面——兩面各自 designated，帳寫在案斷言內）。
       {
         mkTree();
@@ -1490,7 +1490,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
         const g = runGate16();
         // O2 行為翻 2 面帳（本 run 毒化重測）：[14] 輸入順序錨（毒形不匹配 raw 收口形恰-1 形）＋jr2w 凍結
         // normalized 解翻面（毒化 wrap 也 normalize → ascii 形同 KEK）——名單級承載＝[14] 輸入順序錨面（案內檢）；
-        // nfail 精確 2 帳＝P5/P1 形的錨翻面恰補位（姊妹卡新增 PIN/dual 覆蓋時 >= 帽韌性——MINOR-3）。
+        // nfail 精確 2 帳＝P5/P1 形的錨翻面恰補位（新案新增 PIN/dual 覆蓋時 >= 帽韌性）。
         const o2rawRed = g.out.split('\n').some((l: string) => l.includes('[14] deriveKek2 輸入順序錨') && l.trimStart().startsWith('✗'));
         await A('[16] O2 deriveKek2 pass 段接 normalize（禁手形）→ raw 收口形錨翻＋jr2w 凍結面翻（nfail>=2；名單級承載）',
           mut.applied && g.rc === 1 && nfail(g.out) >= 2 && o2rawRed, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
@@ -1504,7 +1504,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
           "  const kek = await deriveKekArgon(passphrase, salt);\n  const wrapped = await sealNoteKey(cfg.wrap3, noteKey, kek, 'notekey');",
           "  const kek = await deriveKekArgon(deriveInput(passphrase), salt);\n  const wrapped = await sealNoteKey(cfg.wrap3, noteKey, kek, 'notekey');");
         const g = runGate16();
-        // O1 名單面 designated（r2 MAJOR-2，本 run 重測帳）：jr3w 凍結兩面（全形照解面翻＋normalized 恆拒
+        // O1 名單面 designated（本 run 重測帳）：jr3w 凍結兩面（全形照解面翻＋normalized 恆拒
         // 面翻）＝raw 入口契約復活的行為齒；4 面帳＝兩行為面＋兩 [15] 錨跟隨。
         const o1fwRed = g.out.split('\n').some((l: string) => l.includes('jr3w 全形 wrap 照解') && l.trimStart().startsWith('✗'));
         const o1normRed = g.out.split('\n').some((l: string) => l.includes('jr3w 拒收 normalized 慣用形') && l.trimStart().startsWith('✗'));
@@ -1512,14 +1512,14 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
           mut.applied && g.rc === 1 && nfail(g.out) >= 2 && o1fwRed && o1normRed, 'rc=' + g.rc + ' nfail=' + nfail(g.out) + ' fails=' + realFails(g.out).map(s => s.slice(0, 44)).join(';;'));
         fs16!.rmSync!(tree16, { recursive: true, force: true });
       }
-      // O4 unwrapNoteKeyDual4 入口接 raw（v3 反拉形）→ 「毒態」行為面翻轉樣本（MAJOR-2 面修正後真有齒）
+      // O4 unwrapNoteKeyDual4 入口接 raw（v3 反拉形）→ 「毒態」行為面翻轉樣本（修正後真有齒）
       {
         mkTree();
         const mut = poison16('src/client/argon2.ts',
           "    const kek2 = await deriveKek2Argon(cfg, deriveInput(passphrase), pinNorm, salt1, pinSalt, 'journal-kek2-v1:' + cfg.wrapDual4);\n    const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');",
           "    const kek2 = await deriveKek2Argon(cfg, passphrase, pinNorm, salt1, pinSalt, 'journal-kek2-v1:' + cfg.wrapDual4);\n    const rawHex = await decryptWithKey(kek2, ivPrefixedCt, 'notekey2');");
         const g = runGate16();
-        // O4 名單面 designated（r2 MAJOR-2，本 run 重測帳）：dual4 pass 段 NFKC 反向等價面（MAJOR-1 修正後
+        // O4 名單面 designated（本 run 重測帳）：dual4 pass 段 NFKC 反向等價面（修正後
         // unwrap 餵 passD4 的真反向）＋[17] jr4d NFKC 慣用形帳面——反拉 normalize 時 unwrap 餵 normalized 形
         // 失去收容 = 該面 null = 行為齒（非只 rc 計數）；行為翻 4 面帳＝反向等價面＋兩 [15] 錨＋[17] 帳面。
         const o4red = g.out.split('\n').some((l: string) => l.includes('dual4 pass 段 NFKC 反向等價') && l.trimStart().startsWith('✗'));
@@ -1533,7 +1533,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
       {
         const argonSrcNow = await srcOf('../src/client/argon2.ts');
         const ncSrcNow = await srcOf('../src/client/note-crypto.ts');
-        // 與 [15] 同形計數錨＝「複寫防單點誤删」（NIT-3：[16] 內層保留 O-案源碼錨——[15] 錨被未來誤删時本段仍咬）。
+        // 與 [15] 同形計數錨＝「複寫防單點誤删」（[16] 內層保留 O-案源碼錨——[15] 錨被未來誤删時本段仍咬）。
         await A('[16] O1-src 計數錨（[15] 同形複寫——防單點誤删）：argon2 normalize 收口入口形恰 3（禁手形任何復活＝計數變異即 RED）',
           argonSrcNow.split('deriveKekArgon(deriveInput(passphrase)').length === 3
             && argonSrcNow.split('deriveArgon2id(\n    deriveInput(passphrase)').length === 2
@@ -1543,7 +1543,7 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
         await A('[16] O4-src 計數錨（[15] 同形複寫）：jr4d unwrap 入口 normalize 形恰 2（wrap/unwrap 對稱；摘除或反拉即變異）',
           argonSrcNow.split('deriveKek2Argon(cfg, deriveInput(passphrase), pinNorm').length === 3);
       }
-      // 收尾：毒化樹清理自證（MINOR-2 修正：封閉集——只核對本 run 喚出的 tree16 路徑；跨執行/
+      // 收尾：毒化樹清理自證（封閉集——只核對本 run 喚出的 tree16 路徑；跨執行/
       // 並行/host 殘留零耦合——其他 core-poison-* 不入本判準）；每棵出生即棄 rmSync 強制在場。
       {
         const exists16 = fs16!.existsSync!;
@@ -1556,9 +1556,9 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
   }
 }
 
-// ── 17. KAT 凍結向量：HKDF info 域世代分離（CRITICAL-1 修正承載面） ──────────────
+// ── 17. KAT 凍結向量：HKDF info 域世代分離（修正承載面） ──────────────
 //
-// 凍結常數計算式構造（t_7361b68c KAT14 母型——raw 'c3'.repeat(32) 寫 c3x32 帳面）：
+// 凍結常數計算式構造（KAT 母型——raw 'c3'.repeat(32) 寫 c3x32 帳面）：
 // jr3w./jr3d.＝舊 raw 族凍結 blob（全形字面 RAW 派生承載；normalized 慣用形恆拒）；
 // jr4w./jr4d.＝v3 族凍結 blob（KEK 輸入契約＝normalizePassphrase：normalized 慣用形可解、
 // raw 全形形恆拒）。KDF 派生輸入正規化收口（v3）：入口 deriveInput(pass)＝normalizePassphrase
@@ -1624,7 +1624,7 @@ const KAT17 = {
       (await unwrapNoteKeyDual4(TACET4, KAT17.jr3d, passD, KAT17.pin, KAT17.sd3)) === null);
   }
 
-// ── 18. 本機包裹專用前綴（v0.2.0 批卡③：wrapLocal opt-in＋讀舊寫新自癒；jr1l.） ──
+// ── 18. 本機包裹專用前綴（wrapLocal opt-in＋讀舊寫新自癒；jr1l.） ──
 //
 // 舊實作借用 cfg.wrap（jr1w. passphrase 包裹前綴）寫本機包裹＝「一個前綴一份契約」的第二
 // 違例（wrappedRec 專用前綴歸卡①批面）。收口三面：
@@ -1635,7 +1635,7 @@ const KAT17 = {
 //     不硬遷移。
 //   ③未配置態讀取面：照走舊形 cfg.wrap（行為不變），且不自癒重寫（heal 綁在新前綴面）。
 // KEK 不動＝deriveGuestKey（identity 派生、passphrase-free——session 期免重打密語的機制
-// 原樣）；本卡只界「前綴」面（payload 布局的 KDF/prefix 契約由前綴界定——帶內版本化母型）。
+// 原樣）；本段只界「前綴」面（payload 布局的 KDF/prefix 契約由前綴界定——帶內版本化母型）。
 console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫新自癒）');
 {
   // section 專用 Map store：node 端 localStorage 死位（keys.ts try/catch 恆 null）——stored 面
@@ -1809,14 +1809,14 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
         }
       };
       // 毒化窗（同字面點數律——needlePA18/PB18/PC18/P18d 毒化前點數自檢在 withPoisonRun18 內）。
-      // byte-exact 帳（NIT-4）：srcBefore sha256 毒前釘死；srcAfter 同值＝毒化零突變本樹。
+      // byte-exact 帳：srcBefore sha256 毒前釘死；srcAfter 同值＝毒化零突變本樹。
       const sha18 = (s: string): string =>
         (getBuiltin18('node:crypto') as { createHash?: (a: string) => { update: (s: string) => { digest: (e: string) => string } } } | undefined)?.createHash?.('sha256')!.update(s)!.digest('hex')!;
       const srcBefore18 = await srcOf('../src/client/note-crypto.ts');
       const shaBefore18 = sha18(srcBefore18);
       const trees18: string[] = [];
 
-      // 三案改 gate-rerun 形（t_42626eda 審查 MINOR-1 follow-up——改形照 [16] runGate16 母型）：
+      // 三案改 gate-rerun 形（改形照 [16] runGate16 母型）：
       // 拷貝樹突變 src/client/note-crypto.ts 後重跑內層整組閘（POISON_GATE_INNER=1 遞迴
       // 防線——內層三毒化節自我跳過），數 [18] 名單 ✗ 真紅：designated-FAIL 帳＝毒化不只
       // 翻面，更要咬「未來有人把 [18] 主斷言改弱」——弱化後毒化名單帳不齊即 RED。
@@ -1857,15 +1857,15 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
       await withPoisonRun18('[18] 毒化 P18c gate-rerun（P18c：寫面接回借用形）',
         needlePC18, 'sealNoteKey(cfg.wrap,',
         ['寫前綴 jr1l.', '寫入 payload unwrap', '自癒回寫恆新前綴', '自癒 blob unwrap 等值', '自癒 blob 舊形恆拒', '二次讀不自癒二次', '寫面唯 cfg.wrapLocal seal'], 7);
-      // P18d 本機段禁令復活（MINOR-1 ERR 半邊——長度中性＋36B）：storeLocalWrap 守衛 return→throw
+      // P18d 本機段禁令復活（ERR 半邊——長度中性＋36B）：storeLocalWrap 守衛 return→throw
       //（storeLocalWrap 自身 try/catch 吸收＝行為面零變；可觀察面＝本窗禁令錨，毒後窗 +36B）。
       await withPoisonRun18('[18] 毒化 P18d gate-rerun（P18d：storeLocalWrap 守衛復活 throw）',
         '    if (!cfg.wrapLocal) return;',
         "    if (!cfg.wrapLocal) throw new Error('ERR_WRAP_NOT_CONFIGURED');",
         ['本機段零 throw 面'], 1);
-      // 真樹 needle 對位錨＋byte-exact（t_ce675413 NIT-4——t_06c666a6 改名同續：毒化全程跑
+      // 真樹 needle 對位錨＋byte-exact：毒化全程跑
       // 拷貝樹，真樹 sha256 毒前毒後恆等＝零突變帳；needle 恰 1×4 計數防線＝誤改斷言窗本體
-      // （含守衛行）即 RED——T3 restoreS 回呼面已退場＝名實一致帳）。
+      // （含守衛行）即 RED——名實一致帳）。
       const srcAfter18 = await srcOf('../src/client/note-crypto.ts');
       await A('[18] 還原 byte-exact 對照（真樹 sha256 毒前毒後恆等——' + shaBefore18.slice(0, 12) + '…）', sha18(srcAfter18) === shaBefore18);
       await A('[18] 真樹 needle 對位錨（恰 1×4——真樹零突變的行程帶）',
@@ -1878,7 +1878,7 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
   }
 }
 
-// ── 19. ladder 表與重取鹽面（v0.2.0 批卡② t_ce216a63；(a+) 案） ──────────────
+// ── 19. ladder 表與重取鹽面（(a+) 案） ──────────────
 //
 // 驗證策略（真 SQLite，node:sqlite）：①ph2_ladder DDL（FK CASCADE／UNIQUE account_id）；
 // ②重取鹽面 unwrapNoteKeyDual4WithSalt＝雙腿重試形為（ladder 遷移旋轉 salt1 後，呼叫端
@@ -1948,26 +1948,26 @@ console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2
   await A('[19] WithSalt 未配置 cfg（wrapDual4 缺）→ null（opt-in 鐵律同向）',
     (await unwrapNoteKeyDual4WithSalt({ pinSalt3Prefix: 'tacet-note-pin3:' }, rewrapD4.wrapped, passD, pinD, rewrapD4.salt)) === null);
 }
-// ── 20. 復原套件專用前綴＋HKDF 派生世代（v0.2.0 批卡⑤ t_8bb68356；卡D 議題二搭車案） ──
+// ── 20. 復原套件專用前綴＋HKDF 派生世代 ──
 //
-// 裁定（records-2026-09-15-to-20 :736）：採但搭車——wrappedRec 專用前綴＋KEK_rec 改
+// 裁定：採搭車——wrappedRec 專用前綴＋KEK_rec 改
 // HKDF-SHA256（jr3d KEK2 HKDF 為先例）；「一個前綴一份契約」第二違例（wrappedRec 共用
-// cfg.wrap＋同 AAD）同步收口。收口五面（修正輪 r1 op-worker CHANGES_REQUIRED 收編）：
-//   ①專用前綴 cfg.wrapRec（jr1r.；命名＝語意後綴軸，沿 jr1l. 卡④定案）＋專屬 AAD
+// cfg.wrap＋同 AAD）同步收口。收口五面（修正輪定案）：
+//   ①專用前綴 cfg.wrapRec（jr1r.；命名＝語意後綴軸，沿 jr1l. 定案）＋專屬 AAD
 //     'notekey-rec'（帶內版本化：payload 契約面綁派生世代）。
-//   ②世代配對門（r1 修正輪 C1/C2）：wrapRec＋recKekHkdf 兩欄一體（同缺同在）——
+//   ②世代配對門（修正輪 C1/C2）：wrapRec＋recKekHkdf 兩欄一體（同缺同在）——
 //     部分配置（XOR）＝ERR_REC_CFG_PARTIAL 拒寫（fail-closed 禁寫出「jr1r.×PBKDF2」
 //     寫得出讀不回 blob 與「jr1w.×HKDF」借用 blob）；讀面部分配置照走舊面回落
-//     （r3 承諾面：配置形正確時舊 blob 永遠可解）。
+//     （承諾面：配置形正確時舊 blob 永遠可解）。
 //   ③KEK_rec 派生世代 cfg.recKekHkdf（HKDF 專責）：HKDF-SHA256( ikm = recToken（256-bit
-//     實體因子——卡D 文字：KDF 強度無意義，世代收的是派生域分離）, salt = recKekSalt？
+//     實體因子——KDF 強度無意義，世代收的是派生域分離）, salt = recKekSalt？
 //     16B hex（未配置＝零鹽）, info = 'journal-kek-rec-v1:' + recKekHkdf, L = 32 )。
-//     info 合成名沿 argon2 家族慣例（tce r1 CRITICAL-1 定形：HKDF info 呼叫端帶入）。
+//     info 合成名沿 argon2 家族慣例（HKDF info 呼叫端帶入定形）。
 //     PBKDF2 舊派生＝deriveRecLegacyKek 單一本體（寫面未配置世代＋讀面回落同源）。
 //   ④讀舊寫新雙試：兩欄齊備 unwrap＝jr1r. 面（HKDF）先行、未中→舊面（cfg.wrap＋
-//     notekey＋PBKDF2）回落（報告 §wrappedRec 場景：救回動線順向雙試＝裁定過渡保護
+//     notekey＋PBKDF2）回落（救回動線順向雙試＝裁定過渡保護
 //     涵蓋；摘雙試＝遷移率裁定非日曆）。兩欄皆缺席（舊 cfg）＝單試舊面（行為不變）。
-//   ⑤四象限 write→read 矩陣（r1 修正輪 M1）：每象限「自 wrap 可自 unwrap 或 wrap 拒絕」
+//   ⑤四象限 write→read 矩陣（修正輪 M1）：每象限「自 wrap 可自 unwrap 或 wrap 拒絕」
 //     ＋超集 cfg 可讀子集 blob（升級路徑保護）＋B01 歷史缺陷形恆拒（升 KDF＝換前綴）。
 console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec HKDF 世代（recKekHkdf opt-in，兩欄一體配對門）');
 {
@@ -1995,7 +1995,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   await A('[20] 未配置世代 wrappedRec 前綴 jr1w.（契約面永不變——借用面凍結）', legacyRec20.startsWith('jr1w.'));
   await A('[20] 未配置世代 unwrap = 原 noteKey（PBKDF2 舊派生契約原樣）',
     eqNoteKey20(await unwrapNoteKeyWithRecToken(TACET, legacyRec20, recToken20, identityA)));
-  await A('[20] KAT 凍結 blob（舊 PBKDF2 契約面）：凍結 recToken＋凍結 identity 鹽域＋凍結 blob 逐位可解（凍結常數計算式構造——t_7361b68c KAT 母型；對錨＝凍結 noteKey raw 非本段活金鑰）',
+  await A('[20] KAT 凍結 blob（舊 PBKDF2 契約面）：凍結 recToken＋凍結 identity 鹽域＋凍結 blob 逐位可解（凍結常數計算式構造——KAT 母型；對錨＝凍結 noteKey raw 非本段活金鑰）',
     eqRawKat20(await unwrapNoteKeyWithRecToken(TACET, 'jr1w.a4xchJ+EPui8iQy5dKpQyGjalu0nlJMsDd0LaLyRrY3mt+6112Se4NvaibymRFHsMg1LgOYsBVy15t0CiU1ipf9g8rniqBmdf1R5LzVXQdNJDCzbAfubPUKc/FE=', '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')));
   await A('[20] seal 未配置守衛：cfg.wrap 缺席 legacy 路徑直呼 → ERR_WRAP_NOT_CONFIGURED（呼叫端亦可先行拒絕——雙防線外層）',
     (async () => {
@@ -2007,17 +2007,17 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
     freshRec20.length > 'jr1r.'.length && unb64Mod(freshRec20.slice('jr1r.'.length)).length === 92);
 
   // P3 新世代讀舊寫新（雙試）＋家族互斥＋KAT 世代帶
-  await A('[20] 新世代讀舊 blob（r3 過渡保護）：舊 PBKDF2/AAD/前綴面回落雙試 → 原 noteKey',
+  await A('[20] 新世代讀舊 blob（過渡保護）：舊 PBKDF2/AAD/前綴面回落雙試 → 原 noteKey',
     eqNoteKey20(await unwrapNoteKeyWithRecToken(TACET5, legacyRec20, recToken20, identityA)));
   await A('[20] 家族互斥：jr1r. blob 餵未配置世代 cfg → null（新面恆拒——家族隔離對稱面）',
     (await unwrapNoteKeyWithRecToken(TACET, freshRec20, recToken20, identityA)) === null);
   await A('[20] KAT 凍結 blob：jr1r. 逐位重放（凍結 recToken/salt/identity/blob 恆定——HKDF 世代派生確定性重驗；對錨＝凍結 noteKey raw 非本段活金鑰）',
     eqRawKat20(await unwrapNoteKeyWithRecToken(TACET5, KAT_BLOB_R20, '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')));
-  await A('[20] KAT 世代齒（鹽入派生正向翻面）：凍結 recToken/identity/blob 不變、鹽域換值 → null（鹽 A wrap→鹽 B unwrap 恆不重合——HKDF salt 有入派生——r1 N3 live 形）',
+  await A('[20] KAT 世代齒（鹽入派生正向翻面）：凍結 recToken/identity/blob 不變、鹽域換值 → null（鹽 A wrap→鹽 B unwrap 恆不重合——HKDF salt 有入派生）',
     (await unwrapNoteKeyWithRecToken({ ...TACET5, recKekSalt: 'ffeeddccbbaa99887766554433221100' }, KAT_BLOB_R20, '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')) === null);
   await A('[20] KAT 世代齒（info 域帶毒化案同錨）：HKDF info 尾綴換值（鹽/identity/blob 恆定）→ null（info 有入派生——R2 毒化翻轉的 clean 鏡）',
     (await unwrapNoteKeyWithRecToken({ ...TACET5, recKekHkdf: 'jr1r-x' }, KAT_BLOB_R20, '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')) === null);
-  await A('[20] HKDF 世代正交面（r1 N4d 收口後契約）：僅 recKekHkdf（wrapRec 缺席）＝配對門拒寫，讀面 jr1r. blob 照舊面回落零接納（cfg.wrap 在場＝PBKDF2 腿零承載——HKDF 派生禁借 jr1w. 前綴）',
+  await A('[20] HKDF 世代正交面（配對門收口後契約）：僅 recKekHkdf（wrapRec 缺席）＝配對門拒寫，讀面 jr1r. blob 照舊面回落零接納（cfg.wrap 在場＝PBKDF2 腿零承載——HKDF 派生禁借 jr1w. 前綴）',
     (await unwrapNoteKeyWithRecToken({ ...TACET, recKekHkdf: 'jr1r.' }, freshRec20, recToken20, identityA)) === null);
 
   // identity 參數語意（HKDF 族零接觸面——docstring identity-free by design 承載）
@@ -2033,24 +2033,24 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   await A('[20] 壞 recKekSalt wrap 面拋 ERR_REC_KEK_SALT（fail-closed 拒寫——派生世代誤配即禁寫）',
     (async () => { try { await wrapNoteKeyWithRecToken({ ...TACET5, recKekSalt: 'xyz123' }, noteKey, recToken20, identityA); return false; } catch (e) { return (e as Error).message === 'ERR_REC_KEK_SALT'; } })());
 
-  // P5 世代配對門（r1 修正輪 C1/C2 收口——兩欄一體，fail-closed 拒寫）
+  // P5 世代配對門（修正輪 C1/C2 收口——兩欄一體，fail-closed 拒寫）
   await A('[20] 配對門 wrapRec-only（C1 象限）：拋 ERR_REC_CFG_PARTIAL（禁寫「jr1r.×PBKDF2」寫得出讀不回 blob）',
     (async () => { try { await wrapNoteKeyWithRecToken({ ...TACET, wrapRec: 'jr1r.' }, noteKey, recToken20, identityA); return false; } catch (e) { return (e as Error).message === 'ERR_REC_CFG_PARTIAL'; } })());
   await A('[20] 配對門 recKekHkdf-only（C2 象限）：拋 ERR_REC_CFG_PARTIAL（禁借 jr1w. 前綴 carrying HKDF 派生）',
     (async () => { try { await wrapNoteKeyWithRecToken({ ...TACET, recKekHkdf: 'jr1r.' }, noteKey, recToken20, identityA); return false; } catch (e) { return (e as Error).message === 'ERR_REC_CFG_PARTIAL'; } })());
-  // B01 歷史缺陷形向量（r1 C2 收口後零接納面）：HKDF-on-jr1w. 借形 blob——守衛形拒寫＝
-  // 無構造源（r1 升級探針缺陷形），凍結重放式對借形 blob 的恆拒承載（對錨＝null 非 noteKey）。
+  // B01 歷史缺陷形向量（收口後零接納面）：HKDF-on-jr1w. 借形 blob——守衛形拒寫＝
+  // 無構造源（升級探針缺陷形），凍結重放式對借形 blob 的恆拒承載（對錨＝null 非 noteKey）。
   const legacyB01_20 = 'jr1w.' + modB64(new Uint8Array(92).fill(7));
   await A('[20] 配對門錯誤序前於鹽形檢（部分配置形不驗鹽——門先收）',
     (async () => { try { await wrapNoteKeyWithRecToken({ ...TACET, recKekHkdf: 'jr1r.', recKekSalt: 'xyz123' }, noteKey, recToken20, identityA); return false; } catch (e) { return (e as Error).message === 'ERR_REC_CFG_PARTIAL'; } })());
-  await A('[20] 配對門讀面寬容（r3 承諾面）：wrapRec-only cfg 讀舊 jr1w. blob → 原 noteKey（部分配置禁寫不禁讀——舊 blob 永遠可解）',
+  await A('[20] 配對門讀面寬容：wrapRec-only cfg 讀舊 jr1w. blob → 原 noteKey（部分配置禁寫不禁讀——舊 blob 永遠可解）',
     eqNoteKey20(await unwrapNoteKeyWithRecToken({ ...TACET, wrapRec: 'jr1r.' }, legacyRec20, recToken20, identityA)));
   await A('[20] 配對門讀面寬容（C1 歷史缺陷形救回面）：wrapRec-only cfg 逐位重放凍結舊 blob（PBKDF2 鹽域）→ 凍結 noteKey',
     eqRawKat20(await unwrapNoteKeyWithRecToken({ ...TACET, wrapRec: 'jr1r.' }, 'jr1w.a4xchJ+EPui8iQy5dKpQyGjalu0nlJMsDd0LaLyRrY3mt+6112Se4NvaibymRFHsMg1LgOYsBVy15t0CiU1ipf9g8rniqBmdf1R5LzVXQdNJDCzbAfubPUKc/FE=', '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000')));
   await A('[20] 配對門讀面恆拒（B01 歷史缺陷形）：recKekHkdf-only cfg 讀 HKDF-on-jr1w. 形 blob → null（借形缺陷 blob 零接納面；升 KDF＝換前綴）',
     (await unwrapNoteKeyWithRecToken({ ...TACET, recKekHkdf: 'jr1r.', recKekSalt: recSalt20 }, legacyB01_20, recToken20, identityA)) === null);
 
-  // M1 四象限 write→read 矩陣（r1 修正輪——四象限配置（wrapRec，recKekHkdf）逐格對帳面；
+  // M1 四象限 write→read 矩陣（修正輪——四象限配置（wrapRec，recKekHkdf）逐格對帳面；
   // 每格「write：blob 前綴（或配對門拒）→ read：同 cfg 自解行為」＋超集 cfg 讀子集 blob）。
   {
     const qCfg10 = (): NoteCryptoConfig => ({ ...TACET, wrapRec: 'jr1r.' });
@@ -2070,7 +2070,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
     const r11q = await unwrapNoteKeyWithRecToken({ ...TACET5 }, b11q, recToken20, identityA);
     await A('[20] M1 read 面自解格：B00/B11 同 cfg 自 wrap 自 unwrap＝原 noteKey（B10/B01 無 blob＝write 面承載）',
       (await eqNoteKey20(r00q)) && (await eqNoteKey20(r11q)));
-    await A('[20] M1 超集讀子集（升級路徑保護）：B10/B01 cfg 皆可讀 B00 舊 blob（舊面回落——r3 承諾）',
+    await A('[20] M1 超集讀子集（升級路徑保護）：B10/B01 cfg 皆可讀 B00 舊 blob（舊面回落）',
       (await eqNoteKey20(await unwrapNoteKeyWithRecToken(qCfg10(), b00q, recToken20, identityA)))
       && (await eqNoteKey20(await unwrapNoteKeyWithRecToken(qCfg01(), b00q, recToken20, identityA))));
     await A('[20] M1 超集讀子集：B11 cfg 讀 B00 blob（雙試回落＝原 noteKey）、B00 cfg 讀 B11 blob（子集讀超集＝null——家族隔離對稱面）',
@@ -2079,7 +2079,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   }
 
   // 源碼窗（計數錨——接線漂移即 RED；needle+1 式對照 [14][15][16] 母型；錨為敘述形且 docstring 零咬；
-  // r1 修正輪 M1 後配對門落地——窗口全體重錨隨修正形；「HKDF 腿零借 cfg.wrap」的接線由 R2 贊毒化承載）
+  // 修正輪 M1 後配對門落地——窗口全體重錨隨修正形；「HKDF 腿零借 cfg.wrap」的接線由 R2 贊毒化承載）
   const noteCryptoSrc20 = await srcOf('../src/client/note-crypto.ts');
   await A('[20] 源碼窗：專屬 AAD 接線恰 2（wrap seal 面與 unwrap open 面各恰 1——回收共用面復活/錯位接線即變異）',
     noteCryptoSrc20.split("kek, 'notekey-rec')").length === 2 && noteCryptoSrc20.split("'notekey-rec', cfg.wrapRec)").length === 2);
@@ -2093,14 +2093,14 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   await A('[20] 源碼窗：PBKDF2 fallback 殘留歸零＋deriveRecKek 呼叫面恰 3（非空洞計數：fallback 形歸零＋def＋兩呼叫端在場——C2 收口面）',
     noteCryptoSrc20.split('if (!cfg.recKekHkdf) return deriveKek').length === 1
     && noteCryptoSrc20.split('deriveRecKek(').length === 4);
-  await A('[20] 源碼窗：deriveRecLegacyKek def＋呼叫恰 3（split 帳＝出現＋1；legacy 本體單一真相——寫面＋讀面同源；r1 N4e 對齊）',
+  await A('[20] 源碼窗：deriveRecLegacyKek def＋呼叫恰 3（split 帳＝出現＋1；legacy 本體單一真相——寫面＋讀面同源）',
     noteCryptoSrc20.split('deriveRecLegacyKek(').length === 4);
   await A('[20] 源碼窗：cfg.wrapRec 敘述形恰 2（配對門 XOR 一對——借用面復活即計數變異）',
     noteCryptoSrc20.split('cfg.wrapRec ||').length === 3
     && noteCryptoSrc20.split('!cfg.wrapRec ||').length === 2);
 
   // R 系毒化（自毒化驗齒——/tmp 拷貝樹 fresh import，出生即棄；期望值真跑後定值，帳面直覺禁沿；
-  // r1 修正輪：R2 重錨＝info 字面→KAT 世代齒（N2）、R4 label 對齊（T3）、R5 新案＝配對門（C1/C2 唯一閘承載））
+  // 修正輪：R2 重錨＝info 字面→KAT 世代齒、R4 label 對齊、R5 新案＝配對門（C1/C2 唯一閘承載））
   const getBuiltin20 = (id: string): unknown =>
     (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
   const fs20 = getBuiltin20('node:fs') as {
@@ -2118,7 +2118,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   const needleR3 = "    const legacyKek = await deriveRecLegacyKek(cfg, recToken, identity);";
   const needleR5 = "if (!cfg.wrapRec || !cfg.recKekHkdf) throw new Error('ERR_REC_CFG_PARTIAL');";
   const srcNow20 = await srcOf('../src/client/note-crypto.ts');
-  await A('[20] 毒化錨前綴自檢（r1 C2 律——毒化窗同字面點數先行；split 計數帳＝出現數＋1）',
+  await A('[20] 毒化錨前綴自檢（毒化窗同字面點數先行；split 計數帳＝出現數＋1）',
     srcNow20.split(needleR1).length === 2 && srcNow20.split(needleR3).length === 2
     && srcNow20.split("const info = 'journal-kek-rec-v1:'").length === 2 && srcNow20.split(needleR5).length === 2);
   if (inner20 || !ready20) {
@@ -2156,16 +2156,16 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
         const back = await mod.unwrapNoteKeyWithRecToken(cfg, blob, rt, identityA);
         await A('[20] 毒化 R1 摘專屬 AAD → 新面 unwrap 死（blob 內 AAD 舊契約形——designated）', back === null, String(back !== null));
       });
-    // R2 HKDF info 域摘除（r1 N2 重錨：毒化打 info 字面——info 變數吃 recKekHkdf 值本身、
+    // R2 HKDF info 域摘除（重錨：毒化打 info 字面——info 變數吃 recKekHkdf 值本身、
     // 家族成名域零在場→KAT 凍結 blob unwrap 死＝KAT 世代齒一次到位（designated））
     await withPoison20(
       (s: string) => s.replace("const info = 'journal-kek-rec-v1:' + hkdfTail;", 'const info = hkdfTail;'),
       async (dir: string) => {
         const mod = (await freshImport20(dir)) as typeof import('../src/client/note-crypto.ts');
         const back = await mod.unwrapNoteKeyWithRecToken(baseCfg20(), KAT_BLOB_R20, '62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5', 'kat-id-0000000000000000');
-        await A('[20] 毒化 R2 info 字面移除 → KAT blob unwrap 死（KAT 世代齒——info 有入派生的正向翻面，r1 N2 重錨——designated）', back === null, String(back !== null));
+        await A('[20] 毒化 R2 info 字面移除 → KAT blob unwrap 死（KAT 世代齒——info 有入派生的正向翻面——designated）', back === null, String(back !== null));
       });
-    // R3 摘舊面雙試（legacy 派生錯鹽）→ 新世代讀舊 blob 死（r3 過渡保護有齒）＋舊 cfg 面同死（同一本體）
+    // R3 摘舊面雙試（legacy 派生錯鹽）→ 新世代讀舊 blob 死（過渡保護有齒）＋舊 cfg 面同死（同一本體）
     await withPoison20(
       (s: string) => s.replace(needleR3, "    const legacyKek = await deriveRecLegacyKek(cfg, recToken, identity + 'x');"),
       async (dir: string) => {
@@ -2177,7 +2177,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
         const back = await mod.unwrapNoteKeyWithRecToken(cfg, legacy, rt, identityA);
         await A('[20] 毒化 R3 摘舊面雙試 → 新世代讀舊 blob 死（designated——過渡保護有齒）', back === null, String(back !== null));
         const backOld = await mod.unwrapNoteKeyWithRecToken(TACET, legacy, rt, identityA);
-        await A('[20] 毒化 R3 舊 cfg 面同死（legacy 派生本體單一真相——兩處呼叫同源，r1 N4e 對齊）', backOld === null, String(backOld !== null));
+        await A('[20] 毒化 R3 舊 cfg 面同死（legacy 派生本體單一真相——兩處呼叫同源）', backOld === null, String(backOld !== null));
       });
     // R4 前綴借用面復活（wrapRec 面接回 cfg.wrap）→ 寫面 fallback jr1w.（designated；契約翻轉齒由 P1 前綴斷言承載）
     await withPoison20(
@@ -2188,12 +2188,12 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
         const nk = await mod.generateNoteKey();
         const rt = mod.generateRecToken();
         const blob = await mod.wrapNoteKeyWithRecToken(cfg, nk, rt, identityA);
-        await A('[20] 毒化 R4 前綴借用面復活 → 寫面 fallback jr1w.（毒化執行證——契約翻轉齒由 P1 前綴斷言承載，r1 T3 label 對齊）',
+        await A('[20] 毒化 R4 前綴借用面復活 → 寫面 fallback jr1w.（毒化執行證——契約翻轉齒由 P1 前綴斷言承載）',
           typeof blob === 'string' && blob.startsWith('jr1w.'), String(blob ?? '').slice(0, 8));
       });
-    // R5 忠實回退（r1 修正輪新增案——C1/C2 拒寫面的唯一閘承載；designated）：
-    // 門分支回寫 r1 @982bd69 生產形（wrapRec 面吃 legacy 派生＋notekey-rec 契約），尾端
-    // cfg.wrap 腿原樣留任（r1 形：wrapRec 缺席續走 cfg.wrap＋poisoned deriveRecKef HKDF）＝
+    // R5 忠實回退（修正輪新增案——C1/C2 拒寫面的唯一閘承載；designated）：
+    // 門分支回寫生產形（wrapRec 面吃 legacy 派生＋notekey-rec 契約），尾端
+    // cfg.wrap 腿原樣留任（wrapRec 缺席續走 cfg.wrap＋poisoned deriveRecKef HKDF）＝
     // 兩歷史缺陷象限（C1＝jr1r.×PBKDF2／C2＝jr1w.×HKDF）寫出面精確重現——毒化代碼照寫、
     // 兩缺陷形復活並自解 null 的行為翻面承載。
     const poisonR5 = (s: string): string => s.replace(
@@ -2213,7 +2213,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
       await A('[20] 毒化 R5 忠實回退 → C2 歷史缺陷形復活（jr1w. 前綴 carrying 派生 HKDF blob 寫出——designated；借形契約面重現）',
         typeof blobC2 === 'string' && blobC2.startsWith('jr1w.'), String(blobC2 ?? '').slice(0, 5));
     });
-    // 檢核：R5 毒化代碼（忠實回退形）寫出的 C1 形 blob，在守衛形（未毒化）讀面下不可救——配對門價值的直接行為證（r1 C1 缺口行為化）
+    // 檢核：R5 毒化代碼（忠實回退形）寫出的 C1 形 blob，在守衛形（未毒化）讀面下不可救——配對門價值的直接行為證（缺口行為化）
     {
       const dirP = fs20!.mkdtempSync!(os20!.tmpdir!() + '/t20r5-')!;
       trees20.push(dirP);
@@ -2231,7 +2231,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
         const rawEqP = async (k: CryptoKey | null): Promise<boolean> => k !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) === rawP;
         const back = await unwrapNoteKeyWithRecToken({ ...TACET, wrapRec: 'jr1r.' }, blobC1, rtP, identityA);
         const backUp = await unwrapNoteKeyWithRecToken(TACET5, blobC1, rtP, identityA);
-        await A('[20] 配對門價值行為證：R5 毒化代碼寫出 C1 形 blob → 守衛形讀面自解 null（B10 象限缺口＝r1 C1 缺口的行為化翻面）',
+        await A('[20] 配對門價值行為證：R5 毒化代碼寫出 C1 形 blob → 守衛形讀面自解 null（B10 象限缺口的行為化翻面）',
           back === null, String(back === null));
         await A('[20] 配對門價值行為證：C1 形 blob 在完整新世代 cfg 下讀面亦 null（HKDF KEK≠PBKDF2 KEK——升級不救 B10）',
           backUp === null && !(await rawEqP(back)),
@@ -2240,10 +2240,10 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
         fs20!.rmSync!(dirP, { recursive: true, force: true });
       }
     }
-    // 還原自證：毒化樹零殘留（本 run 喚出 6 棵全清——封閉集判準；出生即棄拷貝樹＋真樹 needle 計數自證，r1 T3 label 對齊）
+    // 還原自證：毒化樹零殘留（本 run 喚出 6 棵全清——封閉集判準；出生即棄拷貝樹＋真樹 needle 計數自證）
     const srcAfter20 = (getBuiltin20('node:fs') as { readFileSync?: (p: string, e?: string) => string })!.readFileSync!(
       new URL('../src/client/note-crypto.ts', import.meta.url).pathname, 'utf8');
-    await A('[20] 真樹 needle 對位錨（t_ce675413 命名同款——真樹零突變的行程帶）',
+    await A('[20] 真樹 needle 對位錨（真樹零突變的行程帶）',
       srcAfter20.split(needleR1).length === 2 && srcAfter20.split(needleR3).length === 2
       && srcAfter20.split("const info = 'journal-kek-rec-v1:'").length === 2 && srcAfter20.split(needleR5).length === 2);
     const existsSync20 = (p: string): boolean =>

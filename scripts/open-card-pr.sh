@@ -2,7 +2,7 @@
 # open-card-pr.sh — journal-core 同 repo card branch PR 產生器。
 #
 # Usage: open-card-pr.sh <branch> <title> <body-file>
-#   branch     card branch（head），例：card/t_046fe36f-ci-runner
+#   branch     card branch（head），例：card/<id>
 #   title      PR 標題
 #   body-file  PR body 純文字檔（完整讀入）
 #
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 REPO_URL="https://api.github.com/repos/tacet-ink/journal-core/pulls"
-# 位置面：預設為本機絕對路徑（host-specific）；其他環境以 ENV_FILE 覆寫（t_046fe36f r2）
+# 位置面：預設為本機絕對路徑（host-specific）；其他環境以 ENV_FILE 覆寫
 : "${ENV_FILE:=/srv/dropbox/csoft/tacet/.env}"
 
 BRANCH="${1:?usage: open-card-pr.sh <branch> <title> <body-file>}"

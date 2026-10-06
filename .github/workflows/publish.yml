@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     steps:
-      # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定 t_b91ed07f：可發布到 npm 的
+      # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定：可發布到 npm 的
       # workflow（id-token: write）不吃浮動 tag）
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -35,7 +35,7 @@ jobs:
 
       - name: Check tag matches package version
         # workflow_dispatch（branch ref）無 v-tag：直接 fail-fast 標記「須推 v* tag」，
-        # 不誤踩「tag != package version」檢查錯訊（t_b91ed07f 殘餘 N-3；t_580f9c54 落地）。
+        # 不誤踩「tag != package version」檢查錯訊。
         if: github.ref_type != 'tag'
         run: |
           echo "::error::publish runs on tag refs only (GITHUB_REF_TYPE=$GITHUB_REF_TYPE); push a v* tag."
