@@ -7,12 +7,17 @@
 
 ## [未發布]
 
-CI 供應鏈加固：npm ci 一律 `--ignore-scripts`（verify/publish 兩 workflow——依賴腳本零在場）；
-Dependabot PR 分流 GitHub-hosted runner（self-hosted runner 不接機器人分支）；
-移除 repo 內 PR 產生器腳本（含主機路徑與權杖線索——治理掃蕩補漏）；
-包裹前綴快檢上移：五個解包入口（passphrase/分享兩代＋復原套件兩腿）在 KDF 派生前
-先比對前綴——錯誤前綴的試探不再付出 Argon2id／PBKDF2 派生成本（輸出行為不變）；
-資料庫索引修正 migration：ph2_ladder 摘除重複索引、補 account_id 索引（查詢走索引不走全表）。
+**Security** — CI 供應鏈加固：npm ci 一律 `--ignore-scripts`（verify／publish 兩 workflow——依賴安裝不執行任何安裝腳本）；
+Dependabot PR 分流 GitHub-hosted runner 執行驗證（self-hosted runner 不接機器人分支——分流不是擋，驗證照跑）；
+移除 repo 內 PR 產生器腳本（含主機路徑與權杖線索——治理掃蕩補漏）。
+
+**Changed** — 密語包裹前綴快檢上移：五個解包入口（passphrase／分享兩代＋復原套件兩腿）在金鑰派生前
+先比對前綴——錯誤前綴的試探不再付出 Argon2id／PBKDF2 派生成本（輸出行為不變）。
+
+**Added** — 資料庫索引修正 migration：ph2_ladder 摘除重複索引、補 account_id 索引（帳戶查詢走索引不走全表）。
+
+**Migration** — 套用 `migrations/0012-fix-ph2-ladder-index.sql`：純索引面、零行為變更、可重入
+（DROP INDEX IF EXISTS／CREATE INDEX IF NOT EXISTS——重複套用零傷）。
 
 ## [0.2.3] — 2026-10-06
 
@@ -54,9 +59,10 @@ ladder 表原語（ph2_ladder＋AuthStore v3 re-key 介面＋0011 遷移樣本�
   恆為 extractable（鐵律，不再是可調選項）；帶此欄的 config 物件在 TS 下會編譯錯誤
   （多餘屬性／缺必填），移除該欄即可。
 
-安全加固批（非 breaking 面）：hex fail-closed（ERR_BAD_HEX）＋空 identity 拒絕＋ERR_PIN_EMPTY；
-限流改 UPSERT…RETURNING 單句（四次往返寫入鏈收口）＋CORS Max-Age 面＋PH1 固定域鹽注入面（鹽一經選定 per-product 恆固定）＋engines 下限 >=24.7.0＋CI 加固（typecheck＋actions SHA 釘選）＋PBKDF2 並行＋b64 分塊效能批；
-isCipherFor 空字首組裝守衛（空前綴配置態不再永真放行）。
+非 breaking 面：限流改 UPSERT…RETURNING 單句（四次往返寫入鏈收口）＋CORS Max-Age 面＋
+PH1 固定域鹽注入（鹽一經選定 per-product 恆固定）＋engines 下限 >=24.7.0＋CI 加固
+（typecheck＋actions SHA 釘選）＋PBKDF2 並行＋b64 分塊效能批＋isCipherFor 空字首組裝守衛
+（空前綴配置態不再永真放行）；解包呼叫端對 fail-closed 拋面照舊以 try/catch 承接＝回 null 契約不變。
 
 ## [0.1.5] — 2026-09-20
 
