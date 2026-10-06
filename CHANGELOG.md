@@ -8,7 +8,8 @@
 ## [未發布] — https://github.com/tacet-ink/journal-core/compare/v0.2.0...HEAD
 
 wrappedRec 專用前綴 jr1r.＋recToken HKDF 世代（與 recKekHkdf 兩欄一體——部分配置拒寫，
-新面先行舊面回落雙試）。
+新面先行舊面回落雙試）；包內補 migrations/ 目錄（0011 ladder 樣本——閘在包內環境
+可直驅建表）。
 
 ## [0.2.0] — 2026-10-05
 
@@ -19,8 +20,9 @@ ladder 表原語（ph2_ladder＋AuthStore v3 re-key 介面＋0011 遷移樣本�
 ## [0.1.6] — 2026-10-04
 
 安全加固批：hex fail-closed（ERR_BAD_HEX）＋空 identity 拒絕＋ERR_PIN_EMPTY；
-限流改 UPSERT…RETURNING 單句（四次往返寫入鏈收口）；engines 下限 >=24.7.0＋
-CI 加固（typecheck＋actions SHA 釘選）；PBKDF2 並行＋b64 分塊效能批；
+限流改 UPSERT…RETURNING 單句（四次往返寫入鏈收口）＋CORS Max-Age 面；engines 下限
+>=24.7.0＋CI 加固（typecheck＋actions SHA 釘選）；PBKDF2 並行＋b64 分塊效能批；
+PH1 固定域鹽注入面（鹽一經選定 per-product 恆固定）；
 isCipherFor 空字首組裝守衛（空前綴配置態不再永真放行）。
 
 ## [0.1.5] — 2026-09-20

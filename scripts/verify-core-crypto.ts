@@ -1372,6 +1372,8 @@ console.log('\n[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒
         // node_modules 走 symlink（worktree 慣例 cp 語意不跟隨）：本閘執行樹一定有 node_modules
         //（@scure 對照組＋typescript）——毒化樹補 symlink 即可；缺席環境（bare npm ci 後無 install）
         // 本閘自己在主樹就跑不起來，不是毒化矩陣的責任面。
+        // （[18] 毒化窗無此補線——t_ce675413 r1 已知差異：拷貝樹環境缺 @scure 參照組時
+        //   內層輸出恰帶 [2] 參照組 FAIL 1 面＝可預期環境面，非缺陷；本機常態在場照綠。）
         exec16('ln', ['-s', nodeEnvOk ? coreNM : '', path16.join(tree16, 'node_modules')], { cwd: tree16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
       };
       const runGate16 = (): { rc: number; out: string } => {
@@ -1759,8 +1761,8 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
   // ── 源碼窗靜態錨（本地段結構——毒化形即計數/窗錨變異） ──
   const ncSrc18 = await srcOf('../src/client/note-crypto.ts');
   const localWin18 = ncSrc18.slice(ncSrc18.indexOf('── 本機包裹'), ncSrc18.indexOf('── 日記密文入口'));
-  await A('[18] 源碼窗：窗尾 floor 三值帳（真窗 1984B／Δ_p18b≈70B→摘後 1933 持／餘裕 +74B——floor 是帳漂移承重件，隨窗漂移即帳錯）', localWin18.length > 1910);
-  await A('[18] 源碼窗：本機段零 throw 面（ERR_WRAP_NOT_CONFIGURED 禁令——未配置＝無寫入無拋；P18d 毒化咬復活）',
+  await A('[18] 源碼窗：窗尾 floor 三值帳（真窗 1980 字元／P18d 毒後 +36→2016 持——floor 是帳漂移承重件，隨窗漂移即帳錯）', localWin18.length > 1910);
+  await A('[18] 源碼窗：本機段零 ERR_WRAP_NOT_CONFIGURED 禁令面（throw 復活即反——毒化咬復活）',
     !localWin18.includes('ERR_WRAP_NOT_CONFIGURED'));
   await A('[18] 源碼窗：寫面唯 cfg.wrapLocal seal＋舊借形零殘留（v1 借用面復活即反）',
     localWin18.split('sealNoteKey(cfg.wrapLocal').length === 2 && !localWin18.includes('sealNoteKey(cfg.wrap,'));
@@ -1829,6 +1831,8 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
           const s0 = fs18!.readFileSync!(p, 'utf8');
           const cnt = s0.split(needle).length - 1;
           if (cnt !== 1) { await A(label + '（毒化 needle 對位自檢——錨缺席＝runner 設計錯非閘病）', false, 'needle cnt=' + cnt); return; }
+          // 本拷貝樹無 node_modules symlink（對照 [16] mkTree 補線形＝[18] 已知差異——
+          // 缺 @scure 參照組環境的內層輸出帶 [2] 參照組 FAIL 1 面＝可預期環境面，非缺陷）。
           fs18!.writeFileSync!(p, s0.split(needle).join(replacement), 'utf8');
           const g = runGate18(dir);
           const failLines18 = g.out.split('\n').filter((l: string) => l.trimStart().startsWith('✗') && l.includes('[18]'));
@@ -1845,7 +1849,7 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
           fs18!.rmSync!(dir, { recursive: true, force: true });
         }
       };
-      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋源碼窗 floor 面翻（窗 shrink 1833<1910；throw 禁令面由 P18d 獨立承載）
+      // P18 摘 fresh-face（三元→null）→ stored jr1l. blob 通路讀死＋源碼窗 floor 面翻（窗 shrink 1829<1910；throw 禁令面由 P18d 獨立承載）
       await withPoisonRun18('[18] 毒化 P18 gate-rerun（P18：摘 fresh-face 三元→null）',
         needlePA18, '\n    const fresh = null;',
         ['空-held decrypt 經本機包裹通路', '自癒後二次讀回', '窗尾 floor 三值帳'], 3);
@@ -1862,12 +1866,14 @@ console.log('\n[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊�
       await withPoisonRun18('[18] 毒化 P18d gate-rerun（P18d：storeLocalWrap 守衛復活 throw）',
         '    if (!cfg.wrapLocal) return;',
         "    if (!cfg.wrapLocal) throw new Error('ERR_WRAP_NOT_CONFIGURED');",
-        ['本機段零 throw 面'], 1);
-      // 真樹 needle 對位錨＋byte-exact：毒化全程跑
-      // 拷貝樹，真樹 sha256 毒前毒後恆等＝零突變帳；needle 恰 1×4 計數防線＝誤改斷言窗本體
-      // （含守衛行）即 RED——名實一致帳）。
+        ['本機段零 ERR_WRAP_NOT_CONFIGURED 禁令面'], 1);
+      // 真樹 needle 對位錨＋byte-exact：毒化全程跑拷貝樹；真樹 sha256 毒前毒後恆等＝
+      // 零突變帳——對照兩端帶 hex64 形狀條（缺席即顯性 throw，非 fail-open 空轉）；
+      // needle 恰 1×4 計數防線＝誤改斷言窗本體（含守衛行）即 RED——名實一致帳。
+      const shaOk18 = (x: string): boolean => /^[0-9a-f]{64}$/.test(x);
       const srcAfter18 = await srcOf('../src/client/note-crypto.ts');
-      await A('[18] 還原 byte-exact 對照（真樹 sha256 毒前毒後恆等——' + shaBefore18.slice(0, 12) + '…）', sha18(srcAfter18) === shaBefore18);
+      await A('[18] 還原 byte-exact 對照（真樹 sha256 毒前毒後恆且為 hex64——' + shaBefore18.slice(0, 12) + '…）',
+        shaOk18(shaBefore18) && sha18(srcAfter18) === shaBefore18);
       await A('[18] 真樹 needle 對位錨（恰 1×4——真樹零突變的行程帶）',
         srcAfter18.split(needlePA18).length === 2 && srcAfter18.split(needlePB18).length === 2
         && srcAfter18.split(needlePC18).length === 2
@@ -2240,7 +2246,8 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
         fs20!.rmSync!(dirP, { recursive: true, force: true });
       }
     }
-    // 還原自證：毒化樹零殘留（本 run 喚出 6 棵全清——封閉集判準；出生即棄拷貝樹＋真樹 needle 計數自證）
+    // 常駐自證：毒化樹零殘留（本 run 喚出 6 棵全清——封閉集判準；出生即棄拷貝樹＋真樹 needle 計數自證）
+    // 錨名：真樹 needle 對位錨（t_ce675413 命名同款）——樹出生即棄，非毒化還原動作。
     const srcAfter20 = (getBuiltin20('node:fs') as { readFileSync?: (p: string, e?: string) => string })!.readFileSync!(
       new URL('../src/client/note-crypto.ts', import.meta.url).pathname, 'utf8');
     await A('[20] 真樹 needle 對位錨（真樹零突變的行程帶）',
