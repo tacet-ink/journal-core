@@ -5,12 +5,14 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
-## [未發布]
+## [0.2.2] — 2026-10-06
 
-README 治理字面清掃隨 0.2.2 載具出門（批卡引用、內部治理敘事——字面面，零原語）
+README 治理字面清掃隨 0.2.2 載具出門（[0.2.0] 批卡引用、內部治理敘事——字面面，零原語）
 ＋[0.1.6] 節文收斂至三行（批項歸併——內容零失）＋floor 插值帳（[18] 源碼窗 floor
 標籤改插值當地量——窗長一變即靜默失真面封口）＋shaOk18 對照毒化案（hex64 守衛
-缺席咬痕收口）＋[未發布] 標題位改 ref 定義形（[未發布]: compare/v0.2.1...HEAD 入 links 區）。
+缺席咬痕收口）＋[未發布] 標題位 ref 定義形慣例確立（下一節位翻正照 [0.2.2] 節形）。
+
+[未發布]: 佔位節——下一批載項先落此節，節位翻正隨發布輪。
 
 ## [0.2.1] — 2026-10-06
 
@@ -58,7 +60,8 @@ npm metadata 補齊（homepage／repository／bugs——npm 頁側欄 repo 連�
 兩時代金鑰模型、帶內版本化前綴契約、pinlock／雙因子合鑰／分享包裹原語、
 Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 
-[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...HEAD
+[0.2.2]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...v0.2.2
+[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.2.2...HEAD
 [0.2.1]: https://github.com/tacet-ink/journal-core/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tacet-ink/journal-core/compare/v0.1.6...v0.2.0
 [ERR_REC_CFG_PARTIAL]: https://github.com/tacet-ink/journal-core/blob/v0.2.1/src/client/note-crypto.ts
