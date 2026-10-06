@@ -439,6 +439,7 @@ export async function wrapNoteKey(cfg: NoteCryptoConfig, noteKey: CryptoKey, pas
 export async function unwrapNoteKey(cfg: NoteCryptoConfig, wrapped: string, passphrase: string, saltHex: string): Promise<CryptoKey | null> {
   try {
     if (!cfg.wrap) return null;
+    if (!wrapped.startsWith(cfg.wrap)) return null; // 快速前綴快檢（t_87ef62dd）：錯前綴 junk 免付 600k PBKDF2 成本
     const salt = hexToBytes(saltHex);
     if (salt.length !== 16 || !HEX32_RE.test(saltHex)) return null;
     const kek = await deriveKek(passphrase, salt);
@@ -468,6 +469,7 @@ export async function wrapNoteKeyShare(cfg: NoteCryptoConfig, noteKey: CryptoKey
 export async function unwrapNoteKeyShare(cfg: NoteCryptoConfig, wrapped: string, sharePass: string, saltHex: string): Promise<CryptoKey | null> {
   try {
     if (!cfg.wrapShare) return null;
+    if (!wrapped.startsWith(cfg.wrapShare)) return null; // 快速前綴快檢（t_87ef62dd）：錯前綴 junk 免付 600k PBKDF2 成本
     const salt = hexToBytes(saltHex);
     if (salt.length !== 16 || !HEX32_RE.test(saltHex)) return null;
     const kek = await deriveKek(sharePass, salt);
@@ -525,7 +527,10 @@ export async function unwrapNoteKeyWithRecToken(cfg: NoteCryptoConfig, wrapped: 
   try {
     // 次序契約：jr1r. 面只在兩欄齊備時試（HKDF 專責派生——cfg.wrap 面零 HKDF 腿，
     // jr1w. 前綴只 carrying passphrase-PBKDF2 派生：「一個前綴一份契約」第二違例收口）。
-    if (cfg.wrapRec && cfg.recKekHkdf) {
+    // 快速前綴快檢（t_87ef62dd）：jr1r. 腿接線＝條件面（錯前綴跳過 HKDF 腿）——
+    // 禁 return null 形（會短路「新世代讀舊寫新」的舊面回落雙試＝[20] 過渡保護契約）；
+    // 舊面是終面（回落後無再退）＝return null 快檢形恰當（錯前綴免付 600k PBKDF2）。
+    if (cfg.wrapRec && cfg.recKekHkdf && wrapped.startsWith(cfg.wrapRec)) {
       const recKek = await deriveRecKek(cfg, recToken);
       const fresh = await openNoteKey(wrapped, recKek, 'notekey-rec', cfg.wrapRec);
       if (fresh) return fresh;
@@ -533,6 +538,7 @@ export async function unwrapNoteKeyWithRecToken(cfg: NoteCryptoConfig, wrapped: 
     // 舊面回落（過渡保護）：cfg.wrap 在場即試（部分配置讀面照走——寫面已被配對門
     // 拒，讀面寬容＝舊 blob 永遠可解的承載面）。
     if (!cfg.wrap) return null;
+    if (!wrapped.startsWith(cfg.wrap)) return null; // 快速前綴快檢：錯前綴 junk 免付 600k PBKDF2 成本
     const legacyKek = await deriveRecLegacyKek(cfg, recToken, identity);
     return await openNoteKey(wrapped, legacyKek, 'notekey', cfg.wrap);
   } catch {
