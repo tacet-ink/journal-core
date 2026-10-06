@@ -46,6 +46,7 @@
   "files": [
     "src",
     "scripts",
+    "migrations",
     "README.md",
     "LICENSE"
   ],
