@@ -1033,10 +1033,10 @@ async function srcOf(rel: string): Promise<string> {
   // node 內建模組動態存取（structured type，零 node types 依賴——argon2.ts getBuiltinModule 母型同構；
   // TS2591 types 帽下 import('node:fs') 靜態/動態皆炸＝此繞法）
   const fs = (globalThis as unknown as {
-    process?: { getBuiltinModule?: (id: string) => { readFileSync?: (p: string, enc: string) => string } | undefined };
+    process?: { getBuiltinModule?: (id: string) => { readFileSync?: (p: string | URL, enc: string) => string } | undefined };
   }).process?.getBuiltinModule?.('node:fs');
   if (!fs?.readFileSync) throw new Error('ERR_FS_UNAVAILABLE');
-  return fs.readFileSync(new URL(rel, import.meta.url).pathname, 'utf8');
+  return fs.readFileSync(new URL(rel, import.meta.url), 'utf8');
 }
 await A('derivePh1Argon 預設分支源碼面 = encode(PH1_V2_SALT)（鹽預設單一真相錨；同-pass 同值斷言對預設值漂移無承載力）',
   /saltArg \?\? new TextEncoder\(\)\.encode\(PH1_V2_SALT\)/.test(await srcOf('../src/client/argon2.ts')));
@@ -2394,7 +2394,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
 // 外審 #1 的落地裁定（t_87ef62dd）：public 密碼學套件 repo 的 CI 安裝不吃依賴腳本——
 // --ignore-scripts 是安裝面防線（postinstall/preinstall/prepare 全免執行）；
 // Dependabot PR 走 GitHub-hosted runner 隔離（self-hosted runner 不接機器人分支）。
-// 靜態錨面：workflow YAML 本體的接線（job-if C1 母型＋actor 分流＋runs-on 三元）。
+// 靜態錨面：workflow YAML 本體的接線（job-if C1 母型＋actor 分流＋runs-on fromJSON 陣列形）。
 console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 分流）');
 {
   // 環境鍵＝.github 目錄存在（存在性鍵非檔名硬讀——r1 MINOR-3）：閘 src 檔在 files 白名單
@@ -2403,9 +2403,9 @@ console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runne
   // 目錄在場而檔案缺席＝srcOf 硬 FAIL（repo 面牙齒不退位——軟讀文件名會把 repo 內
   // 摘 workflow 校準成靜默綠＝掉牙）。
   const fs21 = (globalThis as unknown as {
-    process?: { getBuiltinModule?: (id: string) => { existsSync?: (p: string) => boolean } | undefined };
+    process?: { getBuiltinModule?: (id: string) => { existsSync?: (p: string | URL) => boolean } | undefined };
   }).process?.getBuiltinModule?.('node:fs');
-  const ghDir21 = !!fs21?.existsSync && fs21.existsSync(new URL('../.github/', import.meta.url).pathname);
+  const ghDir21 = !!fs21?.existsSync && fs21.existsSync(new URL('../.github/', import.meta.url));
   if (ghDir21) {
     const srcVy21 = await srcOf('../.github/workflows/verify.yml');
     const srcPy21 = await srcOf('../.github/workflows/publish.yml');
@@ -2413,17 +2413,17 @@ console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runne
       srcVy21.includes('npm ci --ignore-scripts'));
     await A('[21] verify.yml：job-if 同 repo 保衛（C1 母型——fork／他 repo branch 不上 runner；dependabot 分支照跑不擋＝分流入 RUN 面——r1 MAJOR-1）',
       /if: github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository/.test(srcVy21));
-    await A('[21] verify.yml：runs-on dependabot 三元＝RUN 分流（actor→GitHub-hosted ubuntu-latest；fallback 保留 journal-core 標籤——r1 MAJOR-2）',
-      /runs-on: \$\{\{ github\.event_name == 'pull_request' && github\.actor == 'dependabot\[bot\]' && 'ubuntu-latest' \|\| 'self-hosted, journal-core' \}\}/.test(srcVy21));
+    await A('[21] verify.yml：runs-on dependabot 分流＝fromJSON 陣列形（actor→["ubuntu-latest"]；fallback fromJSON 兩標籤組 ["self-hosted","journal-core"]——裸逗號字串 fallback＝StringToken 單一 literal 標籤缺陷形零承載，r2 MAJOR-1）',
+      /runs-on: \$\{\{ fromJSON\(github\.event_name == 'pull_request' && github\.actor == 'dependabot\[bot\]' && '\["ubuntu-latest"\]' \|\| '\["self-hosted","journal-core"\]'\) \}\}/.test(srcVy21));
     await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
       srcPy21.includes('npm ci --ignore-scripts'));
   } else {
-    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 455−3=452）',
+    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 457−3=454）',
       true, 'no .github dir — consumption tree face');
   }
   // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
   await A('[21] open-card-pr.sh 摘除（主機路徑＋GITHUB_TOKEN 線索面；fs 原語缺席＝顯性 FAIL 自守衛）',
-    !!fs21?.existsSync && !fs21.existsSync(new URL('../scripts/open-card-pr.sh', import.meta.url).pathname));
+    !!fs21?.existsSync && !fs21.existsSync(new URL('../scripts/open-card-pr.sh', import.meta.url)));
   // NIT-1 自證（isBrokenLink repo-root 錨定）：根錨路徑在場形（本 repo 常態 @scure 在場）
   // ＋CWD 無關面（probe 眼：lstat 走 import.meta.url 起手——cwd=任意時仍指 repo）。
   // 缺陷形（裸 '@scure/bip39' 殘留）＝源碼負向咬（regex 敘述形）。
@@ -2435,6 +2435,12 @@ console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runne
       !/lstatSync\('@scure\/bip39'\)/.test(gateSrc21) && !/existsSync\('@scure\/bip39'\)/.test(gateSrc21));
     await A('[21] NIT-1：isBrokenLink 判準本體在場（lstat isSymbolicLink && !existsSync——斷鏈 vs 真缺席分流保線）',
       /isSymbolicLink\(\) && !fsMod\.existsSync\(repoRootRef\)/.test(gateSrc21));
+    await A('[21] r2 MINOR-1：fs 直讀守衛＝URL 物件直傳（existsSync .github 在場面＋srcOf readFileSync rel 面——file: URL 原生接線，零 .pathname 中介）',
+      /fs21\.existsSync\(new URL\('\.\.\/\.github\/', import\.meta\.url\)\)/.test(gateSrc21)
+      && /fs\.readFileSync\(new URL\(rel, import\.meta\.url\), 'utf8'\)/.test(gateSrc21));
+    await A('[21] r2 MINOR-1：fs 原語直讀 .pathname 形零殘留（缺陷形負向——URL %編碼失真→existsSync 恆 false→SKIP 分枝靜默退位面收口）',
+      !/existsSync\(new URL\([^)]*\)\.pathname\)/.test(gateSrc21)
+      && !/readFileSync\(new URL\([^)]*\)\.pathname/.test(gateSrc21));
   }
 }
 
