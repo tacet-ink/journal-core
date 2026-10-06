@@ -211,7 +211,7 @@ hash-wasm 並以 `setArgonLoader()` 注入（詳 `src/client/argon2.ts` 檔頭�
 
 版本歷史見 [CHANGELOG.md](./CHANGELOG.md)。
 
-MIT。安全問題聯絡 tacetink.csd@gmail.com（安全回報流程見 [SECURITY.md](./SECURITY.md)）。
+MIT。安全問題聯絡 security@tacet.ink（安全回報流程見 [SECURITY.md](./SECURITY.md)）。
 
 ## English Summary
 
@@ -273,5 +273,5 @@ knowledge.
 
 ## License
 
-MIT. Security contact: tacetink.csd@gmail.com. Version history: [CHANGELOG.md](./CHANGELOG.md).
+MIT. Security contact: security@tacet.ink. Version history: [CHANGELOG.md](./CHANGELOG.md).
 Security reporting process: [SECURITY.md](./SECURITY.md).
