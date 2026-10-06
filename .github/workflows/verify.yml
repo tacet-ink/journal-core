@@ -16,8 +16,10 @@ jobs:
     # Dependabot 分流（t_87ef62dd）：PR actor＝dependabot[bot] → GitHub-hosted
     # ubuntu-latest（供應鏈隔離——self-hosted runner 不接機器人分支；分流不是擋，
     # 機器人分支照跑驗證）；其餘（含 dependabot 以外的 PR）self-hosted[journal-core]。
+# runs-on 兩臂一律 fromJSON 陣列形——裸逗號字串（'self-hosted, journal-core'）＝runner
+# 解析器 StringToken 整串單加＝一枚 literal 標籤；標籤組唯有陣列形展開（r2 MAJOR-1）。
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && 'ubuntu-latest' || 'self-hosted, journal-core' }}
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && '["ubuntu-latest"]' || '["self-hosted","journal-core"]') }}
     steps:
       # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定：密碼學套件 repo
       # 的 CI 不吃浮動 tag）
