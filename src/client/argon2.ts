@@ -249,12 +249,14 @@ export async function wrapNoteKey3(cfg: Argon3Config, noteKey: CryptoKey, passph
 }
 
 /** jr3w. 解包：任何不符（前綴/salt 形/長度/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 4）。
+ *  快速前綴快檢在場（deriveKekArgon 前——t_87ef62dd；unwrapNoteKey4 母型）：錯前綴 junk 免付 Argon。
  *  收口 openNoteKey：嚴格 92B＋rawHex 形＋hex fail-closed 全在共用核心；本函式只做
  *  家族守衛（wrap3 未配置回 null）、salt1 hex-形檢查與 KEK 派生——payload 形是鹽外置家族（iv‖ct），
  *  own 92B 檢已隨收口摘除（jr3s 同；鹽內嵌族 own 108B 保留）。 */
 export async function unwrapNoteKey3(cfg: Argon3Config, wrapped: string, passphrase: string, saltHex: string): Promise<CryptoKey | null> {
   try {
     if (!cfg.wrap3) return null;
+    if (!wrapped.startsWith(cfg.wrap3)) return null; // 快速前綴快檢（t_87ef62dd）：錯前綴 junk 免付 64 MiB Argon 成本
     const salt = hexToBytes(saltHex);
     if (salt.length !== SALT_LEN || !/^[0-9a-f]{32}$/.test(saltHex)) return null;
     const kek = await deriveKekArgon(passphrase, salt);
@@ -478,11 +480,13 @@ export async function wrapNoteKeyShare3(cfg: Argon3Config, noteKey: CryptoKey, s
 }
 
 /** jr3s. 解包：salt 取自 GET /shares/:hash 回應（與 jr1w 同形）；任何不符回 null，不拋。
+ *  快速前綴快檢在場（deriveKekArgon 前——t_87ef62dd；unwrapNoteKey4 母型）：錯前綴 junk 免付 Argon。
  *  收口 openNoteKey：鹽外置家族（payload 嚴格 92B＋rawHex 形＋hex fail-closed
  *  全在共用核心）；本函式只做家族守衛、salt hex-形檢查與 KEK 派生——own 92B 檢已隨收口摘除。 */
 export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sharePass: string, saltHex: string): Promise<CryptoKey | null> {
   try {
     if (!cfg.wrapShare3) return null;
+    if (!wrapped.startsWith(cfg.wrapShare3)) return null; // 快速前綴快檢（t_87ef62dd）：錯前綴 junk 免付 64 MiB Argon 成本
     const salt = hexToBytes(saltHex);
     if (salt.length !== SALT_LEN || !/^[0-9a-f]{32}$/.test(saltHex)) return null;
     const kek = await deriveKekArgon(sharePass, salt);

@@ -7,7 +7,12 @@
 
 ## [未發布]
 
-[佔位——下一批載項先落此節，節位翻正隨發布輪。]
+CI 供應鏈加固：npm ci 一律 `--ignore-scripts`（verify/publish 兩 workflow——依賴腳本零在場）；
+Dependabot PR 分流 GitHub-hosted runner（self-hosted runner 不接機器人分支）；
+移除 repo 內 PR 產生器腳本（含主機路徑與權杖線索——治理掃蕩補漏）；
+包裹前綴快檢上移：五個解包入口（passphrase/分享兩代＋復原套件兩腿）在 KDF 派生前
+先比對前綴——錯誤前綴的試探不再付出 Argon2id／PBKDF2 派生成本（輸出行為不變）；
+資料庫索引修正 migration：ph2_ladder 摘除重複索引、補 account_id 索引（查詢走索引不走全表）。
 
 ## [0.2.3] — 2026-10-06
 
@@ -35,7 +40,21 @@ ladder 表原語（ph2_ladder＋AuthStore v3 re-key 介面＋0011 遷移樣本�
 
 ## [0.1.6] — 2026-10-04
 
-安全加固批：hex fail-closed（ERR_BAD_HEX）＋空 identity 拒絕＋ERR_PIN_EMPTY；
+**Breaking changes**：
+
+- `hexToBytes` 改 fail-closed：非法 hex（奇數長度／非 hex 字元／空字串）從「靜默歸零」
+  改為拋 `ERR_BAD_HEX`——原本依賴「非法輸入得零值字串」行為的呼叫端需顯式接錯
+  （unwrap 家族 try/catch 承接＝回 null 契約不變）。
+- guest 時代空 identity 改 fail-closed：加密面拋 `ERR_NO_IDENTITY`、解密面回 `null`——
+  空字串 identity（如未登入就加密）不再靜默產出「空帳號金鑰」。
+- `wrapNoteKey*` 家族空 PIN 錯誤碼改拋 `ERR_PIN_EMPTY`（原為 `ERR_DUAL_NOT_CONFIGURED`）——
+  「密碼欄空」與「功能未配置」語意分流；以錯誤字串比對 `ERR_DUAL_NOT_CONFIGURED`
+  判空 PIN 的呼叫端需改比對新碼。
+- `PinLockConfig` 移除必填欄 `noteKeyExtractable`（介面欄位移除）——解包輸出的 noteKey
+  恆為 extractable（鐵律，不再是可調選項）；帶此欄的 config 物件在 TS 下會編譯錯誤
+  （多餘屬性／缺必填），移除該欄即可。
+
+安全加固批（非 breaking 面）：hex fail-closed（ERR_BAD_HEX）＋空 identity 拒絕＋ERR_PIN_EMPTY；
 限流改 UPSERT…RETURNING 單句（四次往返寫入鏈收口）＋CORS Max-Age 面＋PH1 固定域鹽注入面（鹽一經選定 per-product 恆固定）＋engines 下限 >=24.7.0＋CI 加固（typecheck＋actions SHA 釘選）＋PBKDF2 並行＋b64 分塊效能批；
 isCipherFor 空字首組裝守衛（空前綴配置態不再永真放行）。
 
