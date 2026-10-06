@@ -129,7 +129,8 @@ npm run verify   # 455 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋常駐毒化矩陣 [16][18]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
-                 # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner 分流＋腳本摘除＋NIT-1 錨）
+                 # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner 分流＋腳本摘除＋NIT-1 錨；455 帳＝repo 樹——
+                 #   發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→452，SKIP 顯形非靜默）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
 ```
 
