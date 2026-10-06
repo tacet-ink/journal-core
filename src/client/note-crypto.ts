@@ -96,7 +96,7 @@ export function b64(bytes: Uint8Array): string {
   // node 端分塊形 132-181ms→18ms，與閘執行帳同源——Node-only toBase64 的 1ms 帳是
   // 不同形，非本體帳）。瀏覽器端恆走本形——core 是 isomorphic TS
   // 源碼發行，不引入 Node-only
-  // toBase64 分支（卡面否決案）。apply 參數上限安全窗 8192；輸出 byte 等價
+  // toBase64 分支（評估後否決的路線）。apply 參數上限安全窗 8192；輸出 byte 等價
   // （驗證閘 [14] 有 0/1/7/8191/8192/8193/65539 邊界逐位元組對照＋unb64 roundtrip）。
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i += 8192) {
@@ -125,7 +125,7 @@ export function hexToBytes(hex: string): Uint8Array {
   // NFKC 寬容＝設計面刻意：'⑩'→'10' 等相容字元收容後是真 hex
   // 值（⑩→[16] 實帳），非缺陷形（NaN 歸零已殲滅＝輸出恆數學等值）；rawHex 檢查同式（HEX_RE 同行後置
   // ＝rawHex 前置守衛）；鹽欄同為同行後置（note-crypto/argon2 各 unwrap 面鹽欄形檢——行號帳不寫死，
-  // 新增段推移行號＝註解行號帳漂移，NIT-a 同病禁再犯）。
+  // 新增段推移行號＝註解行號帳漂移，同病禁再犯）。
   // 行為恆 null（純註解）；正式輸入面形檢在場，公開原語只保證「正規化後真 hex 恆等值、垃圾恆拒」。
   // 若要 ASCII-only 收緊＝帶內版本化（換前綴），禁原地改語意。
   const norm = hex.normalize('NFKC').toLowerCase();
@@ -488,7 +488,7 @@ export async function unwrapNoteKeyShare(cfg: NoteCryptoConfig, wrapped: string,
  *  派生域（HKDF info）＋前綴契約面（jr1r.）的世代分離；非防爆破強化帳。
  *  鹽域二分（鹽家族）：HKDF salt 屬「派生面內嵌 cfg、payload 零內嵌」——
  *  92B 帳純粹來自 hex(noteKey) 64B＋iv 12＋tag 16（pinSalt 內嵌 payload 是 jr2w./jr3d.
- *  鹽內嵌族的事，不入此帳）。PBKDF2 舊世代派生＝deriveRecLegacyKek（單一本體，修正輪
+ *  鹽內嵌族的事，不入此帳）。PBKDF2 舊世代派生＝deriveRecLegacyKek（單一本體，檢查對齊
  *  收口：deriveRecKek 禁 PBKDF2 fallback——派生源雙模＝C2 缺口形）。 */
 async function deriveRecKek(cfg: NoteCryptoConfig, recToken: string): Promise<CryptoKey> {
   const hkdfTail = cfg.recKekHkdf as string;
@@ -506,7 +506,7 @@ async function deriveRecKek(cfg: NoteCryptoConfig, recToken: string): Promise<Cr
 }
 
 export async function wrapNoteKeyWithRecToken(cfg: NoteCryptoConfig, noteKey: CryptoKey, recToken: string, identity: string): Promise<string> {
-  // 世代配對門（修正輪 C1/C2 收口）：一前綴一份契約補完。
+  // 世代配對門（檢查對齊 C1/C2 收口）：一前綴一份契約補完。
   // 禁寫面＝「前綴面 jr1r.×派生面 PBKDF2」（wrapRec-only，C1：寫得出讀不回）與
   // 「前綴面 jr1w.×派生面 HKDF」（HKDF-only，C2：借 jr1w. 前綴 carrying 第二派生、
   // 升級即失資料）——兩面都由部分配置自然接線產生，門 fail-closed 拒寫。
@@ -543,7 +543,7 @@ export async function unwrapNoteKeyWithRecToken(cfg: NoteCryptoConfig, wrapped: 
 /** 舊契約派生本體（legacy 派生全案單一本體）：PBKDF2(recToken,
  *  salt = recSaltPrefix ‖ identity)——永不變（配置形正確時既有 wrappedRec
  *  blob 逐位可解）。寫面未配置世代與讀面回落同源呼叫本體；deriveRecKek 改 HKDF 專責
- *  （修正輪 C2 收口：HKDF 派生禁借 cfg.wrap 前綴面，派生源不再雙模）。 */
+ *  （檢查對齊 C2 收口：HKDF 派生禁借 cfg.wrap 前綴面，派生源不再雙模）。 */
 async function deriveRecLegacyKek(cfg: NoteCryptoConfig, recToken: string, identity: string): Promise<CryptoKey> {
   return deriveKek(recToken, new TextEncoder().encode(cfg.recSaltPrefix + identity));
 }
@@ -581,7 +581,7 @@ export async function buildBindPayload(
  * 本機包裹：KEK = deriveGuestKey（identity 派生、passphrase-free——
  * session 期免重打密語的機制原樣），payload 改走專用前綴 cfg.wrapLocal（jr1l.）。
  * 舊實作借用 cfg.wrap（jr1w. passphrase 包裹前綴）寫本機包裹＝「一個前綴一份契約」
- * 的第二違例（wrappedRec 專用前綴歸卡①批面）：本機包裹的 KDF 與 caller 不同、
+ * 的第二違例（wrappedRec 專用前綴歸 v0.2.0 世代收口）：本機包裹的 KDF 與 caller 不同、
  * 儲存面（localStorage）不同、生命週期不同（clearLocalWrap 隨時摘除）——共前綴讓
  * 「本機字串是否可能誤入 server 包裹欄」對帳失真。新前綴＝讀舊寫新自癒：
  * loadLocalWrap 先試 jr1l.（本體嚴格面），命中舊形（jr1w.）回落解密後即重包

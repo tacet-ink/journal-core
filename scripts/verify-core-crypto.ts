@@ -1627,7 +1627,7 @@ const KAT17 = {
 // ── 18. 本機包裹專用前綴（wrapLocal opt-in＋讀舊寫新自癒；jr1l.） ──
 //
 // 舊實作借用 cfg.wrap（jr1w. passphrase 包裹前綴）寫本機包裹＝「一個前綴一份契約」的第二
-// 違例（wrappedRec 專用前綴歸卡①批面）。收口三面：
+// 違例（wrappedRec 專用前綴歸 v0.2.0 世代收口）。收口三面：
 //   ①寫面專用前綴：storeLocalWrap 寫入恆 cfg.wrapLocal（jr1l.）；未配置＝退場無寫入
 //     （cipherLocal opt-in 母型——未配置面零寫入零拋）。
 //   ②讀舊寫新自癒：loadLocalWrap 先試新前綴（本體嚴格面）；命中舊形（借用期 jr1w. blob）
@@ -1952,10 +1952,10 @@ console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2
 //
 // 裁定：採搭車——wrappedRec 專用前綴＋KEK_rec 改
 // HKDF-SHA256（jr3d KEK2 HKDF 為先例）；「一個前綴一份契約」第二違例（wrappedRec 共用
-// cfg.wrap＋同 AAD）同步收口。收口五面（修正輪定案）：
+// cfg.wrap＋同 AAD）同步收口。收口五面（檢查對齊定案）：
 //   ①專用前綴 cfg.wrapRec（jr1r.；命名＝語意後綴軸，沿 jr1l. 定案）＋專屬 AAD
 //     'notekey-rec'（帶內版本化：payload 契約面綁派生世代）。
-//   ②世代配對門（修正輪 C1/C2）：wrapRec＋recKekHkdf 兩欄一體（同缺同在）——
+//   ②世代配對門（檢查對齊 C1/C2）：wrapRec＋recKekHkdf 兩欄一體（同缺同在）——
 //     部分配置（XOR）＝ERR_REC_CFG_PARTIAL 拒寫（fail-closed 禁寫出「jr1r.×PBKDF2」
 //     寫得出讀不回 blob 與「jr1w.×HKDF」借用 blob）；讀面部分配置照走舊面回落
 //     （承諾面：配置形正確時舊 blob 永遠可解）。
@@ -1967,7 +1967,7 @@ console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2
 //   ④讀舊寫新雙試：兩欄齊備 unwrap＝jr1r. 面（HKDF）先行、未中→舊面（cfg.wrap＋
 //     notekey＋PBKDF2）回落（救回動線順向雙試＝裁定過渡保護
 //     涵蓋；摘雙試＝遷移率裁定非日曆）。兩欄皆缺席（舊 cfg）＝單試舊面（行為不變）。
-//   ⑤四象限 write→read 矩陣（修正輪 M1）：每象限「自 wrap 可自 unwrap 或 wrap 拒絕」
+//   ⑤四象限 write→read 矩陣（檢查對齊 M1）：每象限「自 wrap 可自 unwrap 或 wrap 拒絕」
 //     ＋超集 cfg 可讀子集 blob（升級路徑保護）＋B01 歷史缺陷形恆拒（升 KDF＝換前綴）。
 console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec HKDF 世代（recKekHkdf opt-in，兩欄一體配對門）');
 {
@@ -2033,7 +2033,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   await A('[20] 壞 recKekSalt wrap 面拋 ERR_REC_KEK_SALT（fail-closed 拒寫——派生世代誤配即禁寫）',
     (async () => { try { await wrapNoteKeyWithRecToken({ ...TACET5, recKekSalt: 'xyz123' }, noteKey, recToken20, identityA); return false; } catch (e) { return (e as Error).message === 'ERR_REC_KEK_SALT'; } })());
 
-  // P5 世代配對門（修正輪 C1/C2 收口——兩欄一體，fail-closed 拒寫）
+  // P5 世代配對門（檢查對齊 C1/C2 收口——兩欄一體，fail-closed 拒寫）
   await A('[20] 配對門 wrapRec-only（C1 象限）：拋 ERR_REC_CFG_PARTIAL（禁寫「jr1r.×PBKDF2」寫得出讀不回 blob）',
     (async () => { try { await wrapNoteKeyWithRecToken({ ...TACET, wrapRec: 'jr1r.' }, noteKey, recToken20, identityA); return false; } catch (e) { return (e as Error).message === 'ERR_REC_CFG_PARTIAL'; } })());
   await A('[20] 配對門 recKekHkdf-only（C2 象限）：拋 ERR_REC_CFG_PARTIAL（禁借 jr1w. 前綴 carrying HKDF 派生）',
@@ -2050,7 +2050,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   await A('[20] 配對門讀面恆拒（B01 歷史缺陷形）：recKekHkdf-only cfg 讀 HKDF-on-jr1w. 形 blob → null（借形缺陷 blob 零接納面；升 KDF＝換前綴）',
     (await unwrapNoteKeyWithRecToken({ ...TACET, recKekHkdf: 'jr1r.', recKekSalt: recSalt20 }, legacyB01_20, recToken20, identityA)) === null);
 
-  // M1 四象限 write→read 矩陣（修正輪——四象限配置（wrapRec，recKekHkdf）逐格對帳面；
+  // M1 四象限 write→read 矩陣（檢查對齊——四象限配置（wrapRec，recKekHkdf）逐格對帳面；
   // 每格「write：blob 前綴（或配對門拒）→ read：同 cfg 自解行為」＋超集 cfg 讀子集 blob）。
   {
     const qCfg10 = (): NoteCryptoConfig => ({ ...TACET, wrapRec: 'jr1r.' });
@@ -2079,7 +2079,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   }
 
   // 源碼窗（計數錨——接線漂移即 RED；needle+1 式對照 [14][15][16] 母型；錨為敘述形且 docstring 零咬；
-  // 修正輪 M1 後配對門落地——窗口全體重錨隨修正形；「HKDF 腿零借 cfg.wrap」的接線由 R2 贊毒化承載）
+  // 檢查對齊 M1 後配對門落地——窗口全體重錨隨修正形；「HKDF 腿零借 cfg.wrap」的接線由 R2 贊毒化承載）
   const noteCryptoSrc20 = await srcOf('../src/client/note-crypto.ts');
   await A('[20] 源碼窗：專屬 AAD 接線恰 2（wrap seal 面與 unwrap open 面各恰 1——回收共用面復活/錯位接線即變異）',
     noteCryptoSrc20.split("kek, 'notekey-rec')").length === 2 && noteCryptoSrc20.split("'notekey-rec', cfg.wrapRec)").length === 2);
@@ -2100,7 +2100,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
     && noteCryptoSrc20.split('!cfg.wrapRec ||').length === 2);
 
   // R 系毒化（自毒化驗齒——/tmp 拷貝樹 fresh import，出生即棄；期望值真跑後定值，帳面直覺禁沿；
-  // 修正輪：R2 重錨＝info 字面→KAT 世代齒、R4 label 對齊、R5 新案＝配對門（C1/C2 唯一閘承載））
+  // 檢查對齊：R2 重錨＝info 字面→KAT 世代齒、R4 label 對齊、R5 新案＝配對門（C1/C2 唯一閘承載））
   const getBuiltin20 = (id: string): unknown =>
     (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
   const fs20 = getBuiltin20('node:fs') as {
@@ -2191,7 +2191,7 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
         await A('[20] 毒化 R4 前綴借用面復活 → 寫面 fallback jr1w.（毒化執行證——契約翻轉齒由 P1 前綴斷言承載）',
           typeof blob === 'string' && blob.startsWith('jr1w.'), String(blob ?? '').slice(0, 8));
       });
-    // R5 忠實回退（修正輪新增案——C1/C2 拒寫面的唯一閘承載；designated）：
+    // R5 忠實回退（檢查對齊新增案——C1/C2 拒寫面的唯一閘承載；designated）：
     // 門分支回寫生產形（wrapRec 面吃 legacy 派生＋notekey-rec 契約），尾端
     // cfg.wrap 腿原樣留任（wrapRec 缺席續走 cfg.wrap＋poisoned deriveRecKef HKDF）＝
     // 兩歷史缺陷象限（C1＝jr1r.×PBKDF2／C2＝jr1w.×HKDF）寫出面精確重現——毒化代碼照寫、
