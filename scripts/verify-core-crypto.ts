@@ -451,7 +451,18 @@ try {
   }
   await A('與 @scure/bip39 參照 200 組雙向一致', refOk);
 } catch {
-  await A('與 @scure/bip39 參照 200 組雙向一致', false, '參照套件未安裝（devDependencies @scure/bip39）');
+  // 斷鏈（symlink 落空）與真缺席要分流：裸 npm ci 環境的確定性病是「參照組斷鏈」——
+  // 訊息指向 vendor 修復（prepare-core-pkg.cjs），不是泛化「未安裝」（對斷鏈態毫無作用＝誤導指示）。
+  const fsMod = (globalThis as unknown as { process?: { getBuiltinModule?: (id: string) => { lstatSync?: (p: string) => { isSymbolicLink(): boolean }; existsSync?: (p: string) => boolean } | undefined } }).process?.getBuiltinModule?.('node:fs');
+  const isBrokenLink = !!fsMod?.lstatSync && !!fsMod.existsSync && (() => {
+    try {
+      return fsMod.lstatSync('@scure/bip39').isSymbolicLink() && !fsMod.existsSync('@scure/bip39');
+    } catch { return false; } // ENOENT＝真缺席（未安裝），不是斷鏈
+  })();
+  await A('與 @scure/bip39 參照 200 組雙向一致', false,
+    isBrokenLink
+      ? '參照套件斷鏈（@scure/bip39 symlink realpath 不存在）——重跑 npm ci（plain）再跑 scripts/prepare-core-pkg.cjs vendor 修復'
+      : '參照套件未安裝（devDependencies @scure/bip39）');
 }
 
 // 與現行包裹鏈相容：words 造的 hex64 走 recTokenHash/wrapNoteKeyWithRecToken 原樣
