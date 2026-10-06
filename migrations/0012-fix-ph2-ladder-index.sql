@@ -1,4 +1,4 @@
--- 0012-ph2-ladder-index-fix.sql：ph2_ladder 索引修正（外審報告 #3，t_87ef62dd）。
+-- 0012-fix-ph2-ladder-index.sql：ph2_ladder 索引修正（外審報告 #3，t_87ef62dd）。
 --
 -- 前置：0011-ph2-ladder.sql（2026-10-05 已部署 prod＝禁回改本卡對位說明）。
 -- 0011 缺陷（外審複證屬實）：
