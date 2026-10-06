@@ -45,6 +45,8 @@ import {
   verifyArgonKat,
   wrapNoteKey3,
   unwrapNoteKey3,
+  wrapNoteKeyShare3,
+  unwrapNoteKeyShare3,
   wrapNoteKeyDual3,
   unwrapNoteKeyDual3,
   wrapNoteKey4,
@@ -453,10 +455,13 @@ try {
 } catch {
   // 斷鏈（symlink 落空）與真缺席要分流：裸 npm ci 環境的確定性病是「參照組斷鏈」——
   // 訊息指向 vendor 修復（prepare-core-pkg.cjs），不是泛化「未安裝」（對斷鏈態毫無作用＝誤導指示）。
+  // 路徑錨定 repo root（t_87ef62dd NIT-1）：裸 '@scure/bip39' 是 CWD 相對——他 cwd 跑閘
+  // （如 scripts/ 子目錄）會把斷鏈態誤報「未安裝」；錨 import.meta.url 起手＝CWD 無關恆真。
   const fsMod = (globalThis as unknown as { process?: { getBuiltinModule?: (id: string) => { lstatSync?: (p: string) => { isSymbolicLink(): boolean }; existsSync?: (p: string) => boolean } | undefined } }).process?.getBuiltinModule?.('node:fs');
+  const repoRootRef = new URL('../node_modules/@scure/bip39', import.meta.url).pathname.replace(/\/$/, '');
   const isBrokenLink = !!fsMod?.lstatSync && !!fsMod.existsSync && (() => {
     try {
-      return fsMod.lstatSync('@scure/bip39').isSymbolicLink() && !fsMod.existsSync('@scure/bip39');
+      return fsMod.lstatSync(repoRootRef).isSymbolicLink() && !fsMod.existsSync(repoRootRef);
     } catch { return false; } // ENOENT＝真缺席（未安裝），不是斷鏈
   })();
   await A('與 @scure/bip39 參照 200 組雙向一致', false,
@@ -884,6 +889,56 @@ await A(`hexToBytes 全形數字（'２ｆ'）→ Bytes 等值（NFKC 窗殲滅�
 await A('bip39 hexToBytes 同步（HEX64_RE 自守前提下的舊向量不變）', (await bip.recTokenToWords('ab'.repeat(32)))?.length === 24);
 await A('unwrap：鹽 hex 非法字元 → 假錯誤誘餌面 null（原碼靜默歸零會錯誤炸出成功路徑）',
   (await unwrapNoteKey(TACET2, dual.wrapped, passD, 'a'.repeat(31) + 'z')) === null);
+// ── 13-2. 包裹前綴快檢上移（t_87ef62dd，外審 #2）：錯前綴 junk 在 KDF 派生前即 null——
+// 母型 unwrapNoteKey4 入口快檢（argon2.ts）；五入口（jr1w./jrsw./jr3w./jr3s.＋recToken 兩腿）
+// 行為恆 null 不拋（快檢同向 null＝契約零變——錯前綴本就由 openNoteKey:417 拒）；
+// 收益面＝錯前綴試探不再付 600k PBKDF2／64MiB Argon2id KDF 成本（計時面對真 KDF 斷言）。
+{
+  const junkPrefix = 'jr9w.' + wrapped.slice('jr1w.'.length); // 真形 payload 錯前綴（junk 前綴面）
+  const t0Junk = performance.now();
+  const junkRc = [
+    await unwrapNoteKey(TACET, junkPrefix, pass, salt),
+    await unwrapNoteKeyShare(TACET, junkPrefix, pass, salt),
+    await unwrapNoteKey3(TACET3, junkPrefix, pass, salt),
+    await unwrapNoteKey3(TACET3, junkPrefix, 'wrong-passphrase', salt),
+    await unwrapNoteKeyShare3(TACET3, junkPrefix, pass, salt),
+  ];
+  const tJunkMs = performance.now() - t0Junk;
+  await A('錯前綴 junk 試探（真 payload 錯前綴面）五入口恆 null 不拋（快檢同向 null＝契約零變）', junkRc.every(r => r === null), JSON.stringify(junkRc.map(r => r === null)));
+  // 行為承載面（KDF 未走即 null）：PBKDF2 600k ≈ 60-150ms／Argon2id 64MiB ≈ 120-150ms——
+  // 任一入口真付 KDF 即超帽；快檢落地後五次試探總計 ≪1ms（實測 <1ms；帽 30ms＝數量級餘裕）。
+  // 結構面（真防線）＝下方源碼計數錨＋接線形——計時帽是行為輔助面（未來快機 PBKDF2 縮水時
+  // 計數錨仍承載）；對照組只承載「正確前綴快檢後仍真 unwrap」＝零變更契約行為面（不計時——
+  // 絕對時距對照在快慢機間是 flake 源，tacet-dev runner 母型）。
+  await A('錯前綴 junk 試探五入口計時帽 ≪ KDF 成本（快檢在 deriveKek/deriveKekArgon 前——真付 KDF 即超帽）', tJunkMs < 30, 'junk5=' + tJunkMs.toFixed(2) + 'ms');
+  const t2Legacy = performance.now();
+  const legacyBack = await unwrapNoteKey(TACET, wrapped, pass, salt);
+  await A('對照組：正確前綴 unwrap 真付 KDF 且救回 noteKey（快檢零變更契約——正確路徑行為面）',
+    legacyBack !== null && hex(new Uint8Array(await crypto.subtle.exportKey('raw', legacyBack))) ===
+    hex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey))), 'elapsed=' + (performance.now() - t2Legacy).toFixed(2) + 'ms');
+  // 源碼計數錨（快檢五點＋recToken 雙腿接線＝tacet-dev「條款與接線分離」）：五入口 startsWith 快檢
+  // 恰 5（摘任一＝計數變異）；recToken 雙腿錨——jr1r. 面在 deriveRecKek 前、cfg.wrap 面在
+  // deriveRecLegacyKek 前的相鄰形（錯位接線——快檢搬進 KDF 之後＝形變異即 RED）。
+  const ncSrc132 = await srcOf('../src/client/note-crypto.ts');
+  const arSrc132 = await srcOf('../src/client/argon2.ts');
+  const qcNc = (ncSrc132.match(/if \(!wrapped\.startsWith\(cfg\.(wrap|wrapShare|wrapRec|wrap)\)\) return null;/g) ?? []).length;
+  const scNc = ncSrc132.split('wrapped.startsWith(cfg.wrapRec)').length - 1; // jr1r. 腿條件面（跳過形）
+  const qcAr = (arSrc132.match(/if \(!wrapped\.startsWith\(cfg\.(wrap3|wrapShare3)\)\) return null;/g) ?? []).length;
+  await A('源碼計數錨：startsWith 快檢恰 6 條（note-crypto 4＝jr1w./jrsw./舊腿終面/jr1r. 條件面＋argon2 2；錯前綴試探防線——摘任一條即計數變異 RED）',
+    qcNc === 3 && scNc === 1 && qcAr === 2, 'nc=' + qcNc + ' sc=' + scNc + ' ar=' + qcAr);
+  await A('源碼計數錨：recToken 雙腿快檢接線形（jr1r. 腿條件面在 deriveRecKek 前——禁 return null 短路雙試；舊面終面接線在 deriveRecLegacyKek 前）',
+    /if \(cfg\.wrapRec && cfg\.recKekHkdf && wrapped\.startsWith\(cfg\.wrapRec\)\) \{\n {6}const recKek = await deriveRecKek\(/.test(ncSrc132)
+    && /if \(!cfg\.wrap\) return null;\n {4}if \(!wrapped\.startsWith\(cfg\.wrap\)\) return null; \/\/ 快速前綴快檢：錯前綴 junk 免付 600k PBKDF2 成本\n {4}const legacyKek = await deriveRecLegacyKek\(/.test(ncSrc132));
+  // 毒化錨前綴自檢（錨窗同字面點數——毒化矩陣 Q 案的錯位防線；jr1w./舊腿兩行同註解開頭——
+  // 錨帶全註解頭消歧：『（t_87ef62dd）』＝jr1w. 面、『：錯前綴』＝舊腿終面）
+  await A('快檢錨前綴自檢：五錨各恰 1（split 計數帳）',
+    ncSrc132.split('if (!wrapped.startsWith(cfg.wrap)) return null; // 快速前綴快檢（t_87ef62dd）').length === 2
+    && ncSrc132.split('if (!wrapped.startsWith(cfg.wrap)) return null; // 快速前綴快檢：').length === 2
+    && ncSrc132.split('if (!wrapped.startsWith(cfg.wrapShare)) return null; // 快速前綴快檢').length === 2
+    && ncSrc132.split('if (cfg.wrapRec && cfg.recKekHkdf && wrapped.startsWith(cfg.wrapRec)) {').length === 2
+    && arSrc132.split('if (!wrapped.startsWith(cfg.wrap3)) return null;').length === 2
+    && arSrc132.split('if (!wrapped.startsWith(cfg.wrapShare3)) return null;').length === 2);
+}
 await A('unwrapNoteKeyDual：salt1 hex 非法字元 ' + 'z' + ' → null（鹽內嵌族 own 檢查照舊——收口本體=鹽外置族）',
   (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31) + 'z')) === null);
 await A('unwrapNoteKeyDual：salt1 hex 奇數長 → null', (await unwrapNoteKeyDual(TACET2, dual.wrapped, passD, pinD, 'a'.repeat(31))) === null);
@@ -1012,6 +1067,20 @@ await A('鍛造壞 base64 面字符 → unwrapNoteKey null（openNoteKey unb64 �
 await A('openNoteKey 直接呼叫：壞 base64 → null 不拋（本體吞收點）', await (async () => {
   const kekC = await craftKek;
   return (await openNoteKey('jr1w.' + '!!not-base64!!', kekC, 'notekey', 'jr1w.')) === null;
+})());
+
+//── 13-3. 發行 tarball 治理面（外審 #7 的封閉集承載——open-card-pr.sh 摘除的 tarball 面對位；t_87ef62dd）──
+//（pack 驗證讀 package.json files 白名單——npm 不可用環境 = 顯性 SKIP 形自守衛，非 silent true）
+await A('[22] 發行 tarball 零 open-card-pr.sh（治理掃蕩面——pack 白名單逐檔對帳），pack 不可用 = SKIP 顯形', await (async () => {
+  try {
+    const cp132 = (globalThis as unknown as { process?: { getBuiltinModule?: (id: string) => { execFileSync?: (c: string, a: string[], o: Record<string, unknown>) => { toString(enc: string): string } } } }).process?.getBuiltinModule?.('node:child_process');
+    if (!cp132?.execFileSync) return false; // 自守衛：缺席＝顯性 FAIL（非 silent true）
+    const out132 = cp132.execFileSync('npm', ['pack', '--json', '--dry-run'], { cwd: new URL('..', import.meta.url).pathname, encoding: 'buffer', timeout: 120000 });
+    const j132 = JSON.parse(out132.toString('utf8')) as { files?: { path: string }[] }[];
+    const files132 = (j132[0]?.files ?? []).map((f) => f.path);
+    const g132 = files132.filter((p) => p === 'scripts/open-card-pr.sh' || p.startsWith('scripts/'));
+    return files132.length > 0 && !files132.includes('scripts/open-card-pr.sh') && g132.length === 2;
+  } catch { return false; }
 })());
 
 // ── 14. 效能形契約（零行為變更——輸出 byte 等價是合約；錨面咬「形」） ──
@@ -1931,7 +2000,7 @@ console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2
   await A('[19] ladder kinds 契約：legacy/v2 兩形（常數面）', PH2_LADDER_KIND_LEGACY === 'legacy' && PH2_LADDER_KIND_V2 === 'v2');
   // 值主權威行為面（真 node:sqlite 直驅本體）：建表走 fork migration 同形（PK=ph2）。
   {
-    const DatabaseSync19 = DatabaseSync as new (p: string) => { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number | bigint }; get: (...p: unknown[]) => unknown } };
+    const DatabaseSync19 = DatabaseSync as new (p: string) => { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number | bigint }; get: (...p: unknown[]) => unknown; all: (...p: unknown[]) => unknown[] } };
     const db19 = new DatabaseSync19(':memory:');
     db19.exec('CREATE TABLE users (account_id TEXT PRIMARY KEY, ph2 TEXT)');
     db19.exec("INSERT INTO users (account_id, ph2) VALUES ('acc19', 'ph2-new')");
@@ -1940,6 +2009,38 @@ console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2
     const ddlPos19 = migSrc19.indexOf('CREATE TABLE IF NOT EXISTS ph2_ladder');
     const ddl19 = migSrc19.slice(ddlPos19, migSrc19.indexOf(';', ddlPos19) + 1);
     db19.exec(ddl19.replace(/IF NOT EXISTS /g, ''));
+    // 0012 對位面（t_87ef62dd）：0011 上線後的索引修正 migration——0011 帶冗餘
+    // idx_ph2_ladder_ph2（PK=ph2 同鍵 duplicate）且 account_id 零索引；0012 DROP＋CREATE
+    // 修正面在 fork 動線於 0011 之後執行（本段照序：建 0011 表＋0011 原索引 → 0012）。
+    {
+      const idxPos19 = migSrc19.indexOf('CREATE INDEX IF NOT EXISTS idx_ph2_ladder_ph2');
+      if (idxPos19 >= 0) db19.exec(migSrc19.slice(idxPos19, migSrc19.indexOf(';', idxPos19) + 1)); // 0011 冗餘索引原樣（0012 要 DROP 的缺陷面）
+      const src12 = await srcOf('../migrations/0012-ph2-ladder-index-fix.sql');
+      await A('[19] 0011 對位錨：冗餘 idx_ph2_ladder_ph2 在場（0012 DROP 面＝0011 冗餘索引原樣）',
+        idxPos19 >= 0 && src12.includes('DROP INDEX IF EXISTS idx_ph2_ladder_ph2'));
+      const stmts12 = ['DROP INDEX IF EXISTS idx_ph2_ladder_ph2;', 'CREATE INDEX IF NOT EXISTS idx_ph2_ladder_account ON ph2_ladder(account_id);'];
+      await A('[19] 0012 語句面：DROP 冗餘＋CREATE account_id 兩句（報告原樣；DROP 在前——殘留冗餘即 RED）',
+        src12.split('DROP INDEX IF EXISTS idx_ph2_ladder_ph2;').length === 2
+        && src12.split('CREATE INDEX IF NOT EXISTS idx_ph2_ladder_account ON ph2_ladder(account_id);').length === 2
+        && src12.indexOf('DROP INDEX') < src12.indexOf('CREATE INDEX'));
+      await A('[19] 0012 非 UNIQUE 契約（一帳多舊值設計——ladder 多歷列並存；UNIQUE 面殘留即 RED）',
+        /CREATE (UNIQUE )?INDEX/.test(src12) && !src12.includes('UNIQUE INDEX'));
+      for (const st12 of stmts12) db19.exec(st12);
+      const idxAfter = db19.prepare('SELECT name FROM sqlite_master WHERE type = \'index\' AND tbl_name = \'ph2_ladder\'').all() as { name: string }[];
+      const idxNames = idxAfter.map((r) => r.name).filter((n) => n !== 'sqlite_autoindex_ph2_ladder_1');
+      await A('[19] 0012 pragma 動線：冗餘 ph2 index 摘除＋account_id index 在場（n 前後查——索引集恰 {idx_ph2_ladder_account}）',
+        idxNames.length === 1 && idxNames[0] === 'idx_ph2_ladder_account', JSON.stringify(idxNames));
+      await A('[19] 0012 冪等：0012 語句重跑零炸（IF EXISTS/IF NOT EXISTS 面——fork 重入動線）',
+        await (async () => { try { db19.exec(stmts12.join('\n')); return true; } catch { return false; } })());
+      // EXPLAIN QUERY PLAN：account_id 查詢走 SEARCH（非 SCAN——修復收益的直接承載面）；
+      // ph2 查面走 autoindex（PK）＝冗餘索引摘除後照 SEARCH。
+      const planAcc = String((db19.prepare('EXPLAIN QUERY PLAN SELECT * FROM ph2_ladder WHERE account_id = ?').get('acc19') as { detail?: string } | null)?.detail ?? '');
+      const planPh2 = String((db19.prepare('EXPLAIN QUERY PLAN SELECT account_id FROM ph2_ladder WHERE ph2 = ?').get('old-19') as { detail?: string } | null)?.detail ?? '');
+      await A('[19] 0012 EXPLAIN 動線：account_id 查詢 SEARCH ph2_ladder (idx_ph2_ladder_account)（非 SCAN）',
+        planAcc.includes('SEARCH ph2_ladder USING INDEX idx_ph2_ladder_account') && !/(^|\s)SCAN\s/.test(planAcc), planAcc);
+      await A('[19] 0012 EXPLAIN PK 面：ph2 查詢仍 SEARCH autoindex（冗餘索引摘除零傷——非 SCAN）',
+        planPh2.includes('SEARCH') && !/(^|\s)SCAN\s/.test(planPh2), planPh2);
+    }
     const env19 = {
       DB: {
         prepare(sql: string) {
@@ -2122,14 +2223,14 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
   await A('[20] 源碼窗：配對門接線形恰 1（wrapRec 或 recKekHkdf 在場即入門——單欄短路復活即形變異）',
     noteCryptoSrc20.split('if (cfg.wrapRec || cfg.recKekHkdf) {').length === 2
     && noteCryptoSrc20.split("if (!cfg.wrapRec || !cfg.recKekHkdf) throw new Error('ERR_REC_CFG_PARTIAL');").length === 2);
-  await A('[20] 源碼窗：HKDF 專責接線恰 1（兩欄齊備守衛——派生雙模/C2 借形復活即變異）',
-    noteCryptoSrc20.split('if (cfg.wrapRec && cfg.recKekHkdf) {').length === 2);
+  await A('[20] 源碼窗：HKDF 專責接線恰 1（兩欄齊備守衛＋t_87ef62dd 快檢條件面——派生雙模/C2 借形復活/短路回歸即變異）',
+    noteCryptoSrc20.split('if (cfg.wrapRec && cfg.recKekHkdf && wrapped.startsWith(cfg.wrapRec)) {').length === 2);
   await A('[20] 源碼窗：PBKDF2 fallback 殘留歸零＋deriveRecKek 呼叫面恰 3（非空洞計數：fallback 形歸零＋def＋兩呼叫端在場——C2 收口面）',
     noteCryptoSrc20.split('if (!cfg.recKekHkdf) return deriveKek').length === 1
     && noteCryptoSrc20.split('deriveRecKek(').length === 4);
   await A('[20] 源碼窗：deriveRecLegacyKek def＋呼叫恰 3（split 帳＝出現＋1；legacy 本體單一真相——寫面＋讀面同源）',
     noteCryptoSrc20.split('deriveRecLegacyKek(').length === 4);
-  await A('[20] 源碼窗：cfg.wrapRec 敘述形恰 2（配對門 XOR 一對——借用面復活即計數變異）',
+  await A('[20] 源碼窗：cfg.wrapRec 敘述形恰 2（配對門 XOR 一對——借用面復活即計數變異；t_87ef62dd 快檢面零咬：腿接線是 startsWith 閉括號形非 XOR 敘述形）',
     noteCryptoSrc20.split('cfg.wrapRec ||').length === 3
     && noteCryptoSrc20.split('!cfg.wrapRec ||').length === 2);
 
@@ -2285,6 +2386,44 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
       typeof fs20!.existsSync === 'function' ? fs20!.existsSync!(p) : false;
     await A('[20] 毒化樹零殘留（本 run 喚出 ' + trees20.length + ' 棵全清——封閉集判準）',
       trees20.length === 6 && trees20.every((t) => !existsSync20(t)));
+  }
+}
+
+// ── 21. CI 供應鏈面（npm ci --ignore-scripts＋Dependabot runner 分流）──
+//
+// 外審 #1 的落地裁定（t_87ef62dd）：public 密碼學套件 repo 的 CI 安裝不吃依賴腳本——
+// --ignore-scripts 是安裝面防線（postinstall/preinstall/prepare 全免執行）；
+// Dependabot PR 走 GitHub-hosted runner 隔離（self-hosted runner 不接機器人分支）。
+// 靜態錨面：workflow YAML 本體的接線（job-if C1 母型＋actor 分流＋runs-on 三元）。
+console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 分流）');
+{
+  const srcVy21 = await srcOf('../.github/workflows/verify.yml');
+  const srcPy21 = await srcOf('../.github/workflows/publish.yml');
+  await A('[21] verify.yml：npm ci --ignore-scripts（安裝面防線——依賴腳本零在場）',
+    srcVy21.includes('npm ci --ignore-scripts'));
+  await A('[21] verify.yml：job-if 同 repo 保衛＋dependabot actor 分流（C1 母型擴一條 actor 分流——機器人分支不上 self-hosted）',
+    /if: github\.event_name != 'pull_request' \|\| \(github\.event\.pull_request\.head\.repo\.full_name == github\.repository && github\.actor != 'dependabot\[bot\]'\)/.test(srcVy21));
+  await A('[21] verify.yml：runs-on dependabot 三元（actor 面 GitHub-hosted ubuntu-latest 隔離；其餘 self-hosted）',
+    /runs-on: \$\{\{ github\.event_name == 'pull_request' && github\.actor == 'dependabot\[bot\]' && 'ubuntu-latest' \|\| 'self-hosted' \}\}/.test(srcVy21));
+  await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
+    srcPy21.includes('npm ci --ignore-scripts'));
+  // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
+  const fs21 = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { existsSync?: (p: string) => boolean } | undefined };
+  }).process?.getBuiltinModule?.('node:fs');
+  await A('[21] open-card-pr.sh 摘除（主機路徑＋GITHUB_TOKEN 線索面；fs 原語缺席＝顯性 FAIL 自守衛）',
+    !!fs21?.existsSync && !fs21.existsSync(new URL('../scripts/open-card-pr.sh', import.meta.url).pathname));
+  // NIT-1 自證（isBrokenLink repo-root 錨定）：根錨路徑在場形（本 repo 常態 @scure 在場）
+  // ＋CWD 無關面（probe 眼：lstat 走 import.meta.url 起手——cwd=任意時仍指 repo）。
+  // 缺陷形（裸 '@scure/bip39' 殘留）＝源碼負向咬（regex 敘述形）。
+  {
+    const gateSrc21 = await srcOf('../scripts/verify-core-crypto.ts');
+    await A('[21] NIT-1：isBrokenLink 路徑錨 = import.meta.url 起手（repo root 錨定——CWD 相對 lstat 誤報面收口）',
+      /const repoRootRef = new URL\('\.\.\/node_modules\/@scure\/bip39', import\.meta\.url\)/.test(gateSrc21));
+    await A('[21] NIT-1：裸 CWD 相對 lstat 殘留歸零（缺陷形負向——lstatSync\(\'@scure 直接形零殘留）',
+      !/lstatSync\('@scure\/bip39'\)/.test(gateSrc21) && !/existsSync\('@scure\/bip39'\)/.test(gateSrc21));
+    await A('[21] NIT-1：isBrokenLink 判準本體在場（lstat isSymbolicLink && !existsSync——斷鏈 vs 真缺席分流保線）',
+      /isSymbolicLink\(\) && !fsMod\.existsSync\(repoRootRef\)/.test(gateSrc21));
   }
 }
 

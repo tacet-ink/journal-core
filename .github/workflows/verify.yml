@@ -13,8 +13,10 @@ jobs:
     # self-hosted runner：labels 自訂 journal-core ＋預設 self-hosted
     # 同 repo 保衛：public repo ＋ self-hosted ＝ 只接同 repo branch——fork／
     # 他 repo branch 的 pull_request 一律不上 runner（host-compromise 防線）
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, journal-core]
+    # Dependabot 分流（t_87ef62dd）：PR actor＝dependabot[bot] → GitHub-hosted
+    # ubuntu-latest（供應鏈隔離——self-hosted runner 不接機器人分支）；其餘同上。
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && 'ubuntu-latest' || 'self-hosted' }}
     steps:
       # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定：密碼學套件 repo
       # 的 CI 不吃浮動 tag）
@@ -25,8 +27,11 @@ jobs:
         with:
           node-version: 26
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (scripts off — supply-chain face)
+        # --ignore-scripts：依賴腳本零在場（postinstall/preinstall/prepare 全免執行——
+        # 供應鏈面；verify/typecheck 需要的 tsc/@scure 純 JS 在場即足）。需要腳本時
+        # 分步驟顯式跑，禁恢復全量 scripts（t_87ef62dd 裁定）。
+        run: npm ci --ignore-scripts
 
       - name: Typecheck
         run: npm run typecheck

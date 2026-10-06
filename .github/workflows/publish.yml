@@ -24,8 +24,12 @@ jobs:
         with:
           node-version: 26   # npm >= 11.5.1（Trusted publishing 最低需求）
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (scripts off — supply-chain face)
+        # --ignore-scripts：依賴腳本零在場（供應鏈面）。本 workflow 之後的步驟
+        # （typecheck/verify/publish）需要的只有 devDeps 純 JS 在場即足——preprepare/
+        # prepare 依賴腳本不自動跑；需要時分步驟顯式執行，禁恢復全量 scripts
+        #（t_87ef62dd 裁定；publish 面有 typecheck+verify 先行＝腳本面零在場即安全）。
+        run: npm ci --ignore-scripts
 
       - name: Typecheck
         run: npm run typecheck
