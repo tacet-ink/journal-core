@@ -35,7 +35,11 @@ export type Ph2LadderKind = 'legacy' | 'v2';
 export const PH2_LADDER_KIND_LEGACY = 'legacy';
 export const PH2_LADDER_KIND_V2 = 'v2';
 
-/** ladder 行形（fork schema 對位面）。 */
+/** ladder 行形（fork schema 對位面）。
+ *  欄名映射註解（讀帳面——schema 欄名 vs Row 形名差異；t_87ef62dd #13 只補註解不改名，
+ *  禁 consumer breaking）：schema 欄是 `upgraded_at`（D1/SQLite 欄面——「舊形被覆蓋的時刻」），
+ *  Row 形名 `createdAt`（fork 消費面語意——「該舊值歷列建立時刻」）；同一值、兩層命名——
+ *  findByOldPh2 讀取面做 upgraded_at→createdAt 的逐欄映射，改任一層名都是 breaking（禁動）。 */
 export interface Ph2LadderRow {
   accountId: string;
   ph2Kind: string;

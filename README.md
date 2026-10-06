@@ -17,8 +17,8 @@
 
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
-npm ci
-npm run verify   # 432 assertions, all green, run against the real modules (no mocks)
+npm ci --ignore-scripts
+npm run verify   # 455 assertions, all green, run against the real modules (no mocks)
 ```
 
 ```ts
@@ -118,7 +118,8 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 ## 驗證（Verification）
 
 ```sh
-npm run verify   # 432 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm ci --ignore-scripts
+npm run verify   # 455 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -127,9 +128,16 @@ npm run verify   # 432 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋ladder 表與重取鹽面 [19]（ph2_ladder 原語／upsert 值主權威行為面／unwrapNoteKeyDual4WithSalt）
                  # ＋常駐毒化矩陣 [16][18]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
+                 # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
+                 # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner 分流＋腳本摘除＋NIT-1 錨）
+                 # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
 ```
 
 - 產品碼**零執行時依賴**（WebCrypto 原語）；devDependencies 僅閘用（typescript、@scure/bip39 對照、workers types）。
+- **node_modules 出廠態說明**：本 repo 的 `@scure/bip39`／`@noble/hashes` 由閘的 vendor 修復
+  腿（`scripts/prepare-core-pkg.cjs`，plain `npm ci` 後執行）補齊 symlink 與 vendored 副本——
+  與 devDependencies 安裝態等價（provenance 註記：現場樹的非 pristine 安裝形態屬此機制，
+  非手工污染；reproduce 走 plain `npm ci` 後跑 prepare 腿即收斂）。
 - Argon2id 雙載體：node 走 `node:crypto`（Node 24.7+ 原生）、瀏覽器走 hash-wasm（wasm 內嵌），
   RFC 9106 標準向量逐位元一致；無載體即 throw（禁 fallback 鐵律）。
 - BIP39 原語自製零依賴，與 @scure/bip39 參照 200 組雙向對照（僅 entropy↔words 轉寫層，禁用其 seed 派生）。
@@ -186,14 +194,41 @@ tacet 遷移層職責（v0.2.0 世代收口）。
 
 ### 例外契約（錯誤碼語意）
 
-- 空 identity（guest 派生）：加密面拋 `ERR_NO_IDENTITY`、解密面回 `null`
-  （K_u = SHA-256(prefix ‖ '') 會靜默產出「空帳號金鑰」＝誤配炸彈，兩面皆 fail-closed）。
-- 空 PIN（`wrapNoteKeyDual`/`wrapNoteKeyDual3`/`wrapNoteKeyDual4`）：拋 `ERR_PIN_EMPTY`——與
-  「功能未配置」（`ERR_DUAL_NOT_CONFIGURED`/`ERR_JR3W_NOT_CONFIGURED`/`ERR_JR4W_NOT_CONFIGURED`/
-  `ERR_JR4D_NOT_CONFIGURED`）語意分離。
-- `hexToBytes` fail-closed：非法 hex（奇數長度/非 hex 字元/空字串）拋 `ERR_BAD_HEX`，
-  不再 parseInt 靜默歸零（假金鑰生產器）。unwrap 家族的 try/catch 承接＝跨前綴鐵律
-  （回 null 不拋）不變。
+**客戶端（client/）**
+
+| 錯誤碼 | 拋出面 |
+| --- | --- |
+| `ERR_NO_IDENTITY` | guest 加密面空 identity（解密面同面回 `null`） |
+| `ERR_GUEST_NOT_CONFIGURED` | `encryptNote` 未配置 `cipherGuest` |
+| `ERR_BAD_HEX` | `hexToBytes` 非法 hex（奇數長度／非 hex 字元／空字串） |
+| `ERR_WRAP_NOT_CONFIGURED` | 包裹未配置（`sealNoteKey` 本體＋`wrapNoteKey` 入口雙防線） |
+| `ERR_WRAPTAMPER_LEN32` | `sealNoteKey` noteKey 非 32B（內部契約面） |
+| `ERR_DUAL_NOT_CONFIGURED` | `wrapNoteKeyDual` 未配置 `wrapDual`／`pinSaltPrefix` |
+| `ERR_SHARE_NOT_CONFIGURED` | `wrapNoteKeyShare` 未配置 `wrapShare` |
+| `ERR_LOCAL_NOT_CONFIGURED` | `encryptLocal` 未配置 `cipherLocal` |
+| `ERR_ATTACH_NOT_CONFIGURED` | `encryptAttach` 未配置 `cipherAttach` |
+| `ERR_PIN_EMPTY` | `wrapNoteKeyDual/3/4` 空 PIN（≠ 未配置——語意分離） |
+| `ERR_PINLOCK_NOT_CONFIGURED` | pinlock 未配置三欄任一 |
+| `ERR_PINLOCK_EMPTY` | pinlock 空 PIN |
+| `ERR_REC_CFG_PARTIAL` | `wrapRec`／`recKekHkdf` 部分配置（配對門拒寫） |
+| `ERR_REC_KEK_SALT` | `recKekSalt` 非 16B hex（HKDF 世代鹽域 fail-closed） |
+| `ERR_JR3W_NOT_CONFIGURED` | `wrapNoteKey3`／`wrapNoteKeyDual3`（＋`share` 面）未配置 |
+| `ERR_JR3S_NOT_CONFIGURED` | `wrapNoteKeyShare3` 未配置 `wrapShare3` |
+| `ERR_JR4W_NOT_CONFIGURED` | `wrapNoteKey4` 未配置 `wrap4` |
+| `ERR_JR4D_NOT_CONFIGURED` | `wrapNoteKeyDual4` 未配置 `wrapDual4` |
+| `ERR_ARGON2_TAGLEN` | Argon2id 載體 tag 非 32B（載體契約面） |
+| `ERR_ARGON2_UNAVAILABLE` | 無 Argon2id 載體（node<24.7 且無 hash-wasm 注入——禁 fallback） |
+
+**伺服端（server/）＋閘**
+
+| 錯誤碼 | 拋出面 |
+| --- | --- |
+| `ERR_BAD_REQUEST` | auth 動線缺 PH1 等必填（400 面回應） |
+| `ERR_RATE_LIMITED` | 限流命中（429 面回應） |
+| `ERR_RATE_TABLE_NAME` | 限流表名非法字元（SQL 面 fail-closed） |
+| `ERR_SQLITE_UNAVAILABLE` | 驗證閘環境 node:sqlite 缺席 |
+| `ERR_FS_UNAVAILABLE` | 驗證閘環境 node:fs 缺席 |
+
 - `PinLockConfig`：解包輸出的 noteKey 恆 `extractable=true`（鐵律，非可調選項）——
   config 只帶三個前綴欄（pinLock/pinLockSaltPrefix/pinLockAad），缺任一即拒。
 
@@ -257,7 +292,7 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 432 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 455 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
 
