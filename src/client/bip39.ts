@@ -82,7 +82,7 @@ export async function generateBip39Words(entropyBytes?: Uint8Array): Promise<str
   return entropyToIndexes(entropy, checksum).map(idx => wordlist[idx]);
 }
 
-// ── 驗證閘固定種子樣本（flake 歸零；t_d1cf3846）──────────────────────────────
+// ── 驗證閘固定種子樣本（flake 歸零）──────────────────────────────
 //
 // 背景：checksum 統計面「錯一詞 64 樣本 ≥63 被抓」用真隨機取樣時，P(漏 ≥2)≈0.4%，
 // 偶發 62/64＝閘 flake（2026-09-19 session 實證）。治本是固定種子：xorshift32 以
