@@ -26,7 +26,7 @@
  *
  * ⚠️ 鐵律：unwrap 輸出 noteKey 一律 extractable=true（要能再包裹）；KEK/KEK2 nonextractable。
  * ⚠️ deriveArgon2id 禁 fallback（零知識）：無載體即 throw，禁降級 PBKDF2 或 zeros 兜底。
- * ⚠️ wrappedRec（復原套件）v0.2.0 批卡⑤世代化：KEK_rec 派生世代（HKDF，recKekHkdf 配置面）
+ * ⚠️ wrappedRec（復原套件）世代化：KEK_rec 派生世代（HKDF，recKekHkdf 配置面）
  * ＋專用前綴 jr1r.（wrapRec）落地在 note-crypto.ts；本檔 recToken 256-bit 實體因子、
  * KEK 強度無意義的原判不變（世代收的是派生域＋契約面分離）。修正輪收口：wrapRec＋
  * recKekHkdf 兩欄一體（部分配置＝ERR_REC_CFG_PARTIAL 拒寫）；HKDF 世代前綴面專屬 jr1r.
@@ -42,7 +42,7 @@ import {
 /** KDF 派生輸入正規化收口（mirror normalizePin 先例）：v3 入口 = normalizePassphrase(pass)；raw 世代入口 = 原密語。
  *  正規化永不進共用派生本體：deriveKekArgon/deriveKek2Argon 吃的是「派生輸入」——
  *  raw 契約（jr3d./jr2w.…）不經此面（帶內版本化「契約面永不變」的結構保證）。
- *  三面單一真相（r2 CRITICAL-1）：本體**委派** normalizePassphrase（語意唯一真相在
+ *  三面單一真相：本體**委派** normalizePassphrase（語意唯一真相在
  *  note-crypto.ts 本體，本函式只是入口收口位命名）——禁自帶 .normalize 實作（閘形錨咬住）； */
 function deriveInput(passphrase: string): string {
   return normalizePassphrase(passphrase);
@@ -69,7 +69,7 @@ export const PH1_V2_SALT = 'tacet-ph1-v1';
  * ×10⁴-10⁶。參數沿 jr3w. 同一組常數（單一碼路）；無載體即 throw（禁 fallback 鐵律）。
  */
 export async function derivePh1Argon(passphrase: string, saltArg?: Uint8Array): Promise<string> {
-  // PH1 鹽可注入（t_7710c766 目標 4）：預設 PH1_V2_SALT 舊值＝tacet 零行為變更；
+  // PH1 鹽可注入：預設 PH1_V2_SALT 舊值＝tacet 零行為變更；
   // 其他產品可自選鹽但 per-product 恆固定（PH2 UNIQUE 約束——per-user 鹽會摧毀它）。
   return toHex(await deriveArgon2id(
     passphrase,
@@ -81,12 +81,12 @@ export async function derivePh1Argon(passphrase: string, saltArg?: Uint8Array): 
 }
 
 /**
- * PH1 v3 鹽（v0.2.0 批卡①，密語正規化 v3 世代）：'tacet-ph1-v2'——鹽域版本代沿
+ * PH1 v3 鹽（密語正規化 v3 世代）：'tacet-ph1-v2'——鹽域版本代沿
  * PH1_V2_SALT（常數名='tacet-ph1-v1'）既有先例模式：常數名＝PH1 規格代、鹽域值＝鹽域代。
  * 鹽域世代分離：若續用 v2 鹽域，v3 世代（normalizePassphrase 後 'ＰＡＳＳ'→'PASS'）與
  * v2 世代 raw 'PASS' 會派生出同一 ph2＝跨世代帳戶空間混合；新鹽域把跨世代 identity
- * 問題留在遷移層查表（v0.2.0 批卡② v2-first 三腿查表職責），核心層零承擔。
- * ⚠️ 鹽撞位警告（MINOR-5，NFKC-effective 帳）：`PH1_V3_SALT` 禁當 `derivePh1Argon` 的
+ * 問題留在遷移層查表（v2-first 三腿查表職責），核心層零承擔。
+ * ⚠️ 鹽撞位警告（NFKC-effective 帳）：`PH1_V3_SALT` 禁當 `derivePh1Argon` 的
  * `saltArg` 餵入——v3 派生輸入吃 normalizePassphrase，同鹽域值錯面餵入＝NFKC-effective
  * 密語與 v2 raw 密語同值撞 ph2。fork 對兩面自選鹽時兩值必須互異（README PH1 節同款警告）。
  */
@@ -95,7 +95,7 @@ export const PH1_V3_SALT = 'tacet-ph1-v2';
 /**
  * PH1 v3：登入憑證 = Argon2id(normalizePassphrase(pass), 固定域鹽, m=64MiB, t=3, p=1) → hex64。
  * 正規化收口在入口（密語 v3 契約 NFKC-only——normalizePassphrase 檔頭三面單一真相）；
- * 鹽可注入（卡A #4 saltArg 慣例：預設 PH1_V3_SALT；per-product 恆固定＝PH2 UNIQUE 約束同 v2 母型）。
+ * 鹽可注入（saltArg 慣例：預設 PH1_V3_SALT；per-product 恆固定＝PH2 UNIQUE 約束同 v2 母型）。
  * 參數沿 jr3w./PH1 v2 同一組常數（單一碼路）；無載體即 throw（禁 fallback 鐵律）。
  * v2/legacy 契約面零動：derivePh1Argon 不吃正規化（舊世代 raw 派生，帶內版本化）。
  */
@@ -249,7 +249,7 @@ export async function wrapNoteKey3(cfg: Argon3Config, noteKey: CryptoKey, passph
 }
 
 /** jr3w. 解包：任何不符（前綴/salt 形/長度/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 4）。
- *  收口 openNoteKey（t_7710c766）：嚴格 92B＋rawHex 形＋hex fail-closed 全在共用核心；本函式只做
+ *  收口 openNoteKey：嚴格 92B＋rawHex 形＋hex fail-closed 全在共用核心；本函式只做
  *  家族守衛（wrap3 未配置回 null）、salt1 hex-形檢查與 KEK 派生——payload 形是鹽外置家族（iv‖ct），
  *  own 92B 檢已隨收口摘除（jr3s 同；鹽內嵌族 own 108B 保留）。 */
 export async function unwrapNoteKey3(cfg: Argon3Config, wrapped: string, passphrase: string, saltHex: string): Promise<CryptoKey | null> {
@@ -264,7 +264,7 @@ export async function unwrapNoteKey3(cfg: Argon3Config, wrapped: string, passphr
   }
 }
 
-// ── jr4w. 單因子包裹（密語正規化 v3 世代；v0.2.0 批卡①） ────────────────────
+// ── jr4w. 單因子包裹（密語正規化 v3 世代） ────────────────────
 //
 // 帶內版本化：密語 KEK 輸入契約改變（raw → normalizePassphrase NFKC-only）＝新前綴，
 // 舊前綴契約面永不變——jr4w. 的函式體與 jr3w. 同構（openNoteKey 共用核心、payload 嚴格
@@ -282,13 +282,13 @@ export async function wrapNoteKey4(cfg: Argon3Config, noteKey: CryptoKey, passph
 }
 
 /** jr4w. 解包（v3 密語）：任何不符（前綴/salt 形/長度/AAD）回 null 不拋；成功 → noteKey extractable=true（鐵律 4）。
- *  家族守衛（wrap4 未配置回 null）＋快速前綴快檢（NIT-2：錯前綴 junk 免付 64 MiB Argon）＋salt hex-形檢＋
+ *  家族守衛（wrap4 未配置回 null）＋快速前綴快檢（錯前綴 junk 免付 64 MiB Argon）＋salt hex-形檢＋
  *  KEK 派生（normalizePassphrase 收口在入口）——payload 形檢在 openNoteKey 本體（鹽外置家族：嚴格 92B＋
  *  rawHex 形＋hex fail-closed）。 */
 export async function unwrapNoteKey4(cfg: Argon3Config, wrapped: string, passphrase: string, saltHex: string): Promise<CryptoKey | null> {
   try {
     if (!cfg.wrap4) return null;
-    if (!wrapped.startsWith(cfg.wrap4)) return null; // 快速前綴快檢（NIT-2）：錯前綴 junk 免付 64 MiB Argon 成本
+    if (!wrapped.startsWith(cfg.wrap4)) return null; // 快速前綴快檢：錯前綴 junk 免付 64 MiB Argon 成本
     const salt = hexToBytes(saltHex);
     if (salt.length !== SALT_LEN || !/^[0-9a-f]{32}$/.test(saltHex)) return null;
     const kek = await deriveKekArgon(deriveInput(passphrase), salt);
@@ -318,7 +318,7 @@ async function deriveKek2Argon(
   hkdfInfo: string,
 ): Promise<CryptoKey> {
   if (!cfg.pinSalt3Prefix) throw new Error('ERR_JR3W_NOT_CONFIGURED');
-  // ⚠️ 瀏覽器 hash-wasm Argon2 禁並行（t_7361b68c）：純 wasm Argon2id 共享記憶體池，
+  // ⚠️ 瀏覽器 hash-wasm Argon2 禁並行：純 wasm Argon2id 共享記憶體池，
   // 兩實例並行在部分引擎靜態直 throw——這裡故意保持串行（與 jr2w. PBKDF2 版
   // deriveKek2 的 Promise.all 並行不同：那裡並行的前提是 crypto.subtle 原生派生）。
   const passBits = await deriveArgon2id(passphrase, salt1, ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM);
@@ -364,7 +364,7 @@ export async function wrapNoteKeyDual3(cfg: Argon3Config, noteKey: CryptoKey, pa
 }
 
 /** jr3d. 解包：pinSalt 內嵌自描述，salt1 取自 login 回應；任何不符回 null，不拋。
- *  t_7710c766：嚴格檢查為鹽內嵌族自有——payload 嚴格 108B（pinSalt 16
+ *  嚴格檢查為鹽內嵌族自有——payload 嚴格 108B（pinSalt 16
  *  ＋ iv 12＋ct 80）＋ decryptWithKey 後 rawHex hex 形檢查（hexToBytes fail-closed），
  *  不經 openNoteKey 本體（鹽外置 92B 形）；與 openNoteKey 同嚴格度。 */
 export async function unwrapNoteKeyDual3(
@@ -395,7 +395,7 @@ export async function unwrapNoteKeyDual3(
   }
 }
 
-// ── jr4d. 雙因子合鑰（密語正規化 v3 世代＝jr3d. 的 v3 後繼；v0.2.0 批卡①） ────
+// ── jr4d. 雙因子合鑰（密語正規化 v3 世代＝jr3d. 的 v3 後繼） ────
 //
 // 帶內版本化：pass 段 KEK 輸入契約改變（raw → normalizePassphrase NFKC-only）＝新前綴；
 // PIN 段契約照舊（normalizePin：NFKC→trim→lowercase，pinlock/dual 面不動）。
@@ -408,7 +408,7 @@ export async function unwrapNoteKeyDual3(
 export async function wrapNoteKeyDual4(cfg: Argon3Config, noteKey: CryptoKey, passphrase: string, pin: string): Promise<{ wrapped: string; salt: string }> {
   if (!cfg.wrapDual4 || !cfg.pinSalt3Prefix) throw new Error('ERR_JR4D_NOT_CONFIGURED');
   const pinNorm = normalizePin(pin);
-  if (!pinNorm) throw new Error('ERR_PIN_EMPTY'); // 空 PIN ≠ 未配置（t_7710c766 語意分離）
+  if (!pinNorm) throw new Error('ERR_PIN_EMPTY'); // 空 PIN ≠ 未配置（語意分離）
   const salt1 = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const pinSalt = crypto.getRandomValues(new Uint8Array(DUAL_SALT_LEN));
   const kek2 = await deriveKek2Argon(cfg, deriveInput(passphrase), pinNorm, salt1, pinSalt, 'journal-kek2-v1:' + cfg.wrapDual4);
@@ -478,7 +478,7 @@ export async function wrapNoteKeyShare3(cfg: Argon3Config, noteKey: CryptoKey, s
 }
 
 /** jr3s. 解包：salt 取自 GET /shares/:hash 回應（與 jr1w 同形）；任何不符回 null，不拋。
- *  收口 openNoteKey（t_7710c766）：鹽外置家族（payload 嚴格 92B＋rawHex 形＋hex fail-closed
+ *  收口 openNoteKey：鹽外置家族（payload 嚴格 92B＋rawHex 形＋hex fail-closed
  *  全在共用核心）；本函式只做家族守衛、salt hex-形檢查與 KEK 派生——own 92B 檢已隨收口摘除。 */
 export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sharePass: string, saltHex: string): Promise<CryptoKey | null> {
   try {
@@ -492,7 +492,7 @@ export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sh
   }
 }
 
-// ── ladder 重試鹽面：unwrapNoteKeyDual4WithSalt（v0.2.0 批卡② t_ce216a63） ────
+// ── ladder 重試鹽面：unwrapNoteKeyDual4WithSalt ────
 //
 // 為何同構再開一支：v3 遷移（登入即重遷）會旋轉 salt1（wrapNoteKeyDual4 落新值）；
 // login 舊形面帶回的 salt（v2 世代的 salt1）在遷移後已解不開 v3 新包裹──呼叫端
@@ -501,7 +501,7 @@ export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sh
 // 檢查、同 HKDF info 域、同輸出契約）──開支出零差異；命名開新支是「重取鹽」的
 // 語意承載位（呼叫端 grep 可審計），零新增實作面。
 //
-// 補記（t_b91ed07f 家族嚴格度）：salt1 形檢／payload 108B／rawHex 形檢全在
+// 補記（家族嚴格度）：salt1 形檢／payload 108B／rawHex 形檢全在
 // unwrapNoteKeyDual4 本體（共用）；本變體純語意薄身。
 
 /** jr4d. 解包（重取 salt1 面）：pinSalt 內嵌自描述，salt1 由呼叫端重取後帶入（ladder 遷移後的新値）；任何不符回 null，不拋。 */

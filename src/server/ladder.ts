@@ -1,7 +1,7 @@
 /**
- * ladder.ts — 密語正規化 v3 世代 ladder 表（v0.2.0 批卡② t_ce216a63；server 內部表）。
+ * ladder.ts — 密語正規化 v3 世代 ladder 表（server 內部表）。
  *
- * （a+）方案（主 session 收案裁定）：遷移時舊 ph2 值入 server 內部表（ph2_ladder），
+ * （a+）方案（設計裁定）：遷移時舊 ph2 值入 server 內部表（ph2_ladder），
  * users 表零 schema 變更、ph2 欄 UNIQUE 恆動──client 舊 bundle 的單欄 v2-first 查表
  * 在遷移後仍對既有帳戶命中（查 users.ph2 現值＝v2 形），行為不變。
  *
@@ -28,7 +28,7 @@ import type { Env } from './env.ts';
 /** ladder 表名（migration 同名；單一真相，fork migration 與本原語同字面）。 */
 export const PH2_LADDER_TABLE = 'ph2_ladder';
 
-/** ladder 行 kinds：'legacy'（SHA-256 快雜湊世代）與 'v2'（v2 形前身，card② 遷移的正常前身）。
+/** ladder 行 kinds：'legacy'（SHA-256 快雜湊世代）與 'v2'（v2 形前身，遷移的正常前身）。
  *  「帳戶現在用什麼形」的真相在 users.ph2 班表行（ph2_ladder 只承載舊值）；kind 欄
  *  純粹是「這個舊值當年是什麼形」的語意記錄。 */
 export type Ph2LadderKind = 'legacy' | 'v2';
@@ -56,7 +56,7 @@ export function makePh2LadderStore(env: Env): {
       return { accountId: row.account_id, ph2Kind: row.ph2_kind, createdAt: row.upgraded_at };
     },
     async insert(accountId: string, oldPh2: string, oldKind: Ph2LadderKind): Promise<void> {
-      // upsert ON CONFLICT(ph2)（值主權威；run 590 定形）：同一舊值恰一列，最新持有者勝——
+      // upsert ON CONFLICT(ph2)（值主權威，PK 定形）：同一舊值恰一列，最新持有者勝——
       // A 遷移落 (V→A) 後 V 值幽靈帳戶後建並遷移＝覆蓋為 (V→B)。無 DELETE 語句：行留存
       // 續供幽靈守衛（行隨帳戶刪除由 FK CASCADE 清）；fork 批面另備 ladderDelete 給
       // delete-account 清場面。

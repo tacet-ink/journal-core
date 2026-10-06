@@ -10,13 +10,13 @@ permissions:
 
 jobs:
   verify:
-    # self-hosted runner（t_046fe36f）：labels 自訂 journal-core ＋預設 self-hosted
-    # C1（t_046fe36f r2）：public repo ＋ self-hosted ＝ 只接同 repo branch——fork／
+    # self-hosted runner：labels 自訂 journal-core ＋預設 self-hosted
+    # 同 repo 保衛：public repo ＋ self-hosted ＝ 只接同 repo branch——fork／
     # 他 repo branch 的 pull_request 一律不上 runner（host-compromise 防線）
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, journal-core]
     steps:
-      # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定 t_b91ed07f：密碼學套件 repo
+      # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定：密碼學套件 repo
       # 的 CI 不吃浮動 tag）
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
