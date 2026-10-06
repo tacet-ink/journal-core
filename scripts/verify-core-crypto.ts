@@ -2015,7 +2015,7 @@ console.log('\n[19] ladder 表與重取鹽面（unwrapNoteKeyDual4WithSalt＋ph2
     {
       const idxPos19 = migSrc19.indexOf('CREATE INDEX IF NOT EXISTS idx_ph2_ladder_ph2');
       if (idxPos19 >= 0) db19.exec(migSrc19.slice(idxPos19, migSrc19.indexOf(';', idxPos19) + 1)); // 0011 冗餘索引原樣（0012 要 DROP 的缺陷面）
-      const src12 = await srcOf('../migrations/0012-ph2-ladder-index-fix.sql');
+      const src12 = await srcOf('../migrations/0012-fix-ph2-ladder-index.sql');
       await A('[19] 0011 對位錨：冗餘 idx_ph2_ladder_ph2 在場（0012 DROP 面＝0011 冗餘索引原樣）',
         idxPos19 >= 0 && src12.includes('DROP INDEX IF EXISTS idx_ph2_ladder_ph2'));
       const stmts12 = ['DROP INDEX IF EXISTS idx_ph2_ladder_ph2;', 'CREATE INDEX IF NOT EXISTS idx_ph2_ladder_account ON ph2_ladder(account_id);'];
@@ -2397,20 +2397,31 @@ console.log('\n[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec
 // 靜態錨面：workflow YAML 本體的接線（job-if C1 母型＋actor 分流＋runs-on 三元）。
 console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 分流）');
 {
-  const srcVy21 = await srcOf('../.github/workflows/verify.yml');
-  const srcPy21 = await srcOf('../.github/workflows/publish.yml');
-  await A('[21] verify.yml：npm ci --ignore-scripts（安裝面防線——依賴腳本零在場）',
-    srcVy21.includes('npm ci --ignore-scripts'));
-  await A('[21] verify.yml：job-if 同 repo 保衛＋dependabot actor 分流（C1 母型擴一條 actor 分流——機器人分支不上 self-hosted）',
-    /if: github\.event_name != 'pull_request' \|\| \(github\.event\.pull_request\.head\.repo\.full_name == github\.repository && github\.actor != 'dependabot\[bot\]'\)/.test(srcVy21));
-  await A('[21] verify.yml：runs-on dependabot 三元（actor 面 GitHub-hosted ubuntu-latest 隔離；其餘 self-hosted）',
-    /runs-on: \$\{\{ github\.event_name == 'pull_request' && github\.actor == 'dependabot\[bot\]' && 'ubuntu-latest' \|\| 'self-hosted' \}\}/.test(srcVy21));
-  await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
-    srcPy21.includes('npm ci --ignore-scripts'));
-  // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
+  // 環境鍵＝.github 目錄存在（存在性鍵非檔名硬讀——r1 MINOR-3）：閘 src 檔在 files 白名單
+  // 而 .github 不出包——tarball 消費樹硬讀 workflows＝未守衛 ENOENT，rc=1 尾段全吞。
+  // 目錄缺席＝顯性 SKIP 行（消費端常態；[16]/[18] 毒化樹 pristine 基準由此同保線）；
+  // 目錄在場而檔案缺席＝srcOf 硬 FAIL（repo 面牙齒不退位——軟讀文件名會把 repo 內
+  // 摘 workflow 校準成靜默綠＝掉牙）。
   const fs21 = (globalThis as unknown as {
     process?: { getBuiltinModule?: (id: string) => { existsSync?: (p: string) => boolean } | undefined };
   }).process?.getBuiltinModule?.('node:fs');
+  const ghDir21 = !!fs21?.existsSync && fs21.existsSync(new URL('../.github/', import.meta.url).pathname);
+  if (ghDir21) {
+    const srcVy21 = await srcOf('../.github/workflows/verify.yml');
+    const srcPy21 = await srcOf('../.github/workflows/publish.yml');
+    await A('[21] verify.yml：npm ci --ignore-scripts（安裝面防線——依賴腳本零在場）',
+      srcVy21.includes('npm ci --ignore-scripts'));
+    await A('[21] verify.yml：job-if 同 repo 保衛（C1 母型——fork／他 repo branch 不上 runner；dependabot 分支照跑不擋＝分流入 RUN 面——r1 MAJOR-1）',
+      /if: github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository/.test(srcVy21));
+    await A('[21] verify.yml：runs-on dependabot 三元＝RUN 分流（actor→GitHub-hosted ubuntu-latest；fallback 保留 journal-core 標籤——r1 MAJOR-2）',
+      /runs-on: \$\{\{ github\.event_name == 'pull_request' && github\.actor == 'dependabot\[bot\]' && 'ubuntu-latest' \|\| 'self-hosted, journal-core' \}\}/.test(srcVy21));
+    await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
+      srcPy21.includes('npm ci --ignore-scripts'));
+  } else {
+    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 455−3=452）',
+      true, 'no .github dir — consumption tree face');
+  }
+  // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
   await A('[21] open-card-pr.sh 摘除（主機路徑＋GITHUB_TOKEN 線索面；fs 原語缺席＝顯性 FAIL 自守衛）',
     !!fs21?.existsSync && !fs21.existsSync(new URL('../scripts/open-card-pr.sh', import.meta.url).pathname));
   // NIT-1 自證（isBrokenLink repo-root 錨定）：根錨路徑在場形（本 repo 常態 @scure 在場）
