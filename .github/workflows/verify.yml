@@ -14,9 +14,10 @@ jobs:
     # 同 repo 保衛：public repo ＋ self-hosted ＝ 只接同 repo branch——fork／
     # 他 repo branch 的 pull_request 一律不上 runner（host-compromise 防線）
     # Dependabot 分流（t_87ef62dd）：PR actor＝dependabot[bot] → GitHub-hosted
-    # ubuntu-latest（供應鏈隔離——self-hosted runner 不接機器人分支）；其餘同上。
-    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
-    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && 'ubuntu-latest' || 'self-hosted' }}
+    # ubuntu-latest（供應鏈隔離——self-hosted runner 不接機器人分支；分流不是擋，
+    # 機器人分支照跑驗證）；其餘（含 dependabot 以外的 PR）self-hosted[journal-core]。
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && 'ubuntu-latest' || 'self-hosted, journal-core' }}
     steps:
       # actions/checkout v7.0.1（SHA 釘選——供應鏈裁定：密碼學套件 repo
       # 的 CI 不吃浮動 tag）
