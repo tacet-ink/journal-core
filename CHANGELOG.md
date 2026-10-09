@@ -24,7 +24,10 @@ delete-account 流程）。README server login wiring 節同步。
 **Migration** — 套用 `migrations/0012-fix-ph2-ladder-index.sql`：純索引面、零行為變更、可重入
 （DROP INDEX IF EXISTS／CREATE INDEX IF NOT EXISTS——重複套用零傷）。
 
-## [未發布]
+## [0.2.5] — 2026-10-10
+
+
+**Security** — `loginRouteCore` ladder 查表守衛上載具（0.2.4 tarball 不含 #8 修復——載具時序，本版翻正；`AuthStore.ladderLookup` 未配置行為恆等 0.2.3 零降級）。
 
 **Added** — 驗證閘段級 `--only` 運行能力（工具面，零原語觸碰）：`node --experimental-strip-types
 scripts/verify-core-crypto.ts --only 16,17,18`（CSV／範圍 `16-18`／混形 `16,17-19` 三形同集合）
@@ -39,7 +42,7 @@ OK 標記改 `CORE-CRYPTO-VERIFY-OK(--ONLY 16-18)` 顯形；段號語法違約�
 
 [佔位——下一批載項先落此節，節位翻正隨發布輪。]
 
-## [0.2.3] — 2026-10-06
+[0.2.3] — 2026-10-06
 
 README／SECURITY 安全聯絡信箱換 security@tacet.ink（品牌信域統一——gmail 退役；
 0.2.2 tarball README 帶舊信箱兩行＝修正時序在 tag 後的注記，本節載具折疊出門）。
