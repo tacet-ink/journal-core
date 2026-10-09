@@ -13,6 +13,11 @@ Dependabot PR 分流 GitHub-hosted runner 執行驗證（self-hosted runner 不�
 
 **Changed** — 密語包裹前綴快檢上移：五個解包入口（passphrase／分享兩代＋復原套件兩腿）在金鑰派生前
 先比對前綴——錯誤前綴的試探不再付出 Argon2id／PBKDF2 派生成本（輸出行為不變）。
+`loginRouteCore` 內建 ladder 查表守衛（2026-10-06 外審 #8 幽靈帳）：現值（PH2）miss 時改走
+`AuthStore.ladderLookup`（optional）查 `ph2_ladder`——命中回舊帳不建幽靈；ladder 也 miss（或
+lookup 未配置、或 store 拋錯 fail-open）才 `createUser`。lookup 未配置＝與 0.2.3 單查行為恆等
+（零新增必配面）；守衛只動查表零寫入面（insert 續在 `rekeyWithLadder` 遷移線、delete 在 fork 的
+delete-account 流程）。README server login wiring 節同步。
 
 **Added** — 資料庫索引修正 migration：ph2_ladder 摘除重複索引、補 account_id 索引（帳戶查詢走索引不走全表）。
 
