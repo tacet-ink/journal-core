@@ -26,23 +26,25 @@ delete-account 流程）。README server login wiring 節同步。
 
 ## [0.2.5] — 2026-10-10
 
-
 **Security** — `loginRouteCore` ladder 查表守衛上載具（0.2.4 tarball 不含 #8 修復——載具時序，本版翻正；`AuthStore.ladderLookup` 未配置行為恆等 0.2.3 零降級）。
 
 **Added** — 驗證閘段級 `--only` 運行能力（工具面，零原語觸碰）：`node --experimental-strip-types
 scripts/verify-core-crypto.ts --only 16,17,18`（CSV／範圍 `16-18`／混形 `16,17-19` 三形同集合）
 只跑指定段——setup（跨段消費向量群）恆跑、毒化矩陣內層 rerun 不繼承 `--only`（內層恆全帳，
 `POISON_GATE_INNER` 語意不變）、`--only` 缺席預設恆全跑（CI/deploy 面零降級）。帳面誠實契約：
-總帳顯形「本輪 X/選段帳 N（總帳 483 案非本輪載）」＋逐段 `案 X/帳 · skip（未跑非通過）` 行＋
+總帳顯形「本輪 X/選段帳 N（總帳 484 案非本輪載）」＋逐段 `案 X/帳 · skip（未跑非通過）` 行＋
 OK 標記改 `CORE-CRYPTO-VERIFY-OK(--ONLY 16-18)` 顯形；段號語法違約（空值／非數字／未定段／
 倒序範圍）＝`ERR_ONLY_*` fail-closed exit 1。段帳為執行帳（healthy-repo 全跑真值；
 語法帳與之差 7＝既有環境條件態——帳面逐段顯形）。審查輪重跑指定段不再付全帳 6-8 分鐘
 （同機實測：全跑 ~370s；`--only 16,17,18` ~350s——兩大毒化重段的內層 gate-rerun 恆全跑＝
 重段省少；便宜段才有大差：`--only 1` ~1.2s、`--only 20` ~3s）。
 
-[佔位——下一批載項先落此節，節位翻正隨發布輪。]
+**Fixed** — [18] 毒化 runner 斷言摘死析取（[25] 段帳重寫前寫下的未來失敗面保險腿——段語意
+重寫後已亡，保留只會吞真失敗面）；[25] 段帳登記義務負向斷言上線（secRan 實跑段必已登記——
+secCases 全摘即 RED）；secCases 敘事收窄成契約窗〔[24]/[25] 自證段＋--only 段存在＋teeth〕；
+README 三行 verify 帳照實 484 收帳。
 
-[0.2.3] — 2026-10-06
+## [0.2.3] — 2026-10-06
 
 README／SECURITY 安全聯絡信箱換 security@tacet.ink（品牌信域統一——gmail 退役；
 0.2.2 tarball README 帶舊信箱兩行＝修正時序在 tag 後的注記，本節載具折疊出門）。
@@ -118,7 +120,7 @@ Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 [0.2.4]: https://github.com/tacet-ink/journal-core/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/tacet-ink/journal-core/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...v0.2.2
-[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.2.4...HEAD
+[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.2.5...HEAD
 [0.2.1]: https://github.com/tacet-ink/journal-core/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tacet-ink/journal-core/compare/v0.1.6...v0.2.0
 [ERR_REC_CFG_PARTIAL]: https://github.com/tacet-ink/journal-core/blob/v0.2.1/src/client/note-crypto.ts
