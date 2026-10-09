@@ -8,14 +8,16 @@
  * - 入庫前密文／包裹格式驗證（inboundCipher／isCipherFor／validWrappedKey／
  *   pickKeyPackage 等，前綴由 config 注入）。
  * - /auth/login 核心動線（loginRouteCore）：rate-limit 閘 → PH1 驗形 →
- *   PH2 → store 查詢／建號 → session token 簽發（30 天）。
+ *   PH2 → store 查詢（現值 miss → ladder 查表守衛——0.2.4 內建，optional 未配置
+ *   即退場）／建號 → session token 簽發（30 天）。
  *
  * 呼叫端（fork）職責——本檔只定義介面，機制在呼叫端實作：
  * - identity 生成：AuthStore.createUser 由各 fork 自決（隨機 account_id 或
  *   客戶端帶入語意皆可）；PH2 UNIQUE 衝突（兩個同時首登同密語）是 store
  *   責任——tacet 參考實作：UNIQUE 失敗重查既有列回 userKey（非 5xx）。
  * - hash-ladder 雙軌（舊式 PH1 直比 → 升級寫回 PH2）與密語重設後的 session
- *   撤銷時機：fork 呼叫端接線（revokeAllSessions 介面已備）。
+ *   撤銷時機：fork 呼叫端接線（revokeAllSessions 介面已備）；ladder 查表守衛已
+ *   內建 loginRouteCore（optional——fork 只需配 ladderLookup＋0011 migration，接線零寫）。
  * - 常數時間比較 timingSafeEq：./hash.ts 匯出（login 動線經 PH2 查詢不直比）。
  *
  * 不變量（勿破壞）：
@@ -136,9 +138,16 @@ export interface AuthStore {
   /** v3 重鑰：舊值入 ladder 表＋ph2/wrapped/salt/wrappedRec/rec_hash
    *  五欄同列覆蓋（rec 欄在場才覆蓋——四欄形契約面不動；fork 實作三語句同批寫入）。 */
   rekeyWithLadder?(userKey: string, oldPh2: string, oldKind: 'legacy' | 'v2', ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
-  /** ladder 查表：以「舊 ph2 值」（v2/legacy 形）查 ladder 表，
-   *  命中回帳戶 id（login route 的「不建幽靈、回舊帳＋ph2Kind='legacy' 語意」守衛面）；
-   *  未配置（optional）＝查表面退場（fork 離線/無表態，行為不變）。 */
+  /**
+   * ladder 查表：以「舊 ph2 值」（v2/legacy 形）查 ladder 表，命中回帳戶 id。
+   * loginRouteCore 內建接線（0.2.4 外審 #8 幽靈守衛上位）：現值 miss → ladderLookup →
+   * 命中＝回舊帳（不建幽靈；ph2Kind 語意照 ladder.ts 檔頭註解——core 端回帳序：
+   * ladder hit → getByUserKey → 可續 buildSession），兩面皆 miss 才 createUser。
+   * 未配置（optional undefined）＝查表面退場（現行單查行為零變——向後相容：
+   * fork 未配 ladder（0011 未上）時行為與 0.2.3 恆等，sennight/vestige 未來接 core 也零炸）。
+   * 錯誤處理照 tacet store.ts 母型：ladder 表缺席（0011 未上）＝fail-open 視同 miss
+   *（lookup 實作自行 catch；本函式不吞 store 拋出的非缺席類錯誤——缺席面由 fork 實作裁定）。
+   */
   ladderLookup?(oldPh2: string): Promise<string | null>;
   /** ladder 入表（遷移線用；upsert冪等）。 */
   ladderInsert?(accountId: string, oldPh2: string, oldKind: 'legacy' | 'v2'): Promise<void>;
@@ -167,12 +176,42 @@ export function errResponse(code: string, status: number): Response {
 
 // ── /auth/login：PH1 進站 → PH2 查詢（UNIQUE）→ session ─────────────────────
 
+/**
+ * loginRouteCore ladder 查表守衛（0.2.4 外審 #8 幽靈帳真洞收口——tacet fork 母型上位）：
+ * 現值（PH2 UNIQUE 查表）miss 時，先查 ladder 表（ph2_ladder：遷移線落下的「舊 ph2 值」），
+ * 命中＝回舊帳不建幽靈；ladder 也 miss（或未配置）＝才 createUser。
+ * - ladder hit 語意照 ladder.ts 檔頭註解：表列只承載舊值，帳戶現行憑證面以
+ *   `getByUserKey` 讀到的 users 現值為準（v3 帳的 salt/wrapped 已是 v3 形）；
+ *   ladder hit → getByUserKey 落查無列（帳戶已刪、行殘留）＝誠實 miss 續走建幽靈。
+ * - lookup 未配置（optional undefined）＝零呼叫，行為與 0.2.3 單查恆等（向後相容鐵律）；
+ *   insert 是遷移線（rekeyWithLadder）職責、delete 已綁 delete-account（fork 面）——
+ *   本守衛只動查表，零寫入面。
+ * - lookup 拋錯（表缺席/儲存故障）＝fail-open 視同 miss，不炸登入（tacet store.ts 母型；
+ *   靜默面照 tacet 慣例只 console.error）。
+ * - 零知識照舊：ladder 只存 ph2 hash 與 account_id，本函式零新洩漏面。
+ */
+async function ladderGuard(
+  store: AuthStore,
+  ph2: string,
+): Promise<AuthRow | null> {
+  if (!store.ladderLookup) return null;
+  let ladderAcc: string | null = null;
+  try {
+    ladderAcc = await store.ladderLookup(ph2);
+  } catch (e) {
+    console.error('[ph2-ladder] lookup failed (fail-open):', e);
+    return null;
+  }
+  if (!ladderAcc) return null;
+  return store.getByUserKey(ladderAcc);
+}
+
 export async function loginRouteCore(env: Env & Record<string, unknown>, store: AuthStore, ip: string, ph1In: unknown): Promise<Response> {
   if (!(await checkRate(env, AUTH_RATE, ip))) return errResponse('ERR_RATE_LIMITED', 429);
   const ph1 = validHash64(ph1In);
   if (!ph1) return errResponse('ERR_BAD_REQUEST', 400);
   const ph2 = await sha256Hex(ph1);
-  const user = await store.findByIdentityQuery(ph2);
+  const user = (await store.findByIdentityQuery(ph2)) ?? (await ladderGuard(store, ph2));
   const userKey: string = user ? user.userKey : await store.createUser(ph2);
   const token = generateSessionToken();
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // PWA：30 天
