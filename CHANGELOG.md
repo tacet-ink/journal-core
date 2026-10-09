@@ -5,7 +5,7 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
-## [未發布]
+## [0.2.4] — 2026-10-09
 
 **Security** — CI 供應鏈加固：npm ci 一律 `--ignore-scripts`（verify／publish 兩 workflow——依賴安裝不執行任何安裝腳本）；
 Dependabot PR 分流 GitHub-hosted runner 執行驗證（self-hosted runner 不接機器人分支——分流不是擋，驗證照跑）；
@@ -23,6 +23,10 @@ delete-account 流程）。README server login wiring 節同步。
 
 **Migration** — 套用 `migrations/0012-fix-ph2-ladder-index.sql`：純索引面、零行為變更、可重入
 （DROP INDEX IF EXISTS／CREATE INDEX IF NOT EXISTS——重複套用零傷）。
+
+## [未發布]
+
+[佔位——下一批載項先落此節，節位翻正隨發布輪。]
 
 ## [0.2.3] — 2026-10-06
 
@@ -97,9 +101,10 @@ npm metadata 補齊（homepage／repository／bugs——npm 頁側欄 repo 連�
 兩時代金鑰模型、帶內版本化前綴契約、pinlock／雙因子合鑰／分享包裹原語、
 Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 
+[0.2.4]: https://github.com/tacet-ink/journal-core/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/tacet-ink/journal-core/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...v0.2.2
-[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.2.3...HEAD
+[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.2.4...HEAD
 [0.2.1]: https://github.com/tacet-ink/journal-core/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tacet-ink/journal-core/compare/v0.1.6...v0.2.0
 [ERR_REC_CFG_PARTIAL]: https://github.com/tacet-ink/journal-core/blob/v0.2.1/src/client/note-crypto.ts
