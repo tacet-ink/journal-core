@@ -2,6 +2,10 @@
  * verify-core-crypto.ts — core 抽取的驗證閘（對真模組，禁鏡像——extractable 教訓）。
  * 執行：node --experimental-strip-types scripts/verify-core-crypto.ts
  * 全綠輸出 CORE-CRYPTO-OK；任何失敗 exit 1。
+ *
+ * 2026-10-09（0.2.4）：[23] loginRouteCore ladder 查表守衛段（外審 #8 幽靈帳）——真 node:sqlite
+ * shim 直驅七情境（現值 hit／ladder hit 回舊帳／兩面 miss 建幽靈／未配置單查零變／fail-open）
+ * ＋拷貝樹毒化 in-gate（接線摘除 → ladder hit 翻建幽靈）。POISON_GATE_INNER 內層跑份自我跳過。
  */
 
 // 對真模組（禁鏡像重寫金鑰邏輯——鏡像驗證抓不到真模組 bug 的生產教訓）
@@ -2418,7 +2422,7 @@ console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runne
     await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
       srcPy21.includes('npm ci --ignore-scripts'));
   } else {
-    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 457−3=454）',
+    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 475−3=472）',
       true, 'no .github dir — consumption tree face');
   }
   // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
@@ -2441,6 +2445,243 @@ console.log('\n[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runne
     await A('[21] r2 MINOR-1：fs 原語直讀 .pathname 形零殘留（缺陷形負向——URL %編碼失真→existsSync 恆 false→SKIP 分枝靜默退位面收口）',
       !/existsSync\(new URL\([^)]*\)\.pathname\)/.test(gateSrc21)
       && !/readFileSync\(new URL\([^)]*\)\.pathname/.test(gateSrc21));
+  }
+}
+
+console.log('\n[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳——現值 miss → ladder → 兩面 miss 才 createUser）');
+{
+  // getBuiltin23：node 內建模組動態存取（本段自備 helper——[19]/[21] 同構；structured type 零 node types 依賴）
+  const getBuiltin23 = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const { DatabaseSync } = (getBuiltin23('node:sqlite') as { DatabaseSync?: unknown } | undefined) ?? {};
+  if (!DatabaseSync) throw new Error('ERR_SQLITE_UNAVAILABLE');
+  const { loginRouteCore } = await import('../src/server/auth.ts');
+  const enc23 = new TextEncoder();
+  const hex23 = (u8: Uint8Array): string => Array.from(u8).map((b) => b.toString(16).padStart(2, '0')).join('');
+  const ncCrypto23 = (getBuiltin23('node:crypto') as { createHash?: (a: string) => { update: (s: string) => { digest: (e: string) => string } } } | undefined) ?? { createHash: () => { throw new Error('ERR_CRYPTO_UNAVAILABLE'); } };
+  const sha256Sync23 = (s: string): string => ncCrypto23.createHash!('sha256').update(s).digest('hex');
+  const sha23 = async (s: string): Promise<string> => hex23(new Uint8Array(await crypto.subtle.digest('SHA-256', enc23.encode(s))));
+  // PH1 hex64 樣本（直入 login body）：loginRouteCore 對 body 做 sha256Hex＝ph2——fixture 種子
+  // 必須種 sha256(ph1)（雜湊後落表）；種 ph1 本身進 ph2 欄＝miss by construction（種錯層）。
+  const ph1a23 = sha256Sync23('jr23-current-ph1');
+  const ph1b23 = sha256Sync23('jr23-old-ph1');
+  const ph1c23 = sha256Sync23('jr23-ghost-ph1');
+  const ph1d23 = sha256Sync23('jr23-nolad-ph1');
+  const ph1e23 = sha256Sync23('jr23-failo-ph1');
+  const ph1x23 = sha256Sync23('jr23-sessi-ph1');
+  const rowA23 = sha256Sync23(ph1a23);
+  const row23old = sha256Sync23('jr23-v3cur-ph1');
+  const row23x = sha256Sync23(ph1x23);
+
+  const mkDb23 = (): { db: { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number }; get: (...p: unknown[]) => unknown; all: (...p: unknown[]) => unknown[] } }; env23: unknown } => {
+    const db = new (DatabaseSync as new (p: string) => { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number }; get: (...p: unknown[]) => unknown; all: (...p: unknown[]) => unknown[] } })(':memory:');
+    db.exec('CREATE TABLE login_rate (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+    db.exec('CREATE TABLE users (account_id TEXT PRIMARY KEY, ph2 TEXT UNIQUE, salt TEXT, wrapped_key TEXT, wrapped_rec TEXT, rec_hash TEXT)');
+    return {
+      db,
+      env23: {
+        DB: {
+          prepare: (sql: string) => ({
+            bind: (...params: unknown[]) => ({
+              run: async () => {
+                let results: unknown[] = [];
+                try { results = db.prepare(sql).all(...params) as unknown[]; }
+                catch { try { db.prepare(sql).run(...params); } catch {} }
+                return { results, meta: {} };
+              },
+            }),
+          }),
+        },
+      } as unknown as never,
+    };
+  };
+  const USER_COLS23 = 'account_id AS userKey, ph2, salt, wrapped_key AS wrapped, wrapped_rec AS wrappedRec, rec_hash AS recHash';
+
+  // ① 現值 hit：單查命中，ladder 零呼叫零建號（現值 hit 短路在 findByIdentityQuery）
+  {
+    const t = mkDb23();
+    const calls23 = { ladder: 0, create: 0 };
+    const store23 = {
+      findByIdentityQuery: async (ph2: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+      createUser: async () => { calls23.create++; return 'acct-ghost-23'; },
+      getByUserKey: async () => null,
+      revokeAllSessions: async () => {},
+      insertSession: async () => {},
+      ladderLookup: async () => { calls23.ladder++; return null; },
+    };
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-23a', ?, 's23', 'wr23')").run(rowA23);
+    const res23 = await loginRouteCore(t.env23 as never, store23 as never, 'ip-23-1', ph1a23);
+    const j23 = JSON.parse(await res23.text()) as { userKey: string; status: string };
+    await A('[23] 現值 hit 回 200 ready（userKey 恰 acct-23a——登入 body 相容現值契約）', res23.status === 200 && j23.status === 'ready' && j23.userKey === 'acct-23a');
+    await A('[23] 現值 hit：ladderLookup 零呼叫（短路在 findByIdentityQuery）', calls23.ladder === 0);
+    await A('[23] 現值 hit：createUser 零呼叫（零幽靈面）', calls23.create === 0);
+  }
+
+  // ② ladder hit（現值 miss）＝回舊帳不建幽靈；getByUserKey 讀現值（ph2Kind 語意照 ladder.ts）；
+  //    session 歸宿舊帳 userKey
+  {
+    const t = mkDb23();
+    const calls23 = { ladder: 0, create: 0, byKey: [] as string[] };
+    let sess23: { tokenHash: string; userKey: string; expiresAt: number } | null = null;
+    const store23 = {
+      findByIdentityQuery: async (ph2: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+      createUser: async () => { calls23.create++; return 'acct-ghost-23'; },
+      getByUserKey: async (key: string) => { calls23.byKey.push(key); return (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE account_id = ?`).get(key) as unknown) || null; },
+      revokeAllSessions: async () => {},
+      insertSession: async (tokenHash: string, userKey: string, expiresAt: number) => { sess23 = { tokenHash, userKey, expiresAt }; },
+      ladderLookup: async () => { calls23.ladder++; return 'acct-23old'; },
+    };
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-23old', ?, 's23', 'wr23')").run(row23old);
+    const res23 = await loginRouteCore(t.env23 as never, store23 as never, 'ip-23-2', ph1b23);
+    const j23 = JSON.parse(await res23.text()) as { userKey: string; status: string };
+    await A('[23] ladder hit → userKey=舊帳 acct-23old（不建幽靈）', j23.userKey === 'acct-23old' && calls23.create === 0);
+    await A('[23] ladder hit：ladderLookup 恰 1 呼叫（守衛接線在場）', calls23.ladder === 1);
+    await A('[23] ladder hit 語意照 ladder.ts：回帳走 getByUserKey（現值面承載——非表列直接回）', calls23.byKey.length === 1 && calls23.byKey[0] === 'acct-23old');
+    await A('[23] ladder hit → ready 分流（帳戶 ph2 在場）', j23.status === 'ready');
+    await A('[23] ladder hit → session 落在舊帳 userKey（tokenSha256＋30 天）', sess23 !== null && (sess23 as { userKey: string }).userKey === 'acct-23old'
+      && /^[0-9a-f]{64}$/.test((sess23 as { tokenHash: string }).tokenHash)
+      && (sess23 as { expiresAt: number }).expiresAt > Date.now() + 29 * 86400e3);
+  }
+
+  // ③ 兩面 miss → 建 1 幽靈（ph2 恆等＝sha256(登入 PH1)）
+  {
+    const t = mkDb23();
+    let inserted23: string | null = null;
+    const calls23 = { ladder: 0 };
+    const store23 = {
+      findByIdentityQuery: async (ph2: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+      createUser: async (ph2: string) => { inserted23 = ph2; return 'acct-ghost-23'; },
+      getByUserKey: async () => null,
+      revokeAllSessions: async () => {},
+      insertSession: async () => {},
+      ladderLookup: async () => { calls23.ladder++; return null; },
+    };
+    const res23 = await loginRouteCore(t.env23 as never, store23 as never, 'ip-23-3', ph1c23);
+    const j23 = JSON.parse(await res23.text()) as { userKey: string; status: string };
+    await A('[23] 兩面 miss → 建 1 幽靈（createUser 恰 1——幽靈語意照舊）', j23.userKey === 'acct-ghost-23');
+    await A('[23] 幽靈 ph2 = sha256Hex(登入 PH1)（subtle 交叉驗——種子層對帳）', inserted23 !== null && inserted23 === await sha23(ph1c23));
+    await A('[23] 兩面 miss：ladderLookup 有呼叫（配置在場＝守衛有接線）＋require_binding 分流', calls23.ladder === 1 && j23.status === 'require_binding');
+  }
+
+  // ④ lookup 未配置（optional undefined）＝0.2.3 單查行為零變（ladder 零呼叫——向後相容鐵律）
+  {
+    const t = mkDb23();
+    const calls23 = { create: 0 };
+    const store23 = {
+      findByIdentityQuery: async (ph2: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+      createUser: async () => { calls23.create++; return 'acct-ghost-23'; },
+      getByUserKey: async () => null,
+      revokeAllSessions: async () => {},
+      insertSession: async () => {},
+    };
+    const res23 = await loginRouteCore(t.env23 as never, store23 as never, 'ip-23-4', ph1d23);
+    const j23 = JSON.parse(await res23.text()) as { userKey: string };
+    await A('[23] ladderLookup 未配置 → 直接建幽靈（0.2.3 單查行為恆等——optional 退場鐵律）', j23.userKey === 'acct-ghost-23' && calls23.create === 1);
+  }
+
+  // ⑤ ladder store 拋錯（表缺席）＝fail-open 視同 miss，不炸登入
+  {
+    const t = mkDb23();
+    let createCalls23 = 0;
+    const store23 = {
+      findByIdentityQuery: async (ph2: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+      createUser: async () => { createCalls23++; return 'acct-ghost-23'; },
+      getByUserKey: async () => null,
+      revokeAllSessions: async () => {},
+      insertSession: async () => {},
+      ladderLookup: async () => { throw new Error('no such table: ph2_ladder'); },
+    };
+    const res23 = await loginRouteCore(t.env23 as never, store23 as never, 'ip-23-5', ph1e23);
+    const j23 = JSON.parse(await res23.text()) as { userKey: string };
+    await A('[23] ladder 拋錯 fail-open＝登入不炸、續建幽靈（tacet store.ts 母型上位）', res23.status === 200 && j23.userKey === 'acct-ghost-23' && createCalls23 === 1);
+  }
+
+  // ⑥ ladder hit：帳戶現值已旋轉（ph2 異值欄面）——status 分流照 user?.ph2 實值
+  {
+    const t = mkDb23();
+    const store23 = {
+      findByIdentityQuery: async (ph2: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+      createUser: async () => 'acct-ghost-23',
+      getByUserKey: async (key: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE account_id = ?`).get(key) as unknown) || null,
+      revokeAllSessions: async () => {},
+      insertSession: async () => {},
+      ladderLookup: async () => 'acct-23old',
+    };
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-23old', 'ph2-rotated-current-23', 's23', 'wr23')").run();
+    const res23 = await loginRouteCore(t.env23 as never, store23 as never, 'ip-23-6', ph1b23);
+    const j23 = JSON.parse(await res23.text()) as { userKey: string; status: string };
+    await A('[23] ladder hit（現值已旋轉異值欄）→ userKey=舊帳、status=ready（user?.ph2 在場分流本體契約）', j23.userKey === 'acct-23old' && j23.status === 'ready');
+  }
+
+  // ⑦ 毒化（拷貝樹 in-gate，t_0ab6e760 母型）：ladderGuard 接線摘除 → ladder hit 案翻建幽靈。
+  // 毒化跑在 /tmp 拷貝樹＝本 repo 樹 byte 不動；還原 byte-exact＋樹出生即棄。
+  // POISON_GATE_INNER sentinel（[16]/[18]/[20] 遞迴防線母型）：內層跑份自我跳過毒化節。
+  {
+    const inner23 = (getBuiltin23('node:process') as { env?: Record<string, string | undefined> } | undefined)?.env?.POISON_GATE_INNER === '1';
+    if (inner23) {
+      await A('[23] 毒化證據：內層跑份自我跳過（POISON_GATE_INNER sentinel——遞迴防線母型）', true, 'POISON_GATE_INNER=1');
+    } else {
+      const fs23 = (getBuiltin23('node:fs') as {
+        mkdtempSync?: (p: string) => string;
+        mkdirSync?: (p: string, o?: unknown) => void;
+        copyFileSync?: (a: string | URL, b: string) => void;
+        readdirSync?: (p: string | URL) => string[];
+        readFileSync?: (p: string | URL, e: string) => string;
+        writeFileSync?: (p: string, s: string, e: string) => void;
+        rmSync?: (p: string, o?: unknown) => void;
+      } | undefined) ?? undefined;
+      const path23x = (getBuiltin23('node:path') as { join?: (...p: string[]) => string } | undefined) ?? undefined;
+      const os23 = (getBuiltin23('node:os') as { tmpdir?: () => string } | undefined) ?? undefined;
+      const url23 = (getBuiltin23('node:url') as { pathToFileURL?: (p: string) => { href: string } } | undefined) ?? undefined;
+      if (!fs23?.mkdtempSync || !path23x?.join || !os23?.tmpdir || !url23?.pathToFileURL) {
+        // 原語缺席環境＝顯性 SKIP 行（非 silent true——t_87ef62dd 環境鍵母型）
+        await A('[23] 毒化面（原語缺席環境）＝顯性 SKIP 行，毒化證據缺席顯形非 silent true',
+          false, 'node fs/path/os/url 原語缺席——毒化面 skip（消費端精簡 Node 形；repo 樹常態不見此行）');
+      } else {
+        // 拷貝樹源＝本閘的套件根（import.meta.url 起手——repo 樹與消費樹同構，零硬編碼路徑）
+        const pkgRootUrl23 = new URL('../', import.meta.url);
+        const srcDirUrl23 = new URL('src/server/', pkgRootUrl23);
+        const tree23 = fs23.mkdtempSync!(path23x.join(os23.tmpdir(), 't23-ladder-'));
+        fs23.mkdirSync!(path23x.join(tree23, 'src/server'), { recursive: true });
+        const filesSer23 = fs23.readdirSync!(srcDirUrl23).filter((f) => f.endsWith('.ts'));
+        for (const f of filesSer23) fs23.copyFileSync!(new URL('src/server/' + f, pkgRootUrl23), path23x.join(tree23, 'src/server', f));
+        await A('[23] 毒化樹拷貝：src/server 全檔在場（auth.ts＋依賴鏈四檔≥5）', filesSer23.length >= 5 && filesSer23.includes('auth.ts'), 'n=' + filesSer23.length);
+        // 毒化錨（唯一）：接線面 `?? (await ladderGuard(store, ph2))` 摘除 → 單查直路
+        //（removal-form——毒面＝ladder hit 案翻建幽靈；未配置案照綠＝行為面恰此面翻）。
+        const needle23 = '(await store.findByIdentityQuery(ph2)) ?? (await ladderGuard(store, ph2))';
+        const srcAuth23 = fs23.readFileSync!(new URL('src/server/auth.ts', pkgRootUrl23), 'utf8');
+        const cnt23 = srcAuth23.split(needle23).length - 1;
+        await A('[23] 毒化錨恰 1（split 計數——接線形單點承載）', cnt23 === 1, 'cnt=' + cnt23);
+        if (cnt23 === 1) {
+          fs23.writeFileSync!(path23x.join(tree23, 'src/server/auth.ts'), srcAuth23.split(needle23).join('await store.findByIdentityQuery(ph2)'), 'utf8');
+          try {
+            const modP = (await import(url23.pathToFileURL(path23x.join(tree23, 'src/server/auth.ts')).href + '?poison23=1')) as unknown as { loginRouteCore: typeof loginRouteCore };
+            const tP = mkDb23();
+            const storeP = {
+              findByIdentityQuery: async () => null,
+              createUser: async () => 'acct-ghost-23',
+              getByUserKey: async () => null,
+              revokeAllSessions: async () => {},
+              insertSession: async () => {},
+              ladderLookup: async () => 'acct-23old',
+            };
+            tP.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-23old', ?, 's23', 'wr23')").run(row23old);
+            const resP = await modP.loginRouteCore(tP.env23 as never, storeP as never, 'ip-23-P', ph1b23);
+            const jP = JSON.parse(await resP.text()) as { userKey: string; status: string };
+            await A('[23] 毒化（ladderGuard 接線摘除）→ ladder hit 案翻建幽靈（行為面真翻——designated）',
+              jP.userKey === 'acct-ghost-23', 'userKey=' + jP.userKey);
+          } catch (e) {
+            await A('[23] 毒化重演（行為面真翻）', false, 'crash: ' + String((e as Error).message).slice(0, 160));
+          }
+          fs23.writeFileSync!(path23x.join(tree23, 'src/server/auth.ts'), srcAuth23, 'utf8');
+          const restored23 = fs23.readFileSync!(path23x.join(tree23, 'src/server/auth.ts'), 'utf8') === srcAuth23;
+          fs23.rmSync!(tree23, { recursive: true, force: true });
+          await A('[23] 毒化還原 byte-exact＋樹出生即棄（本 repo 樹零接觸——零殘毒面）', restored23);
+        } else {
+          fs23.rmSync!(tree23, { recursive: true, force: true });
+        }
+      }
+    }
   }
 }
 
