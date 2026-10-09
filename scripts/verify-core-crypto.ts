@@ -2660,7 +2660,7 @@ console.log('\n[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳—�
             const storeP = {
               findByIdentityQuery: async () => null,
               createUser: async () => 'acct-ghost-23',
-              getByUserKey: async () => null,
+              getByUserKey: async (key: string) => (tP.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE account_id = ?`).get(key) as unknown) || null,
               revokeAllSessions: async () => {},
               insertSession: async () => {},
               ladderLookup: async () => 'acct-23old',

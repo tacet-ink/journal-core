@@ -19,8 +19,9 @@
  * 零知識照舊：ladder 只存 ph2 hash 與 account_id，零 PII、零密語材料。
  *
  * 職責分工（fork 對位面）：表名／migration 由 fork migrations 承載（0011-ph2-ladder.sql，
- * PK=ph2 值主權威形）；本層提供「以舊 ph2 查列」與「遷移時入表」原語，查表接線
- * （現值 miss → ladder → 建幽靈）在 fork route（tacet loginRoute，v2-first 裁定）。
+ * PK=ph2 值主權威形）；本層提供「以舊 ph2 查列」與「遷移時入表」原語。查表守衛自 0.2.4 起
+ * 內建 loginRouteCore（現值 miss → ladder → 兩面 miss 才建幽靈；lookup 未配置＝零呼叫
+ * 行為零變）——自帶 login route 的 fork（tacet loginRoute，v2-first 裁定）續走自身接線。
  */
 
 import type { Env } from './env.ts';
