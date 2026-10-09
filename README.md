@@ -18,7 +18,7 @@
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 457 assertions, all green, run against the real modules (no mocks)
+npm run verify   # 475 assertions, all green, run against the real modules (no mocks)
 ```
 
 ```ts
@@ -76,7 +76,7 @@ run: `node --experimental-strip-types example.ts`
 | `src/client/bip39.ts` | 復原套件 24 詞 ⇄ hex64 轉寫層（BIP39，零依賴自製） |
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
 | `src/server/auth.ts` | 零知識 auth 核心：PH1→PH2 login 動線、入庫格式驗證、包裹欄組成對（pair 檢查 pickKeyPackage）；PH2 UNIQUE 衝突與 session 撤銷＝呼叫端職責 |
-| `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）——幽靈守衛的資料承載位（查表接線在 fork route） |
+| `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）＋幽靈守衛查表接線已內建 loginRouteCore——fork 只需配 `ladderLookup` store＋0011 migration（未配置＝單查行為零變） |
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
@@ -119,18 +119,19 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 
 ```sh
 npm ci --ignore-scripts
-npm run verify   # 457 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 475 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
                  # + 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫新自癒）
                  # ＋復原套件專用前綴與 HKDF 世代 [20]（wrapRec=jr1r.＋recKekHkdf opt-in＋讀舊寫新雙試＋KAT）
+                 # ＋loginRouteCore ladder 查表守衛 [23]（外審 #8 幽靈帳：現值 miss → ladder → 兩面 miss 才建幽靈；真 node:sqlite 直驅七情境＋拷貝樹毒化接線摘除案）
                  # ＋ladder 表與重取鹽面 [19]（ph2_ladder 原語／upsert 值主權威行為面／unwrapNoteKeyDual4WithSalt）
                  # ＋常駐毒化矩陣 [16][18]（/tmp 拷貝樹突變重跑＝毒化證據隨每執行重建）
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   457 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→454，SKIP 顯形非靜默）
+                 #   475 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→472，SKIP 顯形非靜默）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
 ```
 
@@ -189,6 +190,13 @@ PH1 v3（密語正規化世代）：`derivePh1ArgonV3(pass, saltArg?)` 預設鹽
 raw 'PASS' 撞同一 ph2）。派生輸入吃 `normalizePassphrase`（NFKC-only；大小寫摺疊禁絕＝
 大小寫差恆不同 ph2）；v2/legacy 派生面零變更（舊帳戶憑證 raw 契約）。兩代 ph2 可並存查表＝
 tacet 遷移層職責（v0.2.0 世代收口）。
+
+server 登入動線（fork 端）：`loginRouteCore(request-ish, store, ip, ph1)` 內建
+ladder 查表守衛——現值 miss 時經 `AuthStore.ladderLookup`（optional）查 ph2_ladder，
+命中回舊帳不建幽靈、兩面 miss 才 `createUser`；未配置＝行為與 0.2.3 單查恆等。
+接法：store 實作 `ladderLookup`（tacet 參考形＝`SQL_FIND_PH2_LADDER_BY_OLD`＋fail-open
+catch）＋套用 `migrations/0011-ph2-ladder.sql`（＋0012 索引修正）；查表零寫入面
+（insert 在 `rekeyWithLadder` 遷移線、delete 在 fork 的 delete-account 批）。
 ⚠️ 鹽撞位警告：`PH1_V3_SALT` 禁當 `derivePh1Argon` 的 `saltArg` 餵入（反之亦然）——
 把 v3 鹽域值餵 v2 派生（或 fork 把同一 saltArg 帶到兩面）＝NFKC-effective 密語與 v2 raw 密語
 同值撞 ph2，跨世代帳戶空間混合。v3 的 `saltArg` 必須異於本 product 的 v2 鹽域值。
@@ -276,6 +284,16 @@ and salted hashes, and never learns your passphrase or the content of any note.
 - **Key hygiene.** Any key that must be exported/wrapped is imported with `extractable=true`;
   KEK and guest keys are permanently non-extractable.
 
+**Server login wiring.** `loginRouteCore(store, ip, ph1)` ships with the ladder guard built in
+(v0.2.4, external-review #8 ghost-account fix): on a current-value (PH2) miss it consults the
+`ph2_ladder` table via the optional `AuthStore.ladderLookup` — a ladder hit returns the
+existing account (no ghost creation); a ladder miss, an unconfigured lookup, or a
+ladder-store error (fail-open, treated as a miss) all fall through to the legacy
+single-lookup behavior of ≤0.2.3. Forks adopt the guard by configuring `ladderLookup`
+on their store (the tacet reference: `d1AuthStore`) and applying `migrations/0011-ph2-ladder.sql`
+— the lookup itself never writes (inserts stay on the `rekeyWithLadder` migration path,
+deletes on the fork's delete-account flow).
+
 **Opt-in primitives.** Optional contracts (`cipherGuest` / `wrapDual` / `wrapShare` / `pinLock` /
 `cipherAttach` / `cipherLocal` / `wrap4` / `wrapDual4` / `wrapLocal` / `wrapRec` (paired with
 `recKekHkdf`: configured together or not at all; partial configuration is rejected on write) /
@@ -293,9 +311,10 @@ PH1→PH2 login flow, inbound cipher/package validation and paired key-package s
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
 
-**Verification.** `npm run verify` runs 457 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 475 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
-isolation, payload tampering, RFC 9106 KAT, and a 200-vector BIP39 cross-check.
+isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
+login ladder-guard behavior suite (external audit #8).
 
 **Usage.** TypeScript source is published (exports point at `.ts`). If you install from npm you
 must bundle it (vite/esbuild etc.); Node's strip-types does not apply inside `node_modules`.
