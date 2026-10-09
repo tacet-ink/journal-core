@@ -145,8 +145,9 @@ export interface AuthStore {
    * ladder hit → getByUserKey → 可續 buildSession），兩面皆 miss 才 createUser。
    * 未配置（optional undefined）＝查表面退場（現行單查行為零變——向後相容：
    * fork 未配 ladder（0011 未上）時行為與 0.2.3 恆等，sennight/vestige 未來接 core 也零炸）。
-   * 錯誤處理照 tacet store.ts 母型：ladder 表缺席（0011 未上）＝fail-open 視同 miss
-   *（lookup 實作自行 catch；本函式不吞 store 拋出的非缺席類錯誤——缺席面由 fork 實作裁定）。
+   * 錯誤處理照 tacet store.ts 母型：lookup 拋任何錯（0011 未上的 ladder 表缺席、ladder store
+   * 停機故障）＝fail-open 視同 miss，不炸登入（ladder store 停機中登入＝建幽靈——fail-open
+   * 語意的已知代價；接線端 ladderGuard 統一 catch 只包 lookup）＋非 lookup 錯誤照常外拋。
    */
   ladderLookup?(oldPh2: string): Promise<string | null>;
   /** ladder 入表（遷移線用；upsert冪等）。 */
