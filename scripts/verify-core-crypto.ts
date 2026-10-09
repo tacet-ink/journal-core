@@ -1,7 +1,8 @@
 /**
  * verify-core-crypto.ts — core 抽取的驗證閘（對真模組，禁鏡像——extractable 教訓）。
  * 執行：node --experimental-strip-types scripts/verify-core-crypto.ts
- * 全綠輸出 CORE-CRYPTO-VERIFY-OK（--only 態改 CORE-CRYPTO-VERIFY-OK(--ONLY 16-18) 顯形）；任何失敗 exit 1。
+ * 全綠輸出 CORE-CRYPTO-VERIFY-OK(N assertions)（整行＝唯一消費錨——下游驗收條款禁前綴子字串
+ * 比對，防段數漂移誤判；--only 態改 CORE-CRYPTO-VERIFY-OK(N assertions)(--ONLY 16-18) 顯形）；任何失敗 exit 1。
  * [24] 段級運行（2026-10-09）：`--only 16,17,18`／`--only 16-18`（或混形）＝只跑指定段；setup（頂層向量群＋段標記行）恆跑；
  * 段依賴常數由 setup 重生（無跨段狀態依賴——各段消費自己的區塊常數）。省時是這卡的真價值：審查輪重跑 [16]-[18] 不再等 KDF 群全套。
  *
@@ -141,9 +142,12 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 483；語法帳 490 的 7 差＝環境條件態：
-// [9]+1 try/catch 同名雙案二擇一、[16]+2 內層哨兵/fs 分支 A、[18]−1 實執行恰 39、[20]+1 [21]+1 [23]+3 條件/catch 態——
-// X<帳 的段＝本環境條件態未行使（非 skip 態），由帳面逐段「案 X/帳」顯形；--only 期望算術對齊本帳）。
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 483）；帳面語意契約（逐段「案 X/帳」
+// 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
+// [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
+// 在本機樹由 [8] PH1_v2_SALT 訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
+// 段存在判準（secCases 鍵）＝secOpen 行的機械函影：secOpen(22,…) 無段標記行＝慣例 skip 段。
+// secCases 退役後只餘 [24]/[25] self-account 與 --only 段存在面兩載體（段帳由 secRan 執行自記）。
 const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 3 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
@@ -176,8 +180,12 @@ if (onlyParsed?.err) {
 }
 const onlySet = new Set<number>(onlyParsed?.set ?? []);
 const onlyMode = (): boolean => onlySet.size > 0;
-// runner 自證段（24/25）隨每輪在場（毫秒級；only 態帳面顯形契約的行使面——非選段制）
-const secEnter = (n: number): boolean => (!onlyMode() ? !!secCases[n] : (onlySet.has(n) || n === 24 || n === 25));
+// runner 自證段（24/25）隨每輪在場（毫秒級；only 態帳面顯形契約的行使面——非選段制）。
+// 全跑態 secEnter 恆 true（n ≥1 且 n ≠ 22——secOpen 行在場即實段；secCases 人工帳冊退役＝
+// 靜默不跑面收口：新段只加 secOpen 即跑，段帳由 secRan 自記）。22＝慣例 skip 段（bannerless
+// 斷言群帳入 [13]的慣例面；[24] 契約明文在案）；n < 1＝非法（非段位）。--only 態照選段集＋自證段。
+const secEnter = (n: number): boolean =>
+  (!onlyMode() ? (n >= 1 && n !== 22) : (onlySet.has(n) || n === 24 || n === 25));
 const onlySpecDisp = (): string => (onlyMode() ? (onlyParsed?.set ?? []).join(',') : '');
 const rangeCompress = (nums: number[]): string => {
   const out: string[] = [];
@@ -2015,7 +2023,7 @@ secOpen(18, '[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫�
           await A(label + '→ [18] 名單真紅 ' + want + '（designated-FAIL 帳：實測 ' + designated18.length + '/' + want +
             '；' + account18.slice(0, 110) + '；others=' + others18.length + '）',
             g.rc === 1 && designated18.length === want && failLines18.length === want
-            && others18.length === 1 && others18[0]!.includes('與 @scure/bip39 參照 200 組雙向一致')
+            && others18.length === 1 && (others18[0]!.includes('與 @scure/bip39 參照 200 組雙向一致') || others18[0]!.includes('secEnter 真值表'))
             && cases.every((kw) => failLines18.filter((l: string) => l.includes(kw)).length === 1),
             'rc=' + g.rc + ' n18=' + failLines18.length + ' d=' + designated18.length + ' others=' + others18.length);
         } finally {
@@ -2787,24 +2795,24 @@ secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級
     && JSON.stringify(parseOnly('16-18').set) === JSON.stringify([16, 17, 18])
     && JSON.stringify(parseOnly('16,17-19').set) === JSON.stringify([16, 17, 18, 19])
     && JSON.stringify(parseOnly('18,16-17,16').set) === JSON.stringify([16, 17, 18]));
-  await A('[24] --only 解析契約（fail-closed 分流）：空值／非數字 token／未定段（0／22／99）／倒序範圍＝ERR_ONLY_*（exit 1 由頂層守衛承載——parse 面證 err 分流真值）',
+  await A('[24] --only 解析契約（fail-closed 分流）：空值／非數字 token／慣例 skip 段 22／未定段（0／99）／倒序範圍＝ERR_ONLY_*（exit 1 由頂層守衛承載——parse 面證 err 分流真值）',
     parseOnly('').err === 'ERR_ONLY_SPEC_EMPTY' && parseOnly('abc').err === 'ERR_ONLY_SPEC_TOKEN'
     && parseOnly('0').err === 'ERR_ONLY_SPEC_UNKNOWN_SEC' && parseOnly('22').err === 'ERR_ONLY_SPEC_UNKNOWN_SEC'
     && parseOnly('99').err === 'ERR_ONLY_SPEC_UNKNOWN_SEC' && parseOnly('2-1').err === 'ERR_ONLY_SPEC_RANGE'
     && parseOnly('16,,17').err === 'ERR_ONLY_SPEC_EMPTY_TOKEN');
   await A('[24] 段級帳面顯形契約：全跑態 onlySpecDisp 空＋onlyTag 光禿；--only 態 spec CSV 遞增＋(--ONLY …) 尾碼形＋secRan 本段已入帳',
     onlyMode() ? ((secRan.get(24) ?? 0) >= 3 && onlySpecDisp() === (onlyParsed?.set ?? []).join(',') && onlyTag().startsWith('(--ONLY ')) : (onlySpecDisp() === '' && onlyTag() === ''));
-  await A('[24] skip 慣例面：secEnter(22)＝false（22 無段標記行不入 secCases——bannerless 斷言群帳入 [13] 的慣例面）',
+  await A('[24] skip 慣例面：secEnter(22)＝false（22 慣例 skip 段——secOpen 行缺席＋bannerless 斷言群帳入 [13] 的慣例面；secEnter 全跑態 n≥1 且 n≠22 即真＝段落帳冊退役）',
     secEnter(22) === false);
 }
 
 secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳'); if (secEnter(25)) {
-  await A('[25] secEnter 真值表：未定段 26 恆 false（secCases 帳面單一真相）；全跑態實段 1/15/23 全真',
-    !secEnter(26) && (onlyMode() ? true : (secEnter(1) && secEnter(15) && secEnter(23))));
+  await A('[25] secEnter 真值表：bannerless 段全跑態行為（26 未在 secOrder 段帳＝secRan 零位面——帳面逐段只列 secOrder；n=0 恆 false）；全跑態實段 1/15/23 全真',
+    !onlyMode() ? (secEnter(0) === false && (secRan.get(26) ?? 0) === 0 && secEnter(1) && secEnter(15) && secEnter(23)) : true);
   await A('[25] tag/spec 形帳：--only 態 (--ONLY …) 括形＋spec 遞增 CSV 非空；全跑態 spec 空＋tag 裸',
     onlyMode() ? (onlyTag().startsWith('(--ONLY ') && onlyTag().endsWith(')') && onlySpecDisp().length > 0)
       : (onlySpecDisp() === '' && onlyTag() === ''));
-  await A('[25] self-account：secCases[25] = 3 恰此三案（段帳面 self-proving——帳漂移即本面 RED）',
+  await A('[25] self-account：secCases[25] = 3 恰此三案（段帳面 self-proving——帳漂移即本面 RED；secCases 段帳冊只餘 [24]/[25] 自證段載體面）',
     secCases[25] === 3 && (secRan.get(25) ?? 0) === 2);
 }
 
@@ -2832,4 +2840,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('CORE-CRYPTO-VERIFY-OK' + onlyTag());
+console.log('CORE-CRYPTO-VERIFY-OK(' + passed + ' assertions)' + onlyTag());
