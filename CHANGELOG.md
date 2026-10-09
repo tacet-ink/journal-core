@@ -26,6 +26,16 @@ delete-account 流程）。README server login wiring 節同步。
 
 ## [未發布]
 
+**Added** — 驗證閘段級 `--only` 運行能力（工具面，零原語觸碰）：`node --experimental-strip-types
+scripts/verify-core-crypto.ts --only 16,17,18`（CSV／範圍 `16-18`／混形 `16,17-19` 三形同集合）
+只跑指定段——setup（跨段消費向量群）恆跑、毒化矩陣內層 rerun 不繼承 `--only`（內層恆全帳，
+`POISON_GATE_INNER` 語意不變）、`--only` 缺席預設恆全跑（CI/deploy 面零降級）。帳面誠實契約：
+總帳顯形「本輪 X/選段帳 N（總帳 483 案非本輪載）」＋逐段 `案 X/帳 · skip（未跑非通過）` 行＋
+OK 標記改 `CORE-CRYPTO-VERIFY-OK(--ONLY 16-18)` 顯形；段號語法違約（空值／非數字／未定段／
+倒序範圍）＝`ERR_ONLY_*` fail-closed exit 1。段帳為執行帳（healthy-repo 全跑真值；
+語法帳與之差 7＝既有環境條件態——帳面逐段顯形）。審查輪重跑指定段不再付全帳 6-8 分鐘
+（本機實測 `--only 16,17,18` 349s vs 全跑 ~433s；便宜段 1.3s）。
+
 [佔位——下一批載項先落此節，節位翻正隨發布輪。]
 
 ## [0.2.3] — 2026-10-06
