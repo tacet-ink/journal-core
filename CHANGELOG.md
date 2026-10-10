@@ -5,6 +5,22 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.3.1] — 2026-10-10
+
+**Added** — 高階 Vault API（`./client/vault`）：`createVault`／`unlockVault`／`recoverVault`
+不用懂前綴即可註冊/登入/復原（新面前綴家族自動生成：`<app>` 域鹽＋最新世代 jr4 家族；
+AAD 自動綁 `<app>:<recordId>`）；`VaultHandle.encrypt/decrypt` 收字串/JSON/Uint8Array 三形
+（tag 首字元分型）；`changePassphrase`／`needsUpgrade()`／`upgrade()`（同鑰驗證重包——
+帶內版本化律；資料零換鑰）；`VaultError` 型別化錯誤家族（`ERR_VAULT_*` code 欄）——
+低階原語零語意變更（本層為純新增呼叫端）。Argon2id 載體平台預設（`./client/vault` 內建
+回退鏈 injected→node→worker→inline、可覆寫、`setArgonLoader` 注入恆優先；首用 RFC 9106
+KAT 前檢＝錯誤載體拒用不降級——zero-fallback）；Web Worker 載入器內建（登入不卡畫面——
+worker_threads 轉接同一原文雙端串行）；hash-wasm 4.12.0 進 devDependencies＋vendor 產生器
+`scripts/vendor-hash-wasm.cjs`（tarball 以 `!` 排除；產物 `src/client/vendor/hash-wasm-argon2.ts`
+sha256 釘選、去縮排可逆、零全域寫入——產品碼零 runtime deps 鐵律不破）。
+驗證閘新段 [27] 十四案（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError
+毒化／載體覆寫＋Worker 回退鏈／vendor 孿生＋exports 分層單向）。
+
 ## [0.3.0] — 2026-10-10
 
 **Added** — dist 發行：`npm run build`（tsc 原生 emit——ESM＋`.d.ts`，`tsconfig.build.json`；
@@ -138,6 +154,7 @@ npm metadata 補齊（homepage／repository／bugs——npm 頁側欄 repo 連�
 兩時代金鑰模型、帶內版本化前綴契約、pinlock／雙因子合鑰／分享包裹原語、
 Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 
+[0.3.1]: https://github.com/tacet-ink/journal-core/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tacet-ink/journal-core/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/tacet-ink/journal-core/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/tacet-ink/journal-core/compare/v0.2.3...v0.2.4
