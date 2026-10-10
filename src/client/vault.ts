@@ -48,6 +48,17 @@ import { VaultError, isVaultError, type VaultErrorCode } from './vault-error.ts'
 import { ensureArgonCarrier, argonCarrierFailures, type ArgonCarrierKind, type ArgonCarrierOptions } from './argon-auto.ts';
 
 export { VaultError, isVaultError, type VaultErrorCode };
+export {
+  ensureArgonCarrier,
+  currentArgonCarrier,
+  resetArgonCarrier,
+  DEFAULT_ARGON_CHAIN,
+  type ArgonCarrierKind,
+  type ArgonCarrierChoice,
+  type ArgonCarrierOptions,
+  type ArgonFallbackEvent,
+} from './argon-auto.ts';
+export { argonWorkerSource, createBlobArgonWorker, type ArgonWorkerLike } from './argon-worker.ts';
 
 // ── 型別 ────────────────────────────────────────────────────────────────────
 
