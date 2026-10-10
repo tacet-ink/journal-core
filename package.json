@@ -84,8 +84,10 @@
   },
   "files": [
     "dist",
+    "docs",
     "src",
     "scripts",
+    "!scripts/generate-vectors.ts",
     "migrations",
     "README.md",
     "LICENSE"

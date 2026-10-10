@@ -18,7 +18,7 @@
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 484 assertions, all green, run against the real modules (no mocks)
+npm run verify   # 492 assertions, all green, run against the real modules (no mocks)
 ```
 
 ```ts
@@ -80,9 +80,14 @@ run: `node --experimental-strip-types example.ts`
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
+發行形（0.3.0 起）：`dist/`＝tsc 原生 emit 的 ESM `.js`＋`.d.ts`，`exports` 全部子路徑指向 dist；
+`src/` 同包隨附（稽核／閱讀用，import 恆走 dist）。
+
 ## 前綴契約（家族表：13 個資料前綴＋閘對照組 jr1g.）
 
 前綴是版本契約：payload 佈局與 KDF 由前綴界定，升級 = 新前綴。
+逐位元組布局、KDF 參數、AAD 與世代契約的完整規格見 [docs/format-spec.md](./docs/format-spec.md)，
+測試向量見 [docs/vectors/](./docs/vectors/)（真原語產生的凍結證據；閘 [26] 檢存在性與 shape）。
 Tacet 部署實例（config 傳入）：
 
 | 前綴 | 語意 | KDF | payload |
@@ -119,7 +124,7 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 
 ```sh
 npm ci --ignore-scripts
-npm run verify   # 484 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 492 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -131,8 +136,9 @@ npm run verify   # 484 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   484 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→481，SKIP 顯形非靜默）
+                 #   492 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→489，SKIP 顯形非靜默）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
+                 # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
 ```
 
 - 產品碼**零執行時依賴**（WebCrypto 原語）；devDependencies 僅閘用（typescript、@scure/bip39 對照、workers types）。
@@ -146,8 +152,9 @@ npm run verify   # 484 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
 
 ## 使用（Usage）
 
-TypeScript 原始碼發行（exports 直指 .ts）。**注意**：Node 的 strip-types 不適用於
-node_modules 內的檔案，npm 安裝的消費者請走打包器；源碼 clone 可直接 node --experimental-strip-types。
+0.3.0 起發行 `dist/`（ESM `.js`＋`.d.ts`）：npm 安裝後瀏覽器、Node、Deno、Bun、Workers
+皆可直接 import，不需打包器、不需 strip-types（0.2.x 的「npm 安裝必走打包器」限制已退役）。
+源碼 clone 仍可直接 `node --experimental-strip-types` 跑 `src/`。
 
 ```ts
 import { makeKeyStore, makeHeldKey, generateNoteKey, encryptNote, decryptNote } from '@tacet-ink/journal-core';
@@ -241,8 +248,8 @@ catch）＋套用 `migrations/0011-ph2-ladder.sql`（＋0012 索引修正）；�
 - `PinLockConfig`：解包輸出的 noteKey 恆 `extractable=true`（鐵律，非可調選項）——
   config 只帶三個前綴欄（pinLock/pinLockSaltPrefix/pinLockAad），缺任一即拒。
 
-打包器（vite/esbuild）可直接 alias 到源碼目錄使用；Argon2id 瀏覽器載體需另裝
-hash-wasm 並以 `setArgonLoader()` 注入（詳 `src/client/argon2.ts` 檔頭）。
+Argon2id 瀏覽器載體需另裝 hash-wasm 並以 `setArgonLoader()` 注入（詳 `src/client/argon2.ts` 檔頭）；
+Node ≥ 24.7 走內建 `node:crypto` 免注入。
 
 ## 界限（誠實面）
 
@@ -309,16 +316,31 @@ carrier: `node:crypto` ≥ Node 24.7 / hash-wasm in browsers, RFC 9106 test vect
 @scure/bip39), brand-namespaced key storage (`keys.ts`). Server: zero-knowledge auth core with a
 PH1→PH2 login flow, inbound cipher/package validation and paired key-package selection
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
-fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities.
+fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities. Since 0.3.0 the
+package ships `dist/` (tsc-emitted ESM `.js` + `.d.ts`); every `exports` subpath resolves to dist,
+and `src/` is included for reading and auditing only.
 
-**Verification.** `npm run verify` runs 484 assertions against the real modules (no mocks):
+**Format spec & test vectors.** The byte-level wire format of every prefix family — payload layout
+and field lengths, KDF parameters, AAD strings, and the in-band versioning contract — is specified
+in [docs/format-spec.md](./docs/format-spec.md) (Chinese; transcribed from the source, not a new
+contract). JSON test vectors live in [docs/vectors/](./docs/vectors/): one wrap/encrypt sample per
+prefix family (`families.json`), known-answer vectors (RFC 9106 Argon2id, the gate's frozen
+`jr2w.`/`jr3w.`/`jr3d.`/`jr4w.`/`jr4d.`/`jr1r.`/`jr1w.` blobs, and PH1/PH2 credential samples in
+`kat.json`), and 34 BIP39 samples (`bip39.json`). They were generated once by
+`scripts/generate-vectors.ts` against the real primitives and committed as frozen evidence; the
+verify gate checks their presence and shape (section [26]) and does not regenerate them.
+
+**Verification.** `npm run verify` runs 492 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
-login ladder-guard behavior suite (external audit #8).
+login ladder-guard behavior suite (external audit #8), and presence/shape checks for the format
+spec and test vectors.
 
-**Usage.** TypeScript source is published (exports point at `.ts`). If you install from npm you
-must bundle it (vite/esbuild etc.); Node's strip-types does not apply inside `node_modules`.
-See the code sample in the 使用 section above.
+**Usage.** Since 0.3.0 the npm package ships compiled ESM in `dist/`, so browsers, Node, Deno, Bun
+and Workers can import it directly — no bundler and no strip-types needed (the 0.2.x "must bundle"
+requirement is retired). A source checkout can still run `src/` with `node --experimental-strip-types`.
+In browsers, inject the hash-wasm Argon2id carrier via `setArgonLoader()`; Node ≥ 24.7 uses the
+built-in `node:crypto`. See the code sample in the 使用 section above.
 
 **Honest limits.** The guest era is obfuscation-grade, not E2E. PH1 derivation is defined by each
 product (fast hash or Argon2id); this layer only validates its hex64 form. Product concerns
