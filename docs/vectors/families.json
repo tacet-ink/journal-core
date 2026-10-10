@@ -1,0 +1,594 @@
+{
+  "format": "journal-core-vectors/1",
+  "package_version": "0.3.0",
+  "spec": "docs/format-spec.md",
+  "generator": "scripts/generate-vectors.ts",
+  "note": "Frozen evidence generated once by calling the real primitives; not recomputed in CI (random iv/salt). Verify gate [26] checks presence and shape only.",
+  "vectors": [
+    {
+      "prefix": "jr1u.",
+      "family": "guest 時代密文",
+      "layout": "content",
+      "kdf": "K_u = SHA-256(UTF8(guestKdfPrefix ‖ identity))",
+      "aad": "noteId:n1",
+      "inputs": {
+        "plaintext": "今天寫了一點東西。",
+        "aad": "noteId:n1",
+        "guestKdfPrefix": "tacet-note-u1",
+        "identity": "acct-aaaaaaaaaaaaaaaa",
+        "key_hex": "ea50fc9b0196cfd3b25b4e518f431aa3bf50c1cfe92cd9f15b441e2ec7517e71"
+      },
+      "wire": "jr1u.E28OEzwXAV0hlkXL2uA/iSU0xA8MaZcrE4gfLl1/Iy4aY+X4N1tWZCoUF14Kw2p0D78HW+wMUw==",
+      "payload_len": 55,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "136f0e133c17015d219645cb"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 27,
+          "hex": "dae03f892534c40f0c69972b13881f2e5d7f232e1a63e5f8375b56"
+        },
+        {
+          "name": "tag",
+          "offset": 39,
+          "len": 16,
+          "hex": "642a14175e0ac36a740fbf075bec0c53"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1b.",
+      "family": "綁定時代密文",
+      "layout": "content",
+      "kdf": "none (noteKey)",
+      "aad": "noteId:n1",
+      "inputs": {
+        "plaintext": "今天寫了一點東西。",
+        "aad": "noteId:n1",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1b.hjCYLIC/tiHE7v1XnMzBAhPVF1edWNXj8c+YDQuDmUTh8DjVwi1O6QIKBhv7BkS/EtI+Q4joRA==",
+      "payload_len": 55,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "8630982c80bfb621c4eefd57"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 27,
+          "hex": "9cccc10213d517579d58d5e3f1cf980d0b839944e1f038d5c22d4e"
+        },
+        {
+          "name": "tag",
+          "offset": 39,
+          "len": 16,
+          "hex": "e9020a061bfb0644bf12d23e4388e844"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1c.",
+      "family": "附件密文",
+      "layout": "content",
+      "kdf": "none (noteKey or K_u, caller-chosen)",
+      "aad": "jr1a:note-abc:att-001",
+      "inputs": {
+        "plaintext": "{\"v\":1,\"kind\":\"img\",\"mime\":\"image/png\",\"w\":1,\"h\":1,\"b64\":\"AA==\"}",
+        "aad": "jr1a:note-abc:att-001",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1c.nJClotL7fG6XmPO0O4ZasTP3HqWsACeb48emoog4zWpIz0f5kfXY2Cmcpi9KsCcMl90fllmFlb+MjR66P8HkmSLhvm08VPSsk79jFmAPODlfuqj8lGEEv3db/Kw=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "9c90a5a2d2fb7c6e9798f3b4"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "3b865ab133f71ea5ac00279be3c7a6a28838cd6a48cf47f991f5d8d8299ca62f4ab0270c97dd1f96598595bf8c8d1eba3fc1e49922e1be6d3c54f4ac93bf6316"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "600f38395fbaa8fc946104bf775bfcac"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1d.",
+      "family": "本機 IDB 密文",
+      "layout": "content",
+      "kdf": "none (caller-injected key)",
+      "aad": "note-abc",
+      "inputs": {
+        "plaintext": "{\"v\":1,\"body\":\"今天寫了一點東西。\"}",
+        "aad": "note-abc",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1d.5S6wZr5b5H1uEOI3fK00a+KvEtm7YjJnzRkZ7oFByjrRyPArel2UfuPLdo2vnQwROaW/6rfxNKHEt1ulB2QNgJTEn+8f1fNN",
+      "payload_len": 72,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "e52eb066be5be47d6e10e237"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 44,
+          "hex": "7cad346be2af12d9bb623267cd1919ee8141ca3ad1c8f02b7a5d947ee3cb768daf9d0c1139a5bfeab7f134a1"
+        },
+        {
+          "name": "tag",
+          "offset": 56,
+          "len": 16,
+          "hex": "c4b75ba507640d8094c49fef1fd5f34d"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1w.",
+      "family": "passphrase 包裹",
+      "layout": "salt-external",
+      "kdf": "PBKDF2-HMAC-SHA256 iterations=600000, salt=16B external",
+      "aad": "notekey",
+      "inputs": {
+        "passphrase": "correct-horse-battery-staple-42",
+        "salt_hex": "f28bd316108f83335ed9ae4f53aa7611",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1w.ZOLL8kYkEFWupNJEadv4shqgxne/zIplMYFjbWubRMWDh+mHZ4sUcGb4mqhzyBXzoMa4/dCk6UFUvYfRze1F4Ia7E4ccfL3UT+hNIguoT8kbFlqFo5i8Jjy/SkE=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "64e2cbf246241055aea4d244"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "69dbf8b21aa0c677bfcc8a653181636d6b9b44c58387e987678b147066f89aa873c815f3a0c6b8fdd0a4e94154bd87d1cded45e086bb13871c7cbdd44fe84d22"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "0ba84fc91b165a85a398bc263cbf4a41"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1w.",
+      "family": "復原套件包裹（未配置世代／舊契約）",
+      "layout": "salt-external",
+      "kdf": "PBKDF2-HMAC-SHA256 iterations=600000, salt=UTF8(recSaltPrefix ‖ identity)",
+      "aad": "notekey",
+      "inputs": {
+        "rec_token": "62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5",
+        "recSaltPrefix": "tacet-note-rec1:",
+        "identity": "acct-aaaaaaaaaaaaaaaa",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1w.fHLCL51SD7n0PTw2d1rDn4u8/bml/vzayBI7rpB3bgH345lbidjB/eB5rgf+6rGp/DAQOk6JH+RqdXEBD90tOeo8HEsQhjo21uDVrW5vxMitSAn0kK9csVWAqAk=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "7c72c22f9d520fb9f43d3c36"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "775ac39f8bbcfdb9a5fefcdac8123bae90776e01f7e3995b89d8c1fde079ae07feeab1a9fc30103a4e891fe46a7571010fdd2d39ea3c1c4b10863a36d6e0d5ad"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "6e6fc4c8ad4809f490af5cb15580a809"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1r.",
+      "family": "復原套件包裹（HKDF 世代）",
+      "layout": "salt-external",
+      "kdf": "HKDF-SHA256 ikm=UTF8(recToken), salt=recKekSalt, info=UTF8('journal-kek-rec-v1:' + recKekHkdf), L=32",
+      "aad": "notekey-rec",
+      "inputs": {
+        "rec_token": "62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5",
+        "recKekHkdf": "jr1r.",
+        "recKekSalt": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "hkdf_info": "journal-kek-rec-v1:jr1r.",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1r.SYBdceUPBHT0mFb7leanFayy97bdfedC+gjc5wLrn6myvnr+Y73pRLy4rY54M5Lgt7bMV0WjGEB4wdlqyztf+SAP/xmQ6XFQQ7BHpHgJDX/RAY3f5eFPLAdKmmU=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "49805d71e50f0474f49856fb"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "95e6a715acb2f7b6dd7de742fa08dce702eb9fa9b2be7afe63bde944bcb8ad8e783392e0b7b6cc5745a3184078c1d96acb3b5ff9200fff1990e9715043b047a4"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "78090d7fd1018ddfe5e14f2c074a9a65"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1l.",
+      "family": "本機包裹",
+      "layout": "salt-external",
+      "kdf": "K_u = SHA-256(UTF8(guestKdfPrefix ‖ identity))",
+      "aad": "notekey-local",
+      "inputs": {
+        "guestKdfPrefix": "tacet-note-u1",
+        "identity": "acct-localwrap-vector",
+        "storage_key": "tacet_notekey:acct-localwrap-vector",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1l.aZ2wgIFYrrsvWqzlkD9xBPxL0G/0TaFMMSHx13/ZpBcK0bByikCTBulvTRZWO/YZcTeZXVMOrcaPvC7czx/AeMP0y6pqFqo/myr2kP4w+obwxdWTx27rOkL13N8=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "699db0808158aebb2f5aace5"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "903f7104fc4bd06ff44da14c3121f1d77fd9a4170ad1b0728a409306e96f4d16563bf6197137995d530eadc68fbc2edccf1fc078c3f4cbaa6a16aa3f9b2af690"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "fe30fa86f0c5d593c76eeb3a42f5dcdf"
+        }
+      ]
+    },
+    {
+      "prefix": "jrsw.",
+      "family": "分享包裹 V1（建立面退役）",
+      "layout": "salt-external",
+      "kdf": "PBKDF2-HMAC-SHA256 iterations=600000, salt=16B external",
+      "aad": "notekey-share",
+      "inputs": {
+        "share_passphrase": "share-link-passphrase-42",
+        "salt_hex": "3ad5b9c89486b94d6859e8bdef4ebbbe",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jrsw.+PbGkA0qYbs3E1idzMmUx8Bp3FouL5fgI+1OVFeYZ8AQialmOniuPVsGGxABtkLvbNSsfy2bd8kj03x/zITRlDJXUv4QWy7kcrVHbnxyFj3zB8MlzgIQ75v2/l4=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "f8f6c6900d2a61bb3713589d"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "ccc994c7c069dc5a2e2f97e023ed4e54579867c01089a9663a78ae3d5b061b1001b642ef6cd4ac7f2d9b77c923d37c7fcc84d194325752fe105b2ee472b5476e"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "7c72163df307c325ce0210ef9bf6fe5e"
+        }
+      ]
+    },
+    {
+      "prefix": "jr3w.",
+      "family": "passphrase 包裹（Argon2id）",
+      "layout": "salt-external",
+      "kdf": "Argon2id(raw passphrase) m=65536KiB t=3 p=1 tag=32B version=0x13, salt=16B external",
+      "aad": "notekey",
+      "inputs": {
+        "passphrase": "correct-horse-battery-staple-42",
+        "salt_hex": "a6cf999b10a78a142e08a010b8d2c243",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr3w.0MbxRKxqbrGt8JpYnnu397RxunmxacRnDQYUHpguJSyE7ItvAio2ZphzSZ5/Ggt+qwBSoOlgvWTX6R7FFSyNWddpEN44y3kS+fdmuC6IYZejxId7jtQBi+qhuQA=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "d0c6f144ac6a6eb1adf09a58"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "9e7bb7f7b471ba79b169c4670d06141e982e252c84ec8b6f022a36669873499e7f1a0b7eab0052a0e960bd64d7e91ec5152c8d59d76910de38cb7912f9f766b8"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "2e886197a3c4877b8ed4018beaa1b900"
+        }
+      ]
+    },
+    {
+      "prefix": "jr4w.",
+      "family": "passphrase 包裹（密語正規化 v3）",
+      "layout": "salt-external",
+      "kdf": "Argon2id(NFKC(passphrase)) m=65536KiB t=3 p=1 tag=32B version=0x13, salt=16B external",
+      "aad": "notekey",
+      "inputs": {
+        "passphrase": "ｖ３－ｇｅｎｅｒａｔｉｏｎ－ｐａｓｓｐｈｒａｓｅ－４２",
+        "passphrase_nfkc": "v3-generation-passphrase-42",
+        "salt_hex": "f5d0fe43c40db021b01fc80b3771a884",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr4w.pRSV3TeBE5u0KWWP2FvNa8BX5Rv62DA4ROyMrM+3JXbrZaS01MO43JTTx/f2JNsf3n7nKAGNTES0UI9V1Y5A5DBm2wKYed2QOTyAL62jKTbVF031ZVG4N7Lon7I=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "a51495dd3781139bb429658f"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "d85bcd6bc057e51bfad8303844ec8caccfb72576eb65a4b4d4c3b8dc94d3c7f7f624db1fde7ee728018d4c44b4508f55d58e40e43066db029879dd90393c802f"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "ada32936d5174df56551b837b2e89fb2"
+        }
+      ]
+    },
+    {
+      "prefix": "jr3s.",
+      "family": "分享包裹 V2（Argon2id）",
+      "layout": "salt-external",
+      "kdf": "Argon2id(raw share passphrase) m=65536KiB t=3 p=1 tag=32B version=0x13, salt=16B external",
+      "aad": "notekey-share",
+      "inputs": {
+        "share_passphrase": "share-link-passphrase-42",
+        "salt_hex": "c37da29e339f8bae79c5b836b21cc5ca",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr3s.sW880ckNLKZVvc0QNRZh8d+QXPTtxLr1m1HJcyMDFS41LtIkAnv66Kq3OUG2pLeMBMIyDX6u6nE9Ifc8quA568Gb+K2s78rNao0ssQK02mA7XyuP+PoWo7/W9Nc=",
+      "payload_len": 92,
+      "fields": [
+        {
+          "name": "iv",
+          "offset": 0,
+          "len": 12,
+          "hex": "b16f3cd1c90d2ca655bdcd10"
+        },
+        {
+          "name": "ct",
+          "offset": 12,
+          "len": 64,
+          "hex": "351661f1df905cf4edc4baf59b51c9732303152e352ed224027bfae8aab73941b6a4b78c04c2320d7eaeea713d21f73caae039ebc19bf8adacefcacd6a8d2cb1"
+        },
+        {
+          "name": "tag",
+          "offset": 76,
+          "len": 16,
+          "hex": "02b4da603b5f2b8ff8fa16a3bfd6f4d7"
+        }
+      ]
+    },
+    {
+      "prefix": "jr2w.",
+      "family": "PIN 第二因子合鑰（PBKDF2）",
+      "layout": "salt-embedded",
+      "kdf": "HKDF-SHA256(ikm = PBKDF2(pass, salt1, 600000) ‖ PBKDF2(normalizePin(pin), UTF8(pinSaltPrefix ‖ hex(pinSalt)), 2000000), salt=pinSalt, info=UTF8('journal-kek2-v1:' + wrapDual))",
+      "aad": "notekey2",
+      "inputs": {
+        "passphrase": "dual-factor-passphrase-42",
+        "pin": "2580ab",
+        "pinSaltPrefix": "tacet-note-pin1:",
+        "hkdf_info": "journal-kek2-v1:jr2w.",
+        "salt1_hex": "10804f5162cfc8bb8e40d7a46f7f96d7",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr2w.08K+Ive1e/XUYsFWl7kjXkowpvSvp6A0eZnZutaBWB58etl0coc1lXNbX9If8vQwym0HK4zJPAOsryLIPFjjeCu2Z0ic2Skj0BHuReGGzBvhxXWCKdCqibOHsFaWZ4VVivE6HgOZ3yoXfavq",
+      "payload_len": 108,
+      "fields": [
+        {
+          "name": "pinSalt",
+          "offset": 0,
+          "len": 16,
+          "hex": "d3c2be22f7b57bf5d462c15697b9235e"
+        },
+        {
+          "name": "iv",
+          "offset": 16,
+          "len": 12,
+          "hex": "4a30a6f4afa7a0347999d9ba"
+        },
+        {
+          "name": "ct",
+          "offset": 28,
+          "len": 64,
+          "hex": "d681581e7c7ad97472873595735b5fd21ff2f430ca6d072b8cc93c03acaf22c83c58e3782bb667489cd92923d011ee45e186cc1be1c5758229d0aa89b387b056"
+        },
+        {
+          "name": "tag",
+          "offset": 92,
+          "len": 16,
+          "hex": "966785558af13a1e0399df2a177dabea"
+        }
+      ]
+    },
+    {
+      "prefix": "jr3d.",
+      "family": "PIN 第二因子合鑰（Argon2id）",
+      "layout": "salt-embedded",
+      "kdf": "HKDF-SHA256(ikm = Argon2id(raw pass, salt1) ‖ Argon2id(normalizePin(pin), UTF8(pinSalt3Prefix ‖ hex(pinSalt))), m=65536KiB t=3 p=1, salt=pinSalt, info=UTF8('journal-kek2-v1:' + prefix))",
+      "aad": "notekey2",
+      "inputs": {
+        "passphrase": "dual-factor-passphrase-42",
+        "pin": "2580ab",
+        "pinSalt3Prefix": "tacet-note-pin3:",
+        "hkdf_info": "journal-kek2-v1:jr3d.",
+        "salt1_hex": "8a08b51dd6b44a9611b154b2a86b06d2",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr3d.i9V7ND19cSenf1FijGmydAcZXJbFKcyeI3kIPOSIc8/HtEmJ62/TdRkRCd+1viXyLVK43xz7ZFgC5fZyD4hIDnXxL5nNs2+VJJSZnB5Nxq+gmHvyu0iP+HC0AqajqfFgRT8isMFEZ1aqhhwY",
+      "payload_len": 108,
+      "fields": [
+        {
+          "name": "pinSalt",
+          "offset": 0,
+          "len": 16,
+          "hex": "8bd57b343d7d7127a77f51628c69b274"
+        },
+        {
+          "name": "iv",
+          "offset": 16,
+          "len": 12,
+          "hex": "07195c96c529cc9e2379083c"
+        },
+        {
+          "name": "ct",
+          "offset": 28,
+          "len": 64,
+          "hex": "e48873cfc7b44989eb6fd375191109dfb5be25f22d52b8df1cfb645802e5f6720f88480e75f12f99cdb36f952494999c1e4dc6afa0987bf2bb488ff870b402a6"
+        },
+        {
+          "name": "tag",
+          "offset": 92,
+          "len": 16,
+          "hex": "a3a9f160453f22b0c1446756aa861c18"
+        }
+      ]
+    },
+    {
+      "prefix": "jr4d.",
+      "family": "PIN 第二因子合鑰（密語正規化 v3）",
+      "layout": "salt-embedded",
+      "kdf": "HKDF-SHA256(ikm = Argon2id(NFKC(pass), salt1) ‖ Argon2id(normalizePin(pin), UTF8(pinSalt3Prefix ‖ hex(pinSalt))), m=65536KiB t=3 p=1, salt=pinSalt, info=UTF8('journal-kek2-v1:' + prefix))",
+      "aad": "notekey2",
+      "inputs": {
+        "passphrase": "ｄｕａｌ－ｆａｃｔｏｒ－ｐａｓｓｐｈｒａｓｅ－４２",
+        "passphrase_nfkc": "dual-factor-passphrase-42",
+        "pin": "2580ab",
+        "pinSalt3Prefix": "tacet-note-pin3:",
+        "hkdf_info": "journal-kek2-v1:jr4d.",
+        "salt1_hex": "ae4407e7008c36da82a07f50636d43ad",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr4d.W1tOT5rwVvwCa355E+HLV6pDqDpVsbkTbDQaa0DFsw6oR5mBNADcECNO77wkImdwpDWpxCrjUZDt6Snk5Bh0jjQkG5pPjpF6PbW74KVRO9Uk3ugRR9kB4vvdePQnzSO/DXaAgCL519u8bRix",
+      "payload_len": 108,
+      "fields": [
+        {
+          "name": "pinSalt",
+          "offset": 0,
+          "len": 16,
+          "hex": "5b5b4e4f9af056fc026b7e7913e1cb57"
+        },
+        {
+          "name": "iv",
+          "offset": 16,
+          "len": 12,
+          "hex": "aa43a83a55b1b9136c341a6b"
+        },
+        {
+          "name": "ct",
+          "offset": 28,
+          "len": 64,
+          "hex": "40c5b30ea84799813400dc10234eefbc24226770a435a9c42ae35190ede929e4e418748e34241b9a4f8e917a3db5bbe0a5513bd524dee81147d901e2fbdd78f4"
+        },
+        {
+          "name": "tag",
+          "offset": 92,
+          "len": 16,
+          "hex": "27cd23bf0d76808022f9d7dbbc6d18b1"
+        }
+      ]
+    },
+    {
+      "prefix": "jr1p.",
+      "family": "本機 PIN 鎖定",
+      "layout": "salt-embedded",
+      "kdf": "PBKDF2-HMAC-SHA256(normalizePin(pin), UTF8(pinLockSaltPrefix ‖ hex(pinSalt)), 600000)",
+      "aad": "notekey-pinlock",
+      "inputs": {
+        "pin": "135790",
+        "pinLockSaltPrefix": "tacet-pinlock-v1:",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr1p.+eUaFScqL5fobMx+WZjGksj4Wg2gp3p3KlG5Vigwf77Zd+u9VG8ocy4yAF/H2VTB5JXjOKfSsfkQzYKOEsTDk6CK4mS+NXKnRzAv5kjd7MYV8TMNxNRqJcRfVbc2iFuAWSuih5EWA7EDaVTQ",
+      "payload_len": 108,
+      "fields": [
+        {
+          "name": "pinSalt",
+          "offset": 0,
+          "len": 16,
+          "hex": "f9e51a15272a2f97e86ccc7e5998c692"
+        },
+        {
+          "name": "iv",
+          "offset": 16,
+          "len": 12,
+          "hex": "c8f85a0da0a77a772a51b956"
+        },
+        {
+          "name": "ct",
+          "offset": 28,
+          "len": 64,
+          "hex": "28307fbed977ebbd546f28732e32005fc7d954c1e495e338a7d2b1f910cd828e12c4c393a08ae264be3572a747302fe648ddecc615f1330dc4d46a25c45f55b7"
+        },
+        {
+          "name": "tag",
+          "offset": 92,
+          "len": 16,
+          "hex": "36885b80592ba287911603b1036954d0"
+        }
+      ]
+    }
+  ]
+}
