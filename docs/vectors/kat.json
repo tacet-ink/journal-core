@@ -1,0 +1,145 @@
+{
+  "format": "journal-core-vectors/1",
+  "package_version": "0.3.0",
+  "spec": "docs/format-spec.md",
+  "generator": "scripts/generate-vectors.ts",
+  "note": "Frozen evidence generated once by calling the real primitives; not recomputed in CI (random iv/salt). Verify gate [26] checks presence and shape only.",
+  "rfc9106": {
+    "algorithm": "Argon2id",
+    "version": "0x13",
+    "memory_kib": 32,
+    "iterations": 3,
+    "parallelism": 4,
+    "tag_len": 32,
+    "password_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+    "salt_hex": "00000000000000000000000000000000",
+    "secret": null,
+    "associated_data": null,
+    "expected_tag_hex": "72d2a36fd5c266bcc96121b24937bc253338cdfcbd273713655748c54b4dd503"
+  },
+  "frozen_blobs": [
+    {
+      "source": "verify [14] KAT14",
+      "prefix": "jr2w.",
+      "wire": "jr2w.srO0tba3uLm6u7y9vr/AwURFRkdISUpLTE1OTy8+hmx+AhMYCgPVBH1Q1q1UnjPF9uvN/ie4DoYqh4LGkMTHvHDy/Sku/lMRvoRWfuqSuIlX0rEpVU8HfMajsaYtzaz1zHFQELEIuzTsM6+S",
+      "payload_len": 108,
+      "inputs": {
+        "passphrase": "correct-horse-battery-staple-42",
+        "pin": "482913",
+        "salt1_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "pinSaltPrefix": "tacet-note-pin1:",
+        "hkdf_info": "journal-kek2-v1:jr2w."
+      },
+      "expected_note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+    },
+    {
+      "source": "verify [17] KAT17",
+      "prefix": "jr3w.",
+      "wire": "jr3w.BeQ8F6s3DdJWY853l2jRv5dHtVEMd+tjJ3XuIisu2ymuK7IInuqIvxtwPD3WzhTkEtCRr+h7KOfWo5FM6ELGjPxwxHAp5LtM5zcEg8hmCqH3dMX9iHF7IOQl3Ak=",
+      "payload_len": 92,
+      "inputs": {
+        "passphrase": "ＰＡＳＳ１２ｘ",
+        "salt_hex": "f6a511fb29b131869d282d89f9eaa90a"
+      },
+      "expected_note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+    },
+    {
+      "source": "verify [17] KAT17",
+      "prefix": "jr3d.",
+      "wire": "jr3d.nOB7P29euSEa+LM8qMSTRe6r32TbBX7nS2R/WyRJ7N1NO+mqXuW5u9HLiLzYObKHq3NURwiEaxD9qwli646qDoG4/5wlHD7UE9nBT485oUeEx/vYIkmOu4muJQ42avl8zX9M1PSgaP+Bk+R9",
+      "payload_len": 108,
+      "inputs": {
+        "passphrase": "ｄｕａｌ－ｆａｃｔｏｒ－ｐａｓｓｐｈｒａｓｅ－４２",
+        "pin": "2580ab",
+        "salt1_hex": "a06bd4b1f293b8c8ebff4b6a02f13a34",
+        "pinSalt3Prefix": "tacet-note-pin3:",
+        "hkdf_info": "journal-kek2-v1:jr3d."
+      },
+      "expected_note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+    },
+    {
+      "source": "verify [17] KAT17",
+      "prefix": "jr4w.",
+      "wire": "jr4w.x6cZmk7UVUAf8abE3mLps22+BLTdWGTDOZpTs4DqHFUDUcz5p5VpdIqYub/9r+sE2/hYE1fPb68ABSCdDeEvJVXlGOsbDr9L//xsdFcZZYlRtrMO3APSwJQBrv0=",
+      "payload_len": 92,
+      "inputs": {
+        "passphrase": "v3-generation-passphrase-42",
+        "salt_hex": "31a8d4ae616ccc0a6def28a9b0db4860"
+      },
+      "expected_note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+    },
+    {
+      "source": "verify [17] KAT17",
+      "prefix": "jr4d.",
+      "wire": "jr4d.Dz8wgY5Lphif69Fh5fE+54J4YBlUJgfVLHBeM7RGr3HUmplys5FpcIK/AZT8zstvsUSpox2mwnpo4eQA9eqtbRK3kTowaWRyAEjTfx4kJS9eMoPQEWsr+GRRYgtdINlgAoVJxyi/NaCNqhDR",
+      "payload_len": 108,
+      "inputs": {
+        "passphrase": "dual-factor-passphrase-42",
+        "pin": "2580ab",
+        "salt1_hex": "d6ebccb6c9bb3a0d13905183d2b2977d",
+        "pinSalt3Prefix": "tacet-note-pin3:",
+        "hkdf_info": "journal-kek2-v1:jr4d."
+      },
+      "expected_note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+    },
+    {
+      "source": "verify [20]",
+      "prefix": "jr1r.",
+      "wire": "jr1r.bkvBFdKjNVfidHcfn0WoyyRJLkajWhXF7WmPdc3Q9FCNNxDz+7PgN0x25BjuAZPFi1oP3t+8dblrnSQEltkieBh33xoyChcGKe1wEfaStQF6ITBNb6vBZKVXDEQ=",
+      "payload_len": 92,
+      "inputs": {
+        "rec_token": "62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5",
+        "identity": "kat-id-0000000000000000",
+        "recKekHkdf": "jr1r.",
+        "recKekSalt": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "hkdf_info": "journal-kek-rec-v1:jr1r."
+      },
+      "expected_note_key_hex": "57c72afacd486194c41227f42311600e287a7d48baa7a3e9de32fa460c089699"
+    },
+    {
+      "source": "verify [20]",
+      "prefix": "jr1w.",
+      "wire": "jr1w.a4xchJ+EPui8iQy5dKpQyGjalu0nlJMsDd0LaLyRrY3mt+6112Se4NvaibymRFHsMg1LgOYsBVy15t0CiU1ipf9g8rniqBmdf1R5LzVXQdNJDCzbAfubPUKc/FE=",
+      "payload_len": 92,
+      "inputs": {
+        "rec_token": "62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5",
+        "identity": "kat-id-0000000000000000",
+        "recSaltPrefix": "tacet-note-rec1:"
+      },
+      "expected_note_key_hex": "57c72afacd486194c41227f42311600e287a7d48baa7a3e9de32fa460c089699"
+    }
+  ],
+  "credentials": [
+    {
+      "kind": "ph1_legacy",
+      "input": "correct-horse-battery-staple-42",
+      "salt": null,
+      "expected_hex": "7dd095c64aba71ab6c386f3a01508e411007fc3855561a7bdb07c62d9fb98801"
+    },
+    {
+      "kind": "ph1_v2",
+      "input": "correct-horse-battery-staple-42",
+      "salt": "tacet-ph1-v1",
+      "expected_hex": "dc7c78fe83a0b3a84eace16c404c80300a10f93f3235ad5c7d563d5e1aab5baf"
+    },
+    {
+      "kind": "ph1_v3",
+      "input": "ｖ３－ｇｅｎｅｒａｔｉｏｎ－ｐａｓｓｐｈｒａｓｅ－４２",
+      "input_nfkc": "v3-generation-passphrase-42",
+      "salt": "tacet-ph1-v2",
+      "expected_hex": "0d2f022c5e42c710e981feb484157ae35d7cf9542b489ae35b99c8fee001eae6"
+    },
+    {
+      "kind": "ph2_of_ph1_v2",
+      "input": "dc7c78fe83a0b3a84eace16c404c80300a10f93f3235ad5c7d563d5e1aab5baf",
+      "salt": null,
+      "expected_hex": "5860adc190682591654ebb81ca980c08b76a7ea50b2e0191610522caabcdf537"
+    },
+    {
+      "kind": "rec_token_hash",
+      "input": "62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5",
+      "salt": null,
+      "expected_hex": "f700df2e385610d8295db7f69a6ac3481c456e6f88ec2dee8e44f8e8161f59bd"
+    }
+  ]
+}
