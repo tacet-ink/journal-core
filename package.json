@@ -93,6 +93,7 @@
     "scripts",
     "!scripts/generate-vectors.ts",
     "!scripts/vendor-hash-wasm.cjs",
+    "!scripts/dts-fixture.cjs",
     "migrations",
     "README.md",
     "LICENSE"

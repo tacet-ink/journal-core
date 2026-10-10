@@ -52,6 +52,12 @@ function deriveInput(passphrase: string): string {
 export const ARGON_RFC9106_EXPECTED =
   '72d2a36fd5c266bcc96121b24937bc253338cdfcbd273713655748c54b4dd503';
 
+/** RFC 9106 KAT 參數單一真相（verifyArgonKat／scripts/generate-vectors.ts 寫 kat.json／閘 [26] 對帳共用）。
+ *  tagLen＝派生本體固定輸出長（ARGON_TAG_LEN）；pwd＝passwordLen 位元組 passwordByte、salt＝saltLen 位元組 0x00。 */
+export const ARGON_RFC9106_PARAMS = Object.freeze({
+  memoryKib: 32, iterations: 3, parallelism: 4, tagLen: 32, passwordByte: 0x01, passwordLen: 32, saltLen: 16,
+} as const);
+
 /**
  * PH1 v2 固定域鹽（登入憑證 Argon2id 派生，2026-09-10 安全路線第 4 步）。
  *
@@ -229,7 +235,8 @@ type NodeArgonFn = (
 
 /** 標準向量 KAT：驗證當前載體的 Argon2id 實作正確性（驗證閘起手式）。 */
 export async function verifyArgonKat(): Promise<boolean> {
-  const raw = await deriveArgon2id(new Uint8Array(32).fill(1), new Uint8Array(16), 32, 3, 4);
+  const k = ARGON_RFC9106_PARAMS;
+  const raw = await deriveArgon2id(new Uint8Array(k.passwordLen).fill(k.passwordByte), new Uint8Array(k.saltLen), k.memoryKib, k.iterations, k.parallelism);
   return toHex(raw) === ARGON_RFC9106_EXPECTED;
 }
 

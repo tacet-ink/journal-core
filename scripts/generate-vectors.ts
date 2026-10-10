@@ -23,7 +23,7 @@ import {
 import {
   wrapNoteKey3, unwrapNoteKey3, wrapNoteKey4, unwrapNoteKey4, wrapNoteKeyShare3, unwrapNoteKeyShare3,
   wrapNoteKeyDual3, unwrapNoteKeyDual3, wrapNoteKeyDual4, unwrapNoteKeyDual4,
-  verifyArgonKat, derivePh1Argon, derivePh1ArgonV3, ARGON_RFC9106_EXPECTED,
+  verifyArgonKat, derivePh1Argon, derivePh1ArgonV3, ARGON_RFC9106_EXPECTED, ARGON_RFC9106_PARAMS,
   ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM, ARGON_TAG_LEN, PH1_V2_SALT, PH1_V3_SALT,
   type Argon3Config,
 } from '../src/client/argon2.ts';
@@ -342,8 +342,10 @@ const write = (name: string, body: Record<string, unknown>): void =>
 write('families.json', { vectors: families });
 write('kat.json', {
   rfc9106: {
-    algorithm: 'Argon2id', version: '0x13', memory_kib: 32, iterations: 3, parallelism: 4, tag_len: 32,
-    password_hex: '01'.repeat(32), salt_hex: '00'.repeat(16), secret: null, associated_data: null,
+    algorithm: 'Argon2id', version: '0x13', memory_kib: ARGON_RFC9106_PARAMS.memoryKib, iterations: ARGON_RFC9106_PARAMS.iterations,
+    parallelism: ARGON_RFC9106_PARAMS.parallelism, tag_len: ARGON_RFC9106_PARAMS.tagLen,
+    password_hex: ARGON_RFC9106_PARAMS.passwordByte.toString(16).padStart(2, '0').repeat(ARGON_RFC9106_PARAMS.passwordLen),
+    salt_hex: '00'.repeat(ARGON_RFC9106_PARAMS.saltLen), secret: null, associated_data: null,
     expected_tag_hex: ARGON_RFC9106_EXPECTED,
   },
   frozen_blobs: frozen,
