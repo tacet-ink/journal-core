@@ -244,7 +244,7 @@ export async function deriveKekArgon(password: string, salt: Uint8Array): Promis
   return argonKekFromRaw(await deriveArgon2id(password, salt, ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM));
 }
 
-/** jr3w. 包裹：payload = salt[16] ‖ iv[12] ‖ AES-GCM(KEK, hex(noteKey), aad='notekey')；salt 由呼叫端存 users.salt。 */
+/** jr3w. 包裹：payload = iv[12] ‖ AES-GCM(KEK, hex(noteKey), aad='notekey')（鹽外置家族，嚴格 92B）；salt 不入 payload，由呼叫端存 users.salt。 */
 export async function wrapNoteKey3(cfg: Argon3Config, noteKey: CryptoKey, passphrase: string): Promise<{ wrapped: string; salt: string }> {
   if (!cfg.wrap3) throw new Error('ERR_JR3W_NOT_CONFIGURED');
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
@@ -279,7 +279,7 @@ export async function unwrapNoteKey3(cfg: Argon3Config, wrapped: string, passphr
 // 與 cfg.wrap4 前綴。舊 payload（jr1w./jr3w.）永遠可解＝raw 派生；新 payload 只由 jr4w. 產生。
 // pinSaltPrefix 沿用 cfg 既有欄（Argon3 家族 PIN 鹽域，非 jr3d. 專屬）。
 
-/** jr4w. 包裹（v3 密語）：payload = salt[16] ‖ iv[12] ‖ GCM(KEK, hex(noteKey), aad='notekey')；salt 呼叫端存 users.salt。 */
+/** jr4w. 包裹（v3 密語）：payload = iv[12] ‖ GCM(KEK, hex(noteKey), aad='notekey')（鹽外置家族，嚴格 92B）；salt 不入 payload，呼叫端存 users.salt。 */
 export async function wrapNoteKey4(cfg: Argon3Config, noteKey: CryptoKey, passphrase: string): Promise<{ wrapped: string; salt: string }> {
   if (!cfg.wrap4) throw new Error('ERR_JR4W_NOT_CONFIGURED');
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
