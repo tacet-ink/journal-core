@@ -2805,7 +2805,7 @@ secOpen(23, '[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳——
 }
 
 };
-// ── 26. 格式規格＋測試向量（docs/format-spec.md＋docs/vectors/*.json；0.3.0 批 A2） ──
+// ── 26. 格式規格＋測試向量（docs/format-spec.md＋docs/vectors/*.json） ──
 //
 // 單向契約：源碼 → scripts/generate-vectors.ts → JSON（凍結證據，commit 入 repo）→ 本段只檢存在＋shape。
 // 本段不依賴產生器、不重算 KDF（向量含隨機 iv/鹽＝重算即漂移）；BIP39 是確定性轉寫，逐組對照現行原語。
@@ -2881,7 +2881,7 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
 }
 }
 
-// ── 27. 高階 Vault API（src/client/vault.ts＋argon-auto.ts＋argon-worker.ts＋vendor hash-wasm；0.3.1 批 A3） ──
+// ── 27. 高階 Vault API（src/client/vault.ts＋argon-auto.ts＋argon-worker.ts＋vendor hash-wasm） ──
 //
 // 行為面（對真模組）：create→encrypt→decrypt 三資料形 roundtrip、AAD＝`<app>:<recordId>` 以低階原語
 // 手解對帳、unlockVault 新前綴（jr4w.）／舊前綴（jr3w. Argon、jr1w. PBKDF2）、upgrade 同鑰驗證重包、

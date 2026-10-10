@@ -1,5 +1,5 @@
 /**
- * vault.ts — 高階 Vault API（0.3.1 批 A3）：createVault／unlockVault／recoverVault → VaultHandle。
+ * vault.ts — 高階 Vault API：createVault／unlockVault／recoverVault → VaultHandle。
  *
  * 定位：低階原語（note-crypto.ts／argon2.ts）的**呼叫端**——additive-only，零改動原語語意。
  * 一個 vault＝一把隨機 256-bit noteKey（generateNoteKey）＋伺服器存的包裹欄（wrapped＋salt）
