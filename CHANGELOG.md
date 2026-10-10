@@ -32,7 +32,7 @@ delete-account 流程）。README server login wiring 節同步。
 scripts/verify-core-crypto.ts --only 16,17,18`（CSV／範圍 `16-18`／混形 `16,17-19` 三形同集合）
 只跑指定段——setup（跨段消費向量群）恆跑、毒化矩陣內層 rerun 不繼承 `--only`（內層恆全帳，
 `POISON_GATE_INNER` 語意不變）、`--only` 缺席預設恆全跑（CI/deploy 面零降級）。帳面誠實契約：
-總帳顯形「本輪 X/選段帳 N（總帳 484 案非本輪載）」＋逐段 `案 X/帳 · skip（未跑非通過）` 行＋
+總帳顯形「本輪 X/選段帳 N（段帳總和 483 案——非本輪載面）」＋逐段 `案 X/帳 · skip（未跑非通過）` 行＋
 OK 標記改 `CORE-CRYPTO-VERIFY-OK(--ONLY 16-18)` 顯形；段號語法違約（空值／非數字／未定段／
 倒序範圍）＝`ERR_ONLY_*` fail-closed exit 1。段帳為執行帳（healthy-repo 全跑真值；
 語法帳與之差 7＝既有環境條件態——帳面逐段顯形）。審查輪重跑指定段不再付全帳 6-8 分鐘
@@ -42,6 +42,8 @@ OK 標記改 `CORE-CRYPTO-VERIFY-OK(--ONLY 16-18)` 顯形；段號語法違約�
 **Fixed** — [18] 毒化 runner 斷言摘死析取（[25] 段帳重寫前寫下的未來失敗面保險腿——段語意
 重寫後已亡，保留只會吞真失敗面）；[25] 段帳登記義務負向斷言上線（secRan 實跑段必已登記——
 secCases 全摘即 RED）；secCases 敘事收窄成契約窗〔[24]/[25] 自證段＋--only 段存在＋teeth〕；
+[0.2.4] 已版發行補收——[23]⑥ 毒化案 getByUserKey 改 db-backed 正讀復齒＋ladderLookup
+ docstring 對 fail-open 碼面＋ladder.ts 職責分工節對 0.2.4 內建接線（9af261e；補錄隨本版出門）；
 README 三行 verify 帳照實 484 收帳。
 
 ## [0.2.3] — 2026-10-06
