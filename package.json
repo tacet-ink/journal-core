@@ -109,7 +109,7 @@
     "vendor:hash-wasm": "node scripts/vendor-hash-wasm.cjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260831.1",
+    "@cloudflare/workers-types": "^5.20261010.1",
     "@scure/bip39": "^2.4.0",
     "hash-wasm": "^4.12.0",
     "typescript": "~7.0.2"
