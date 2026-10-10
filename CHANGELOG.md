@@ -5,6 +5,16 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.3.0] — 2026-10-10
+
+**Added** — dist 發行：`npm run build`（tsc 原生 emit——ESM＋`.d.ts`，`tsconfig.build.json`；
+`prepublishOnly` 內建＝手動出車防線）；publish workflow 顯式 build＋dist import 冒煙步
+（建置失敗在 publish 前顯形）。`exports`/`main`/`types` 收口指 dist（13 子路徑逐條
+types＋default 雙形——types 恆 `.d.ts`、default 恆 `.js`）；tarball `files` 加 `dist`，
+`src` 保留（低階消費者源碼可讀＋稽核面，imports 恆走 dist）。瀏覽器、Node、Deno、
+Bun、Workers 從此免打包器直接 import；Node `--experimental-strip-types` 的
+「node_modules 內 .ts 禁區」類問題（消費端 `.core-pkg` realpath 手術）隨 dist 出車退役。
+
 ## [0.2.4] — 2026-10-09
 
 **Security** — CI 供應鏈加固：npm ci 一律 `--ignore-scripts`（verify／publish 兩 workflow——依賴安裝不執行任何安裝腳本）；

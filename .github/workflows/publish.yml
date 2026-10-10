@@ -37,6 +37,13 @@ jobs:
       - name: Verify crypto primitives
         run: npm run verify
 
+      - name: Build dist (tsc emit — ESM + .d.ts)
+        # exports 恆指 dist（0.3.0 起）：dist 不入版控，出車前必建。npm publish 的
+        # prepublishOnly 亦會重建（手動出車防線）；此步顯式前置＝建置失敗在 publish 前顯形。
+        run: |
+          npm run build
+          node -e "import('./dist/index.js').then(m=>{const n=Object.keys(m).length;console.log('dist exports:',n);if(!n)process.exit(1)})"
+
       - name: Check tag matches package version
         # workflow_dispatch（branch ref）無 v-tag：直接 fail-fast 標記「須推 v* tag」，
         # 不誤踩「tag != package version」檢查錯訊。
