@@ -142,15 +142,16 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 483）；帳面語意契約（逐段「案 X/帳」
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 484）；帳面語意契約（逐段「案 X/帳」
 // 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
 // [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
-// 在本機樹由 [8] PH1_v2_SALT 訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
+// 在本機樹由 [8]（登入憑證 Argon2id 派生）內登入 lane 的訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
 // secEnter 跑行為脫鉤 secCases；secCases 鍵只承載段存在／帳面／--only 判準的登記義務
 //（secOpen(22,…) 無段標記行＝慣例 skip 段）。缺帳防線（teeth）：secRan 實跑段必已登記——
-// for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL；反向缺席段＝帳面誠實「案 0/N · skip」。
-// secCases 只餘 [24]/[25] self-account 與 --only 段存在面＋teeth 三載體（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 3 };
+// for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
+//——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
+// secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -2524,7 +2525,7 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
     await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
       srcPy21.includes('npm ci --ignore-scripts'));
   } else {
-    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 479）',
+    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 481）',
       true, 'no .github dir — consumption tree face');
   }
   // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
@@ -2816,8 +2817,8 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
       : (onlySpecDisp() === '' && onlyTag() === ''));
   await A('[25] secCases 段帳登記義務（負向斷言——teeth）：secRan 實跑段（本機樹 [23]⑤ fail-open 表缺席異常面照行）必已登記；secCases 缺鍵且非 22 段＝RED（secCases 全摘禁令的行為面承載）',
     (() => { for (const [k25] of secRan) if (!secCases[k25] && k25 !== 22) return false; return true; })());
-  await A('[25] self-account：secCases[25] = 3 恰此三案（段帳面 self-proving——帳漂移即本面 RED；secCases 載體面：[24]/[25] 自證段＋--only 段存在面＋teeth 三載體）',
-    secCases[25] === 3 && (secRan.get(25) ?? 0) === 3);
+  await A('[25] self-account：secCases[25] = 4 恰此四案（段帳面 self-proving——帳漂移即本面 RED；secCases 載體面：[24]/[25] 自證段＋--only 段存在面＋teeth 三載體）',
+    secCases[25] === 4 && (secRan.get(25) ?? 0) === 3);
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
