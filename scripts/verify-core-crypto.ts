@@ -69,6 +69,8 @@ import {
   derivePh1ArgonV3,
   PH1_V2_SALT,
   PH1_V3_SALT,
+  ARGON_RFC9106_EXPECTED,
+  setArgonLoader,
   type Argon3Config,
 } from '../src/client/argon2.ts';
 import { makeKeyStore } from '../src/client/keys.ts';
@@ -97,6 +99,19 @@ import {
   PH2_LADDER_KIND_V2,
   makePh2LadderStore,
 } from '../src/server/ladder.ts';
+import {
+  createVault,
+  unlockVault,
+  recoverVault,
+  VaultError,
+  isVaultError,
+  currentArgonCarrier,
+  resetArgonCarrier,
+  argonWorkerSource,
+  type VaultOptions,
+  type ArgonWorkerLike,
+} from '../src/client/vault.ts';
+import { hashWasmArgon2Factory, HASH_WASM_ARGON2_SHA256, HASH_WASM_VERSION } from '../src/client/vendor/hash-wasm-argon2.ts';
 
 type Row19 = { account_id: string; ph2_kind: string };
 type Env19 = { DB: { prepare(sql: string): { bind(...params: unknown[]): { first(): Promise<Row19 | null>; run(): Promise<void> } } } };
@@ -142,7 +157,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 492——A2 [26] +8）；帳面語意契約（逐段「案 X/帳」
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 506——A3 [27] +14）；帳面語意契約（逐段「案 X/帳」
 // 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
 // [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
 // 在本機樹由 [8]（登入憑證 Argon2id 派生）內登入 lane 的訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
@@ -151,7 +166,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 14 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -2525,7 +2540,7 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
     await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
       srcPy21.includes('npm ci --ignore-scripts'));
   } else {
-    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 489）',
+    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 503）',
       true, 'no .github dir — consumption tree face');
   }
   // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
@@ -2790,7 +2805,7 @@ secOpen(23, '[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳——
 }
 
 };
-// ── 26. 格式規格＋測試向量（docs/format-spec.md＋docs/vectors/*.json；0.3.0 批 A2） ──
+// ── 26. 格式規格＋測試向量（docs/format-spec.md＋docs/vectors/*.json） ──
 //
 // 單向契約：源碼 → scripts/generate-vectors.ts → JSON（凍結證據，commit 入 repo）→ 本段只檢存在＋shape。
 // 本段不依賴產生器、不重算 KDF（向量含隨機 iv/鹽＝重算即漂移）；BIP39 是確定性轉寫，逐組對照現行原語。
@@ -2866,6 +2881,309 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
 }
 }
 
+// ── 27. 高階 Vault API（src/client/vault.ts＋argon-auto.ts＋argon-worker.ts＋vendor hash-wasm） ──
+//
+// 行為面（對真模組）：create→encrypt→decrypt 三資料形 roundtrip、AAD＝`<app>:<recordId>` 以低階原語
+// 手解對帳、unlockVault 新前綴（jr4w.）／舊前綴（jr3w. Argon、jr1w. PBKDF2）、upgrade 同鑰驗證重包、
+// changePassphrase 週期（含 PIN jr4d. 進出）、復原套件（jr1r.）、VaultError 毒化（搬列 AAD／竄改／
+// 形不符／配置缺欄）、載體覆寫顯形（setArgonLoader 注入優先＋錯值載體 KAT 拒用）、真 Worker 載體
+//（node worker_threads 轉接層跑 argonWorkerSource 原文——瀏覽器 blob 形同源碼）、回退鏈（Worker 失效→
+// inline＋onFallback；無回退鏈＝KDF_UNSUPPORTED；派生期載體失效歸因不誤報 WRAP_MISMATCH）、vendor 孿生
+//（去縮排原文 sha256＝檔內常數＝閘釘選值）、零 runtime deps＋exports 子路徑＋分層單向。
+// 收尾恆 resetArgonCarrier()＋setArgonLoader(null)——後續段零載體殘留。
+secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）'); if (secEnter(27)) {
+{
+  const codeOf27 = async (p: Promise<unknown>): Promise<string> => {
+    try { await p; return 'OK'; } catch (e) { return e instanceof VaultError ? e.code : 'NON-VAULT:' + String((e as Error)?.message ?? e); }
+  };
+  const fam27 = (h: { family: unknown }): string | null => h.family as string | null; // getter 讀值（禁 TS 跨 await 窄化）
+  const bytesEq27 = (a: unknown, b: Uint8Array): boolean =>
+    a instanceof Uint8Array && a.length === b.length && a.every((x, i) => x === b[i]);
+  const CFG27: VaultOptions = {
+    app: 'tacet-vault27',
+    cipher: 'jr1v.',
+    argon: { wrap4: 'jr4w.', wrap3: 'jr3w.', wrapDual4: 'jr4d.', wrapDual3: 'jr3d.', pinSalt3Prefix: 'tacet-note-pin3:' },
+    legacy: { wrap: 'jr1w.', wrapDual: 'jr2w.', pinSaltPrefix: 'tacet-note-pin1:' },
+    recovery: { wrapRec: 'jr1r.', recKekHkdf: 'tacet-vault27' },
+  };
+  const PASS27 = 'correct horse ｂａｔｔｅｒｙ 27';
+  try {
+    // ① roundtrip 三資料形
+    const c27 = await createVault(PASS27, CFG27);
+    const v27 = c27.vault;
+    const str27 = '默·日記 — 🌙 line\nbreak';
+    const obj27 = { title: '標題', tags: ['a', 'b'], n: 3, ok: true, nil: null, nested: { x: [1, { y: 'z' }] } };
+    const bytes27 = new Uint8Array([0, 1, 2, 254, 255, 0, 128]);
+    const bS27 = await v27.encrypt('rec-s', str27);
+    const bJ27 = await v27.encrypt('rec-j', obj27);
+    const bB27 = await v27.encrypt('rec-b', bytes27);
+    const bE27 = await v27.encrypt('rec-e', new Uint8Array(0));
+    const bES27 = await v27.encrypt('rec-es', '');
+    await A('[27] create→encrypt→decrypt roundtrip 三資料形（字串含 Unicode／JSON 巢狀物件／Uint8Array 含 0x00＋空陣列＋空字串）還原同型；blob 前綴＝cfg.cipher；同明文兩次密文異（隨機 iv）',
+      [bS27, bJ27, bB27, bE27, bES27].every((b) => b.startsWith('jr1v.'))
+      && (await v27.decrypt('rec-s', bS27)) === str27
+      && JSON.stringify(await v27.decrypt('rec-j', bJ27)) === JSON.stringify(obj27)
+      && bytesEq27(await v27.decrypt('rec-b', bB27), bytes27)
+      && bytesEq27(await v27.decrypt('rec-e', bE27), new Uint8Array(0))
+      && (await v27.decrypt('rec-es', bES27)) === ''
+      && (await v27.encrypt('rec-s', str27)) !== bS27);
+
+    // ② 寫面形＋AAD 域（低階原語手解對帳）
+    const rec27 = c27.serverRecord;
+    const nk27 = await unwrapNoteKey4(CFG27.argon, rec27.wrapped, PASS27, rec27.salt);
+    const openRaw27 = async (key: CryptoKey | null, blob: string, aad: string): Promise<Uint8Array | null> => {
+      if (!key) return null;
+      try {
+        const p = unb64Mod(blob.slice(5));
+        return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: p.slice(0, 12) as BufferSource, additionalData: enc.encode(aad) as BufferSource }, key, p.slice(12) as BufferSource));
+      } catch { return null; }
+    };
+    const rawS27 = await openRaw27(nk27, bS27, 'tacet-vault27:rec-s');
+    const kit27 = c27.recovery;
+    await A('[27] 寫面形：serverRecord jr4w.＋salt hex32、family wrap4、needsUpgrade false、carrier node；低階 unwrapNoteKey4 解得同鑰——AAD＝`<app>:<recordId>`（tag 0x73＋UTF-8 本體）、裸 recordId／他 app 域恆解不開；復原套件 recToken hex64＋wrappedRec jr1r.＋recTokenHash＝SHA-256(recToken)',
+      rec27.wrapped.startsWith('jr4w.') && /^[0-9a-f]{32}$/.test(rec27.salt) && v27.family === 'wrap4' && v27.needsUpgrade() === false && v27.carrier === 'node'
+      && !!rawS27 && rawS27[0] === 0x73 && new TextDecoder().decode(rawS27.subarray(1)) === str27
+      && (await openRaw27(nk27, bS27, 'rec-s')) === null && (await openRaw27(nk27, bS27, 'other-app:rec-s')) === null
+      && !!kit27 && /^[0-9a-f]{64}$/.test(kit27.recToken) && kit27.wrappedRec.startsWith('jr1r.') && kit27.recTokenHash === await sha(kit27.recToken));
+
+    // ③ unlockVault 新前綴
+    const u27 = await unlockVault(PASS27, rec27, CFG27);
+    await A('[27] unlockVault 新前綴（jr4w.）：另一 handle 解前 handle 三資料形密文；family wrap4、needsUpgrade false',
+      u27.family === 'wrap4' && !u27.needsUpgrade()
+      && (await u27.decrypt('rec-s', bS27)) === str27 && JSON.stringify(await u27.decrypt('rec-j', bJ27)) === JSON.stringify(obj27)
+      && bytesEq27(await u27.decrypt('rec-b', bB27), bytes27));
+
+    // ④ unlockVault 舊前綴（jr3w. Argon／jr1w. PBKDF2）——同一 noteKey 兩包
+    const OLD27 = 'old pass 27';
+    const nkOld27 = await generateNoteKey();
+    const r3_27 = await wrapNoteKey3(CFG27.argon, nkOld27, OLD27);
+    const r1_27 = await wrapNoteKey(TACET, nkOld27, OLD27);
+    const u3_27 = await unlockVault(OLD27, r3_27, CFG27);
+    const u1_27 = await unlockVault(OLD27, r1_27, CFG27);
+    const bOld27 = await u3_27.encrypt('rec-old', 'old-era');
+    await A('[27] unlockVault 舊前綴各一：jr3w.（family wrap3）／jr1w.（family wrap，PBKDF2 舊世代讀面＝carrier null 不需 Argon）皆 needsUpgrade true；兩 handle 同鑰互解＋低階 noteKey 手解同 AAD 域',
+      u3_27.family === 'wrap3' && u1_27.family === 'wrap' && u3_27.needsUpgrade() && u1_27.needsUpgrade() && u1_27.carrier === null && u3_27.carrier === 'node'
+      && (await u1_27.decrypt('rec-old', bOld27)) === 'old-era'
+      && new TextDecoder().decode((await openRaw27(nkOld27, bOld27, 'tacet-vault27:rec-old'))?.subarray(1)) === 'old-era');
+
+    // ⑤ upgrade：錯密語拒（狀態不動）→ 正確密語重包 jr4w.；舊包裹仍可解（舊前綴語意不動）；雙因子 jr3d. → jr4d.
+    const upWrong27 = await codeOf27(u3_27.upgrade('not the pass'));
+    const stillOld27 = u3_27.family === 'wrap3' && u3_27.serverRecord?.wrapped === r3_27.wrapped;
+    const up27 = await u3_27.upgrade(OLD27);
+    const uUp27 = await unlockVault(OLD27, up27, CFG27);
+    const uOld27b = await unlockVault(OLD27, r3_27, CFG27);
+    const upIdem27 = await u3_27.upgrade('ignored when current');
+    const r3d27 = await wrapNoteKeyDual3(CFG27.argon, nkOld27, OLD27, '2468');
+    const uD27 = await unlockVault(OLD27, r3d27, { ...CFG27, pin: '2468' });
+    const dualBefore27 = fam27(uD27) === 'wrapDual3' && uD27.needsUpgrade(); // 升級前快照（斷言式在全部動作後求值）
+    const upDualNoPin27 = await codeOf27(uD27.upgrade(OLD27));
+    const upD27 = await uD27.upgrade(OLD27, { pin: '2468' });
+    await A('[27] needsUpgrade/upgrade 真值行：錯密語＝ERR_VAULT_WRAP_MISMATCH 且狀態不動；正確＝新前綴 jr4w. 包同一 noteKey（新包裹解舊密文）、needsUpgrade 翻 false、已最新再呼＝原包裹欄原樣；舊 jr3w. 包裹照解；jr3d. 缺 PIN＝ERR_VAULT_PIN_REQUIRED、帶 PIN → jr4d.（family wrapDual4）',
+      upWrong27 === 'ERR_VAULT_WRAP_MISMATCH' && stillOld27
+      && up27.wrapped.startsWith('jr4w.') && fam27(u3_27) === 'wrap4' && !u3_27.needsUpgrade()
+      && (await uUp27.decrypt('rec-old', bOld27)) === 'old-era' && (await uOld27b.decrypt('rec-old', bOld27)) === 'old-era'
+      && upIdem27.wrapped === up27.wrapped
+      && dualBefore27 && upDualNoPin27 === 'ERR_VAULT_PIN_REQUIRED'
+      && upD27.wrapped.startsWith('jr4d.') && fam27(uD27) === 'wrapDual4' && !uD27.needsUpgrade());
+
+    // ⑥ changePassphrase 週期（含 PIN 進出）
+    const NEW27 = 'new pass 27';
+    const cp27 = await v27.changePassphrase(NEW27);
+    const uNew27 = await unlockVault(NEW27, cp27, CFG27);
+    const oldOnNew27 = await codeOf27(unlockVault(PASS27, cp27, CFG27));
+    const oldRecStill27 = await unlockVault(PASS27, rec27, CFG27);
+    const cpD27 = await v27.changePassphrase(NEW27, { pin: '1357' });
+    const famD27 = v27.family;
+    const noPin27 = await codeOf27(unlockVault(NEW27, cpD27, CFG27));
+    const uPin27 = await unlockVault(NEW27, cpD27, { ...CFG27, pin: '1357' });
+    const cpNoPin27 = await codeOf27(v27.changePassphrase(NEW27));
+    const cpBack27 = await v27.changePassphrase(NEW27, { pin: null });
+    await A('[27] changePassphrase 週期：同一 noteKey 重包 jr4w.（新密語解舊密文、舊密語對新包裹＝WRAP_MISMATCH、舊包裹欄不被本 API 觸及）；pin 字串→jr4d.（無 PIN 解鎖＝PIN_REQUIRED、帶 PIN 解）；雙因子省略 pin＝PIN_REQUIRED；pin:null 回 jr4w.；空密語＝BAD_PASSPHRASE、空白 PIN＝BAD_PIN',
+      cp27.wrapped.startsWith('jr4w.') && cp27.wrapped !== rec27.wrapped && (await uNew27.decrypt('rec-s', bS27)) === str27
+      && oldOnNew27 === 'ERR_VAULT_WRAP_MISMATCH' && (await oldRecStill27.decrypt('rec-s', bS27)) === str27
+      && cpD27.wrapped.startsWith('jr4d.') && famD27 === 'wrapDual4' && noPin27 === 'ERR_VAULT_PIN_REQUIRED'
+      && (await uPin27.decrypt('rec-j', bJ27) as { title?: string }).title === '標題'
+      && cpNoPin27 === 'ERR_VAULT_PIN_REQUIRED' && cpBack27.wrapped.startsWith('jr4w.') && fam27(v27) === 'wrap4'
+      && (await codeOf27(v27.changePassphrase(''))) === 'ERR_VAULT_BAD_PASSPHRASE'
+      && (await codeOf27(v27.changePassphrase(NEW27, { pin: '   ' }))) === 'ERR_VAULT_BAD_PIN');
+
+    // ⑦ VaultError 毒化（記錄密文面）
+    const tamper27 = (() => { const p = unb64Mod(bS27.slice(5)); p[p.length - 1] ^= 0x01; return 'jr1v.' + modB64(p); })();
+    const errObj27 = await (async () => { try { await v27.decrypt('rec-OTHER', bS27); return null; } catch (e) { return e; } })();
+    const cyc27: Record<string, unknown> = {}; cyc27.self = cyc27;
+    await A('[27] VaultError 毒化（記錄面）：錯 recordId（AAD 搬列）／末位元翻轉竄改／他 vault 金鑰＝ERR_VAULT_DECRYPT；他前綴／壞 base64／過短＝ERR_VAULT_BAD_BLOB；空 recordId＝BAD_RECORD_ID；undefined／ArrayBuffer／Uint16Array／BigInt／循環物件＝BAD_DATA；錯誤物件 instanceof VaultError＋name＋isVaultError 分流',
+      errObj27 instanceof VaultError && (errObj27 as VaultError).name === 'VaultError' && isVaultError(errObj27, 'ERR_VAULT_DECRYPT') && !isVaultError(errObj27, 'ERR_VAULT_BAD_BLOB')
+      && (await codeOf27(v27.decrypt('rec-s', tamper27))) === 'ERR_VAULT_DECRYPT'
+      && (await codeOf27(u3_27.decrypt('rec-s', bS27))) === 'ERR_VAULT_DECRYPT'
+      && (await codeOf27(v27.decrypt('rec-s', 'jr1b.' + bS27.slice(5)))) === 'ERR_VAULT_BAD_BLOB'
+      && (await codeOf27(v27.decrypt('rec-s', 'jr1v.!!not-base64!!'))) === 'ERR_VAULT_BAD_BLOB'
+      && (await codeOf27(v27.decrypt('rec-s', 'jr1v.' + modB64(new Uint8Array(20))))) === 'ERR_VAULT_BAD_BLOB'
+      && (await codeOf27(v27.encrypt('', 'x'))) === 'ERR_VAULT_BAD_RECORD_ID'
+      && (await codeOf27(v27.decrypt('', bS27))) === 'ERR_VAULT_BAD_RECORD_ID'
+      && (await codeOf27(v27.encrypt('r', undefined as never))) === 'ERR_VAULT_BAD_DATA'
+      && (await codeOf27(v27.encrypt('r', new ArrayBuffer(4) as never))) === 'ERR_VAULT_BAD_DATA'
+      && (await codeOf27(v27.encrypt('r', new Uint16Array(2) as never))) === 'ERR_VAULT_BAD_DATA'
+      && (await codeOf27(v27.encrypt('r', 10n as never))) === 'ERR_VAULT_BAD_DATA'
+      && (await codeOf27(v27.encrypt('r', cyc27 as never))) === 'ERR_VAULT_BAD_DATA');
+
+    // ⑧ 配置／serverRecord 拒（opt-in 未配置即拒、不猜）
+    const noW4_27 = { ...CFG27, argon: { ...CFG27.argon, wrap4: undefined } };
+    await A('[27] VaultError 拒（配置／包裹欄面）：serverRecord 缺 salt／缺 wrapped／salt 大寫／null＝BAD_RECORD；未知前綴＝WRAP_UNKNOWN；缺 argon.wrap4／缺 app／缺 cipher／前綴互為前綴／recovery 半配置／PIN 寫面未配置＝ERR_VAULT_CONFIG；空密語＝BAD_PASSPHRASE',
+      (await codeOf27(unlockVault(PASS27, { wrapped: rec27.wrapped } as never, CFG27))) === 'ERR_VAULT_BAD_RECORD'
+      && (await codeOf27(unlockVault(PASS27, { salt: rec27.salt } as never, CFG27))) === 'ERR_VAULT_BAD_RECORD'
+      && (await codeOf27(unlockVault(PASS27, { wrapped: rec27.wrapped, salt: rec27.salt.toUpperCase() }, CFG27))) === 'ERR_VAULT_BAD_RECORD'
+      && (await codeOf27(unlockVault(PASS27, null as never, CFG27))) === 'ERR_VAULT_BAD_RECORD'
+      && (await codeOf27(unlockVault(PASS27, { wrapped: 'jr9w.' + rec27.wrapped.slice(5), salt: rec27.salt }, CFG27))) === 'ERR_VAULT_WRAP_UNKNOWN'
+      && (await codeOf27(createVault(PASS27, noW4_27))) === 'ERR_VAULT_CONFIG'
+      && (await codeOf27(createVault(PASS27, { ...CFG27, app: '' }))) === 'ERR_VAULT_CONFIG'
+      && (await codeOf27(createVault(PASS27, { ...CFG27, cipher: '' }))) === 'ERR_VAULT_CONFIG'
+      && (await codeOf27(createVault(PASS27, { ...CFG27, cipher: 'jr4' }))) === 'ERR_VAULT_CONFIG'
+      && (await codeOf27(createVault(PASS27, { ...CFG27, recovery: { wrapRec: 'jr1r.', recKekHkdf: '' } }))) === 'ERR_VAULT_CONFIG'
+      && (await codeOf27(createVault(PASS27, { ...CFG27, argon: { wrap4: 'jr4w.' }, pin: '1234' }))) === 'ERR_VAULT_CONFIG'
+      && (await codeOf27(createVault('', CFG27))) === 'ERR_VAULT_BAD_PASSPHRASE');
+
+    // ⑨ 復原套件
+    const rv27 = await recoverVault(kit27!.recToken, kit27!.wrappedRec, CFG27);
+    const rvFamNull27 = rv27.family === null && rv27.serverRecord === null && rv27.carrier === null && !rv27.needsUpgrade();
+    const rvUp27 = await codeOf27(rv27.upgrade(PASS27));
+    const rvCp27 = await rv27.changePassphrase('recovered 27');
+    const rvU27 = await unlockVault('recovered 27', rvCp27, CFG27);
+    const wrongTok27 = (kit27!.recToken[0] === 'a' ? 'b' : 'a') + kit27!.recToken.slice(1);
+    await A('[27] 復原套件：recoverVault(recToken, wrappedRec) 解舊密文；family／serverRecord／carrier 皆 null（HKDF 不需 Argon）、upgrade＝BAD_RECORD、changePassphrase 設新密語後 unlock 可解；錯 recToken／非 hex64／他前綴＝ERR_VAULT_RECOVERY；未配置 recovery＝ERR_VAULT_CONFIG',
+      (await rv27.decrypt('rec-s', bS27)) === str27 && rvFamNull27 && rvUp27 === 'ERR_VAULT_BAD_RECORD'
+      && rvCp27.wrapped.startsWith('jr4w.') && (await rvU27.decrypt('rec-b', bB27) as Uint8Array).length === bytes27.length
+      && (await codeOf27(recoverVault(wrongTok27, kit27!.wrappedRec, CFG27))) === 'ERR_VAULT_RECOVERY'
+      && (await codeOf27(recoverVault('xyz', kit27!.wrappedRec, CFG27))) === 'ERR_VAULT_RECOVERY'
+      && (await codeOf27(recoverVault(kit27!.recToken, 'jr1w.' + kit27!.wrappedRec.slice(5), CFG27))) === 'ERR_VAULT_RECOVERY'
+      && (await codeOf27(recoverVault(kit27!.recToken, kit27!.wrappedRec, { ...CFG27, recovery: undefined }))) === 'ERR_VAULT_CONFIG');
+
+    // ⑩ 載體覆寫顯形（setArgonLoader 注入恆優先；錯值載體 KAT 拒用）
+    let cnt27 = 0;
+    const fac27 = hashWasmArgon2Factory();
+    const countLoader27 = () => { cnt27++; return Promise.resolve(fac27); };
+    setArgonLoader(countLoader27);
+    const cInj27 = await createVault(PASS27, { ...CFG27, recovery: undefined });
+    const injKind27 = cInj27.vault.carrier;
+    const injCur27 = currentArgonCarrier();
+    const uFromNode27 = await unlockVault(PASS27, rec27, CFG27); // 注入載體解 node 載體所寫
+    setArgonLoader(null);
+    const uFromInj27 = await unlockVault(PASS27, cInj27.serverRecord, CFG27); // node 載體解注入載體所寫
+    const zeroLoader27 = () => Promise.resolve({ argon2id: (async () => new Uint8Array(32)) as never });
+    setArgonLoader(zeroLoader27);
+    const badKat27 = await codeOf27(createVault(PASS27, CFG27));
+    setArgonLoader(null);
+    await A('[27] 載體覆寫顯形：setArgonLoader 注入＝carrier／currentArgonCarrier 皆 injected 且注入載體實被呼叫；注入↔node 互解（逐位元一致）；撤注入回 node；錯值載體（恆零輸出）＝RFC 9106 KAT 拒用 ERR_VAULT_KDF_UNSUPPORTED（zero-fallback：不降級）',
+      injKind27 === 'injected' && injCur27 === 'injected' && cnt27 > 0
+      && (await uFromNode27.decrypt('rec-s', bS27)) === str27 && uFromInj27.family === 'wrap4' && uFromInj27.carrier === 'node'
+      && currentArgonCarrier() === 'node' && badKat27 === 'ERR_VAULT_KDF_UNSUPPORTED');
+
+    // ⑪ 真 Worker 載體（node worker_threads 轉接層跑 argonWorkerSource 原文）
+    const wt27 = (globalThis as unknown as { process?: { getBuiltinModule?: (id: string) => unknown } }).process?.getBuiltinModule?.('node:worker_threads') as
+      { Worker?: new (src: string, o: { eval: boolean }) => { postMessage(m: unknown, t?: unknown): void; terminate(): Promise<number>; on(ev: string, f: (x: unknown) => void): void } } | undefined;
+    if (!wt27?.Worker) {
+      await A('[27] 真 Worker 載體（worker_threads 缺席環境）＝顯性 FAIL 行（非 silent true）', false, 'node:worker_threads 缺席');
+    } else {
+      const SHIM27 = "const { parentPort } = require('node:worker_threads'); globalThis.self = { postMessage: (m, t) => parentPort.postMessage(m, t), set onmessage(f) { parentPort.on('message', (d) => f({ data: d })); } };\n";
+      let made27 = 0;
+      const nodeWorker27 = (): ArgonWorkerLike => {
+        made27++;
+        const w = new wt27.Worker!(SHIM27 + argonWorkerSource(), { eval: true });
+        const like: ArgonWorkerLike = { postMessage: (m, t) => w.postMessage(m, t), terminate: () => { void w.terminate(); }, onmessage: null, onerror: null };
+        w.on('message', (d) => like.onmessage?.({ data: d }));
+        w.on('error', (e) => like.onerror?.(e));
+        return like;
+      };
+      const wOpts27 = { chain: ['worker', 'inline'] as const, createWorker: nodeWorker27 };
+      const cW27 = await createVault(PASS27, { ...CFG27, recovery: undefined, carrier: wOpts27 });
+      const wKind27 = cW27.vault.carrier;
+      const wCur27 = currentArgonCarrier();
+      const uW27 = await unlockVault(PASS27, rec27, { ...CFG27, carrier: wOpts27 }); // Worker 解 node 所寫
+      resetArgonCarrier();
+      const afterReset27 = currentArgonCarrier();
+      const uWn27 = await unlockVault(PASS27, cW27.serverRecord, CFG27); // node 解 Worker 所寫
+      await A('[27] 真 Worker 載體：chain [worker,inline]＋worker_threads 轉接 argonWorkerSource 原文＝carrier worker（單一 Worker 重用）；Worker↔node 互解逐位元一致；resetArgonCarrier 撤自裝載體回 node',
+        wKind27 === 'worker' && wCur27 === 'worker' && made27 === 1 && uW27.carrier === 'worker'
+        && (await uW27.decrypt('rec-s', bS27)) === str27 && uWn27.family === 'wrap4' && uWn27.carrier === 'node' && afterReset27 === 'node');
+    }
+
+    // ⑫ 回退鏈＋失效歸因
+    const events27: { from: string; to: string }[] = [];
+    const broken27 = (): ArgonWorkerLike => { throw new Error('CSP worker-src blocked (simulated)'); };
+    const fb27 = await unlockVault(PASS27, rec27, { ...CFG27, carrier: { chain: ['worker', 'inline'], createWorker: broken27, onFallback: (e) => events27.push(e) } });
+    const fbKind27 = fb27.carrier;
+    const fbCur27 = currentArgonCarrier();
+    resetArgonCarrier();
+    const noFb27 = await codeOf27(unlockVault(PASS27, rec27, { ...CFG27, carrier: { chain: ['worker'], createWorker: broken27 } }));
+    resetArgonCarrier();
+    // 健康 KAT（32 KiB）、64 MiB 派生即 ok:false 的 flaky Worker：無回退＝KDF_UNSUPPORTED（非 WRAP_MISMATCH）；有回退＝成功＋事件
+    const flaky27 = (): ArgonWorkerLike => {
+      const fac = hashWasmArgon2Factory();
+      const like: ArgonWorkerLike = {
+        postMessage: (m) => {
+          const q = m as { id: number; memorySize: number; password: string | Uint8Array; salt: Uint8Array; iterations: number; parallelism: number; hashLength: number };
+          void (async () => {
+            if (q.memorySize > 1024) { like.onmessage?.({ data: { id: q.id, ok: false, error: 'OOM (simulated)' } }); return; }
+            const out = await fac.argon2id({ ...q, outputType: 'binary' }) as Uint8Array;
+            like.onmessage?.({ data: { id: q.id, ok: true, out } });
+          })();
+        },
+        terminate: () => {},
+        onmessage: null,
+        onerror: null,
+      };
+      return like;
+    };
+    const attrib27 = await codeOf27(unlockVault(PASS27, rec27, { ...CFG27, carrier: { chain: ['worker'], createWorker: flaky27 } }));
+    resetArgonCarrier();
+    const events27b: unknown[] = [];
+    const fl27 = await unlockVault(PASS27, rec27, { ...CFG27, carrier: { chain: ['worker', 'inline'], createWorker: flaky27, onFallback: (e) => events27b.push(e) } });
+    const flKind27 = fl27.carrier === 'worker' ? currentArgonCarrier() : fl27.carrier;
+    resetArgonCarrier();
+    const absent27 = await codeOf27(unlockVault(PASS27, rec27, { ...CFG27, carrier: { chain: ['worker'] } })); // node 無全域 Worker＝載體缺席
+    const emptyChain27 = await codeOf27(createVault(PASS27, { ...CFG27, carrier: { chain: [] } }));
+    resetArgonCarrier();
+    await A('[27] 回退鏈顯形：Worker 建構失敗→inline（onFallback 1 次 worker→inline、carrier 翻 inline）；chain 無 inline＝ERR_VAULT_KDF_UNSUPPORTED；派生期 Worker 失效（KAT 過、64 MiB 失敗）無回退＝KDF_UNSUPPORTED 不誤報 WRAP_MISMATCH、有回退＝成功＋事件；載體缺席（node 無全域 Worker、chain [worker]）＝KDF_UNSUPPORTED；空 chain＝CONFIG',
+      fbKind27 === 'inline' && fbCur27 === 'inline' && events27.length === 1 && events27[0].from === 'worker' && events27[0].to === 'inline'
+      && noFb27 === 'ERR_VAULT_KDF_UNSUPPORTED'
+      && attrib27 === 'ERR_VAULT_KDF_UNSUPPORTED'
+      && (await fl27.decrypt('rec-s', bS27)) === str27 && flKind27 === 'inline' && events27b.length === 1
+      && absent27 === 'ERR_VAULT_KDF_UNSUPPORTED' && emptyChain27 === 'ERR_VAULT_CONFIG');
+  } catch (e) {
+    await A('[27] 行為面未預期拋出（應全數經 VaultError 分流或斷言承載）', false, String((e as Error)?.stack ?? e).slice(0, 400));
+  } finally {
+    resetArgonCarrier();
+    setArgonLoader(null);
+  }
+
+  // ⑬ vendor 孿生＋零 runtime deps
+  const vendSrc27 = await srcOf('../src/client/vendor/hash-wasm-argon2.ts');
+  const vb27 = vendSrc27.indexOf('  // VENDOR-BEGIN\n');
+  const ve27 = vendSrc27.indexOf('  // VENDOR-END\n');
+  const restored27 = vb27 > 0 && ve27 > vb27
+    ? vendSrc27.slice(vb27 + '  // VENDOR-BEGIN\n'.length, ve27).split('\n').map((l) => (l.startsWith('  ') ? l.slice(2) : l)).join('\n')
+    : '';
+  const HASH_WASM_PIN27 = 'dcec617a2e1b700fa132d1583a186cb70611113395e869f2dd6cc82b415d3094'; // hash-wasm@4.12.0 dist/argon2.umd.min.js
+  const kat27 = await hashWasmArgon2Factory().argon2id({ password: new Uint8Array(32).fill(1), salt: new Uint8Array(16), iterations: 3, parallelism: 4, memorySize: 32, hashLength: 32, outputType: 'hex' });
+  const pkg27 = JSON.parse(await srcOf('../package.json')) as { dependencies?: unknown; devDependencies?: Record<string, string>; files?: string[]; exports?: Record<string, { types?: string; default?: string }> };
+  await A('[27] vendor 孿生：去兩格縮排原文 sha256＝HASH_WASM_ARGON2_SHA256＝閘釘選值（hash-wasm@4.12.0）；vendor inline 載體 RFC 9106 KAT 一致且零全域寫入；零 runtime deps（無 dependencies 欄）＋hash-wasm 僅 devDependencies＋產生器 tarball 排除',
+    restored27.length > 20000 && await sha(restored27) === HASH_WASM_ARGON2_SHA256 && HASH_WASM_ARGON2_SHA256 === HASH_WASM_PIN27 && HASH_WASM_VERSION === '4.12.0'
+    && kat27 === ARGON_RFC9106_EXPECTED && (globalThis as unknown as { hashwasm?: unknown }).hashwasm === undefined
+    && pkg27.dependencies === undefined && typeof pkg27.devDependencies?.['hash-wasm'] === 'string'
+    && !!pkg27.files?.includes('!scripts/vendor-hash-wasm.cjs'));
+
+  // ⑭ exports 子路徑＋分層單向＋靜態錨
+  const vaultSrc27 = await srcOf('../src/client/vault.ts');
+  const autoSrc27 = await srcOf('../src/client/argon-auto.ts');
+  const lowSrcs27 = [await srcOf('../src/client/note-crypto.ts'), await srcOf('../src/client/argon2.ts')];
+  await A('[27] exports `./client/vault` 指 dist（types .d.ts＋default .js 雙形）；分層單向（note-crypto.ts／argon2.ts 零 import vault／argon-auto／argon-worker）；AAD 構形錨 `app + \':\' + recordId` 恰 1；argon-auto 零 PBKDF2 碼面（無 \'PBKDF2\' 字面、無 note-crypto import——zero-fallback 錨）',
+    pkg27.exports?.['./client/vault']?.types === './dist/client/vault.d.ts' && pkg27.exports?.['./client/vault']?.default === './dist/client/vault.js'
+    && lowSrcs27.every((s) => !/from '\.\/(vault|argon-auto|argon-worker)/.test(s))
+    && vaultSrc27.includes('new TextEncoder().encode(app + \':\' + recordId)')
+    && vaultSrc27.split('TextEncoder().encode(app + \':\' + recordId)').length - 1 === 1
+    && !/['"]PBKDF2['"]|from '\.\/note-crypto/.test(autoSrc27));
+}
+}
+
 secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級帳面顯形）'); if (secEnter(24)) {
   await A('[24] --only 解析契約（全跑態）：spec 缺席＝onlySet 空集＝secEnter 恆真（CI 形契約不變——npm run verify 全帳；--only 態本面恆真跳過＝帳面由次面承載）',
     !onlyMode() ? (onlySpecRaw === null && parseOnly('').err === 'ERR_ONLY_SPEC_EMPTY' && secEnter(1) && secEnter(23)) : true);
@@ -2886,8 +3204,8 @@ secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級
 }
 
 secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCases 段帳'); if (secEnter(25)) {
-  await A('[25] secEnter 真值表：bannerless 段全跑態行為（27 未在 secOrder 段帳＝secRan 零位面——帳面逐段只列 secOrder；n=0 恆 false）；全跑態實段 1/15/23 全真',
-    !onlyMode() ? (secEnter(0) === false && (secRan.get(27) ?? 0) === 0 && secEnter(1) && secEnter(15) && secEnter(23)) : true);
+  await A('[25] secEnter 真值表：bannerless 段全跑態行為（99 非段位＝不在 secOrder 段帳＝secRan 零位面——帳面逐段只列 secOrder；n=0 恆 false；原哨兵 27 隨 A3 [27] 實段落地改 99）；全跑態實段 1/15/23 全真',
+    !onlyMode() ? (secEnter(0) === false && (secRan.get(99) ?? 0) === 0 && secEnter(1) && secEnter(15) && secEnter(23)) : true);
   await A('[25] tag/spec 形帳：--only 態 (--ONLY …) 括形＋spec 遞增 CSV 非空；全跑態 spec 空＋tag 裸',
     onlyMode() ? (onlyTag().startsWith('(--ONLY ') && onlyTag().endsWith(')') && onlySpecDisp().length > 0)
       : (onlySpecDisp() === '' && onlyTag() === ''));
@@ -2898,7 +3216,7 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27];
 const secTotal = secOrder.reduce((a, n) => a + (secCases[n] ?? 0), 0);
 const ranSecs = secOrder.filter((n) => (secRan.get(n) ?? 0) > 0);
 const selTotal = secOrder.filter((n) => !onlyMode() || onlySet.has(n) || n === 24 || n === 25).reduce((a, n) => a + (secCases[n] ?? 0), 0);
