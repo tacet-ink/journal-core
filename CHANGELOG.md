@@ -15,24 +15,14 @@ types＋default 雙形——types 恆 `.d.ts`、default 恆 `.js`）；tarball `
 Bun、Workers 從此免打包器直接 import；Node `--experimental-strip-types` 的
 「node_modules 內 .ts 禁區」類問題（消費端 `.core-pkg` realpath 手術）隨 dist 出車退役。
 
-## [0.2.4] — 2026-10-09
-
-**Security** — CI 供應鏈加固：npm ci 一律 `--ignore-scripts`（verify／publish 兩 workflow——依賴安裝不執行任何安裝腳本）；
-Dependabot PR 分流 GitHub-hosted runner 執行驗證（self-hosted runner 不接機器人分支——分流不是擋，驗證照跑）；
-移除 repo 內 PR 產生器腳本（含主機路徑與權杖線索——治理掃蕩補漏）。
-
-**Changed** — 密語包裹前綴快檢上移：五個解包入口（passphrase／分享兩代＋復原套件兩腿）在金鑰派生前
-先比對前綴——錯誤前綴的試探不再付出 Argon2id／PBKDF2 派生成本（輸出行為不變）。
-`loginRouteCore` 內建 ladder 查表守衛（2026-10-06 外審 #8 幽靈帳）：現值（PH2）miss 時改走
-`AuthStore.ladderLookup`（optional）查 `ph2_ladder`——命中回舊帳不建幽靈；ladder 也 miss（或
-lookup 未配置、或 store 拋錯 fail-open）才 `createUser`。lookup 未配置＝與 0.2.3 單查行為恆等
-（零新增必配面）；守衛只動查表零寫入面（insert 續在 `rekeyWithLadder` 遷移線、delete 在 fork 的
-delete-account 流程）。README server login wiring 節同步。
-
-**Added** — 資料庫索引修正 migration：ph2_ladder 摘除重複索引、補 account_id 索引（帳戶查詢走索引不走全表）。
-
-**Migration** — 套用 `migrations/0012-fix-ph2-ladder-index.sql`：純索引面、零行為變更、可重入
-（DROP INDEX IF EXISTS／CREATE INDEX IF NOT EXISTS——重複套用零傷）。
+**Added** — 線上格式規格 `docs/format-spec.md`（逐前綴家族的 payload 位元組布局與欄位長度、
+KDF 參數、AAD、加密原語、帶內版本化世代契約；從源碼錄，不新增契約）＋JSON 測試向量
+`docs/vectors/`（`families.json` 各家族 wrap/encrypt 一組、`kat.json` RFC 9106＋驗證閘凍結 blob 七組
+＋PH1/PH2 憑證樣本、`bip39.json` 34 組抽樣）——由 `scripts/generate-vectors.ts` 呼叫真原語一次性
+產生、凍結入 repo（不隨 CI 重算）。驗證閘新段 [26]：向量存在性＋位元組 shape＋欄位名對規格＋
+凍結 blob 逐字對閘 KAT（verify 帳 484→492；發行包 481→489）。tarball `files` 加 `docs`（產生器 `scripts/generate-vectors.ts` 留 repo、以 `!` 排除不入 tarball——發行包 scripts 封閉集仍 2 檔）。
+README（zh＋English Summary）：Usage 改 dist 直接 import（「必走打包器」舊文退役）、
+English Summary 增「Format spec & test vectors」段、模組段補 dist 發行形。
 
 ## [0.2.5] — 2026-10-10
 
@@ -55,6 +45,25 @@ secCases 全摘即 RED）；secCases 敘事收窄成契約窗〔[24]/[25] 自證
 [0.2.4] 已版發行補收——[23]⑥ 毒化案 getByUserKey 改 db-backed 正讀復齒＋ladderLookup
  docstring 對 fail-open 碼面＋ladder.ts 職責分工節對 0.2.4 內建接線（9af261e；補錄隨本版出門）；
 README 三行 verify 帳照實 484 收帳。
+
+## [0.2.4] — 2026-10-09
+
+**Security** — CI 供應鏈加固：npm ci 一律 `--ignore-scripts`（verify／publish 兩 workflow——依賴安裝不執行任何安裝腳本）；
+Dependabot PR 分流 GitHub-hosted runner 執行驗證（self-hosted runner 不接機器人分支——分流不是擋，驗證照跑）；
+移除 repo 內 PR 產生器腳本（含主機路徑與權杖線索——治理掃蕩補漏）。
+
+**Changed** — 密語包裹前綴快檢上移：五個解包入口（passphrase／分享兩代＋復原套件兩腿）在金鑰派生前
+先比對前綴——錯誤前綴的試探不再付出 Argon2id／PBKDF2 派生成本（輸出行為不變）。
+`loginRouteCore` 內建 ladder 查表守衛（2026-10-06 外審 #8 幽靈帳）：現值（PH2）miss 時改走
+`AuthStore.ladderLookup`（optional）查 `ph2_ladder`——命中回舊帳不建幽靈；ladder 也 miss（或
+lookup 未配置、或 store 拋錯 fail-open）才 `createUser`。lookup 未配置＝與 0.2.3 單查行為恆等
+（零新增必配面）；守衛只動查表零寫入面（insert 續在 `rekeyWithLadder` 遷移線、delete 在 fork 的
+delete-account 流程）。README server login wiring 節同步。
+
+**Added** — 資料庫索引修正 migration：ph2_ladder 摘除重複索引、補 account_id 索引（帳戶查詢走索引不走全表）。
+
+**Migration** — 套用 `migrations/0012-fix-ph2-ladder-index.sql`：純索引面、零行為變更、可重入
+（DROP INDEX IF EXISTS／CREATE INDEX IF NOT EXISTS——重複套用零傷）。
 
 ## [0.2.3] — 2026-10-06
 
@@ -129,10 +138,12 @@ npm metadata 補齊（homepage／repository／bugs——npm 頁側欄 repo 連�
 兩時代金鑰模型、帶內版本化前綴契約、pinlock／雙因子合鑰／分享包裹原語、
 Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 
+[0.3.0]: https://github.com/tacet-ink/journal-core/compare/v0.2.5...v0.3.0
+[0.2.5]: https://github.com/tacet-ink/journal-core/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/tacet-ink/journal-core/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/tacet-ink/journal-core/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...v0.2.2
-[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.2.5...HEAD
+[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.3.0...HEAD
 [0.2.1]: https://github.com/tacet-ink/journal-core/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tacet-ink/journal-core/compare/v0.1.6...v0.2.0
 [ERR_REC_CFG_PARTIAL]: https://github.com/tacet-ink/journal-core/blob/v0.2.1/src/client/note-crypto.ts

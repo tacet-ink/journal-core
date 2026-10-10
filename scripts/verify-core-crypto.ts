@@ -142,7 +142,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 484）；帳面語意契約（逐段「案 X/帳」
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 492——A2 [26] +8）；帳面語意契約（逐段「案 X/帳」
 // 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
 // [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
 // 在本機樹由 [8]（登入憑證 Argon2id 派生）內登入 lane 的訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
@@ -151,7 +151,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -2525,7 +2525,7 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
     await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
       srcPy21.includes('npm ci --ignore-scripts'));
   } else {
-    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 481）',
+    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 489）',
       true, 'no .github dir — consumption tree face');
   }
   // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
@@ -2790,6 +2790,82 @@ secOpen(23, '[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳——
 }
 
 };
+// ── 26. 格式規格＋測試向量（docs/format-spec.md＋docs/vectors/*.json；0.3.0 批 A2） ──
+//
+// 單向契約：源碼 → scripts/generate-vectors.ts → JSON（凍結證據，commit 入 repo）→ 本段只檢存在＋shape。
+// 本段不依賴產生器、不重算 KDF（向量含隨機 iv/鹽＝重算即漂移）；BIP39 是確定性轉寫，逐組對照現行原語。
+// teeth：payload 位元組長度＝b64 解碼真值、fields 拼接＝payload 逐位元組、布局長度＝規格表列、
+// 欄位名逐一在規格檔、凍結 blob 逐字＝本閘 KAT 字面（[14]/[17]/[20]）、RFC 9106 期望值＝argon2.ts 常數。
+secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vectors 存在性＋shape）'); if (secEnter(26)) {
+{
+  const readJson26 = async (rel: string): Promise<Record<string, unknown> | null> => {
+    try { return JSON.parse(await srcOf(rel)) as Record<string, unknown>; } catch { return null; }
+  };
+  const spec26 = await srcOf('../docs/format-spec.md').catch(() => '');
+  const fam26 = await readJson26('../docs/vectors/families.json');
+  const kat26 = await readJson26('../docs/vectors/kat.json');
+  const bip26 = await readJson26('../docs/vectors/bip39.json');
+  type Vec26 = { prefix: string; family: string; layout: string; kdf: string; aad: string; inputs: Record<string, unknown>; wire: string; payload_len: number; fields: { name: string; offset: number; len: number; hex: string }[] };
+  const vecs26 = (Array.isArray(fam26?.vectors) ? fam26!.vectors : []) as Vec26[];
+  const HEAD26 = ['format', 'package_version', 'spec', 'generator', 'note'];
+  await A('[26] 規格檔＋三向量檔在場且 JSON parse；頂層共通欄齊（format=journal-core-vectors/1、spec/generator 路徑字面——產生器不被閘依賴，發行包不帶產生器）',
+    spec26.length > 0 && !!fam26 && !!kat26 && !!bip26
+    && [fam26, kat26, bip26].every((j) => HEAD26.every((k) => typeof j![k] === 'string') && j!.format === 'journal-core-vectors/1'
+      && j!.spec === 'docs/format-spec.md' && j!.generator === 'scripts/generate-vectors.ts'));
+  // 規格表前綴集（§1 家族逐條表：| `prefix` | 家族 | 布局 | payload | KDF | AAD |）
+  const specRows26 = spec26.split('\n').filter((l) => /^\| `jr[0-9a-z]{2}\.`(（[^|]*）)? \|/.test(l) && /\| (content|salt-external|salt-embedded) \|/.test(l));
+  const specPrefixes26 = new Set(specRows26.map((l) => l.match(/^\| `(jr[0-9a-z]{2}\.)`/)![1]));
+  const vecPrefixes26 = new Set(vecs26.map((v) => v.prefix));
+  await A('[26] 家族覆蓋雙向：規格家族表 16 列前綴集＝families.json 前綴集（15 前綴；jr1w. 兩世代各一組）',
+    specRows26.length === 16 && vecs26.length === 16 && specPrefixes26.size === 15
+    && [...specPrefixes26].every((p) => vecPrefixes26.has(p)) && [...vecPrefixes26].every((p) => specPrefixes26.has(p)));
+  const VKEYS26 = ['prefix', 'family', 'layout', 'kdf', 'aad', 'inputs', 'wire', 'payload_len', 'fields'];
+  await A('[26] families 位元組 shape：payload_len＝wire b64 解碼真長；fields offset 連續、len 總和＝payload_len、hex 拼接＝payload 逐位元組',
+    vecs26.length > 0 && vecs26.every((v) => {
+      if (!VKEYS26.every((k) => k in v) || !v.wire.startsWith(v.prefix)) return false;
+      let payload: Uint8Array;
+      try { payload = unb64Mod(v.wire.slice(v.prefix.length)); } catch { return false; }
+      let off = 0;
+      for (const f of v.fields) { if (f.offset !== off || f.hex.length !== f.len * 2) return false; off += f.len; }
+      return payload.length === v.payload_len && off === v.payload_len && v.fields.map((f) => f.hex).join('') === hex(payload);
+    }));
+  await A('[26] 布局長度＝規格：salt-external 92／salt-embedded 108（pinSalt 頭 16）／content 28+UTF8(plaintext)；且規格家族表該前綴列含同布局＋同長度',
+    vecs26.length > 0 && vecs26.every((v) => {
+      const want = v.layout === 'salt-external' ? 92 : v.layout === 'salt-embedded' ? 108 : v.layout === 'content' ? 28 + enc.encode(String(v.inputs.plaintext)).length : -1;
+      const lenCol = v.layout === 'content' ? '28+n' : String(want);
+      const head = v.layout === 'salt-embedded' ? v.fields[0]?.name === 'pinSalt' && v.fields[0]?.len === 16 : v.fields[0]?.name === 'iv';
+      return want === v.payload_len && head && specRows26.some((l) => l.startsWith('| `' + v.prefix + '`') && l.includes('| ' + v.layout + ' | ' + lenCol + ' |'));
+    }));
+  const KKEYS26 = ['rfc9106', 'frozen_blobs', 'credentials', 'expected_tag_hex', 'expected_note_key_hex', 'expected_hex', 'samples', 'entropy_hex', 'checksum_hex', 'words', 'source'];
+  await A('[26] 欄位名對規格：families 每筆欄名＋fields 子欄（name/offset/len/hex）＋kat/bip39 欄名，逐一以 `欄名` 形出現在 format-spec.md',
+    spec26.length > 0 && [...HEAD26, ...VKEYS26, 'name', 'offset', 'len', 'hex', ...KKEYS26].every((k) => spec26.includes('`' + k + '`'))
+    && KKEYS26.slice(0, 3).every((k) => !!kat26 && k in kat26) && !!bip26 && 'samples' in bip26);
+  const gate26 = await srcOf('./verify-core-crypto.ts');
+  const frozen26 = (Array.isArray(kat26?.frozen_blobs) ? kat26!.frozen_blobs : []) as { prefix: string; wire: string; payload_len: number; expected_note_key_hex: string; source: string }[];
+  const rfc26 = (kat26?.rfc9106 ?? {}) as Record<string, unknown>;
+  const creds26 = (Array.isArray(kat26?.credentials) ? kat26!.credentials : []) as { kind: string; expected_hex: string }[];
+  await A('[26] kat 對帳：RFC 9106 expected_tag_hex＝ARGON_RFC9106_EXPECTED（argon2.ts 常數）；凍結 blob 7 筆逐字＝本閘 KAT 字面（[14]/[17]/[20]）且 payload_len＝解碼真長；憑證樣本 5 筆 hex64',
+    (await import('../src/client/argon2.ts')).ARGON_RFC9106_EXPECTED === rfc26.expected_tag_hex
+    && frozen26.length === 7 && frozen26.every((b) => gate26.includes("'" + b.wire + "'") && b.wire.startsWith(b.prefix)
+      && unb64Mod(b.wire.slice(b.prefix.length)).length === b.payload_len && /^[0-9a-f]{64}$/.test(b.expected_note_key_hex))
+    && creds26.length === 5 && creds26.every((c) => /^[0-9a-f]{64}$/.test(c.expected_hex)));
+  const samples26 = (Array.isArray(bip26?.samples) ? bip26!.samples : []) as { entropy_hex: string; checksum_hex: string; words: string[]; source: string }[];
+  await A('[26] bip39 抽樣 ≥32 組：entropy hex64＋24 詞＋checksum＝SHA-256(entropy)[0]；逐組對照現行轉寫原語（recTokenToWords 逐詞相等——確定性轉寫非 KDF 重算）',
+    samples26.length >= 32 && (await (async () => {
+      for (const s of samples26) {
+        if (!/^[0-9a-f]{64}$/.test(s.entropy_hex) || s.words?.length !== 24) return false;
+        const cs = new Uint8Array(await crypto.subtle.digest('SHA-256', hexToBytes(s.entropy_hex) as BufferSource))[0];
+        if (cs.toString(16).padStart(2, '0') !== s.checksum_hex) return false;
+        if ((await bip.recTokenToWords(s.entropy_hex))?.join(' ') !== s.words.join(' ')) return false;
+      }
+      return true;
+    })()));
+  const pkg26 = JSON.parse(await srcOf('../package.json')) as { files?: string[] };
+  await A('[26] 發行面：package.json files 含 docs（tarball 帶規格＋向量——消費端可對帳）＋產生器排除（!scripts/generate-vectors.ts——[22] scripts 封閉集 2 檔不動）',
+    Array.isArray(pkg26.files) && pkg26.files.includes('docs') && pkg26.files.includes('!scripts/generate-vectors.ts'));
+}
+}
+
 secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級帳面顯形）'); if (secEnter(24)) {
   await A('[24] --only 解析契約（全跑態）：spec 缺席＝onlySet 空集＝secEnter 恆真（CI 形契約不變——npm run verify 全帳；--only 態本面恆真跳過＝帳面由次面承載）',
     !onlyMode() ? (onlySpecRaw === null && parseOnly('').err === 'ERR_ONLY_SPEC_EMPTY' && secEnter(1) && secEnter(23)) : true);
@@ -2810,8 +2886,8 @@ secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級
 }
 
 secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCases 段帳'); if (secEnter(25)) {
-  await A('[25] secEnter 真值表：bannerless 段全跑態行為（26 未在 secOrder 段帳＝secRan 零位面——帳面逐段只列 secOrder；n=0 恆 false）；全跑態實段 1/15/23 全真',
-    !onlyMode() ? (secEnter(0) === false && (secRan.get(26) ?? 0) === 0 && secEnter(1) && secEnter(15) && secEnter(23)) : true);
+  await A('[25] secEnter 真值表：bannerless 段全跑態行為（27 未在 secOrder 段帳＝secRan 零位面——帳面逐段只列 secOrder；n=0 恆 false）；全跑態實段 1/15/23 全真',
+    !onlyMode() ? (secEnter(0) === false && (secRan.get(27) ?? 0) === 0 && secEnter(1) && secEnter(15) && secEnter(23)) : true);
   await A('[25] tag/spec 形帳：--only 態 (--ONLY …) 括形＋spec 遞增 CSV 非空；全跑態 spec 空＋tag 裸',
     onlyMode() ? (onlyTag().startsWith('(--ONLY ') && onlyTag().endsWith(')') && onlySpecDisp().length > 0)
       : (onlySpecDisp() === '' && onlyTag() === ''));
@@ -2822,7 +2898,7 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26];
 const secTotal = secOrder.reduce((a, n) => a + (secCases[n] ?? 0), 0);
 const ranSecs = secOrder.filter((n) => (secRan.get(n) ?? 0) > 0);
 const selTotal = secOrder.filter((n) => !onlyMode() || onlySet.has(n) || n === 24 || n === 25).reduce((a, n) => a + (secCases[n] ?? 0), 0);

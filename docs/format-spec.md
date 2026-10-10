@@ -339,7 +339,7 @@ PH1 鹽是 per-product 固定域鹽（PH2 UNIQUE 約束）；v2／v3 鹽域值�
 
 ### 7.1 `families.json`——各前綴家族 wrap／encrypt 一組
 
-`vectors[]` 每筆：
+`vectors`（陣列）每筆：
 
 | 欄位 | 意義 |
 | --- | --- |
@@ -351,7 +351,7 @@ PH1 鹽是 per-product 固定域鹽（PH2 UNIQUE 約束）；v2／v3 鹽域值�
 | `inputs` | 產生時的輸入（密語、PIN、identity、config 欄、外置鹽 `salt_hex`／`salt1_hex`、`note_key_hex` 或 `plaintext`） |
 | `wire` | 完整線上字串（`prefix + b64(payload)`） |
 | `payload_len` | Base64 解碼後位元組數 |
-| `fields` | payload 欄位切分：`[{ name, offset, len, hex }]`，`len` 總和＝`payload_len` |
+| `fields` | payload 欄位切分陣列，每項 `name`（`pinSalt`／`iv`／`ct`／`tag`）、`offset`、`len`、`hex`；`len` 總和＝`payload_len` |
 
 金鑰包裹家族的 `inputs.note_key_hex` 固定 `c3`×32（驗證閘 KAT 母型），以此 wire 依本規格解包須得回之；
 content 家族以 `inputs.plaintext`／`inputs.aad` 解密須得回原文。
@@ -361,9 +361,9 @@ content 家族以 `inputs.plaintext`／`inputs.aad` 解密須得回原文。
 | 欄位 | 意義 |
 | --- | --- |
 | `rfc9106` | Argon2id RFC 9106 §5.3 參數與 `expected_tag_hex` |
-| `frozen_blobs[]` | 驗證閘凍結 blob（[14] `jr2w.`、[17] `jr3w.`／`jr3d.`／`jr4w.`／`jr4d.`、[20] `jr1r.`／`jr1w.` 復原舊契約）：`prefix`、`wire`、解包輸入、`expected_note_key_hex`、`source`（閘段號） |
-| `credentials[]` | §5 憑證派生樣本：`kind`、`input`、`salt`、`expected_hex` |
+| `frozen_blobs` | 驗證閘凍結 blob（[14] `jr2w.`、[17] `jr3w.`／`jr3d.`／`jr4w.`／`jr4d.`、[20] `jr1r.`／`jr1w.` 復原舊契約）：`prefix`、`wire`、解包輸入、`expected_note_key_hex`、`source`（閘段號） |
+| `credentials` | §5 憑證派生樣本：`kind`、`input`、`salt`、`expected_hex` |
 
 ### 7.3 `bip39.json`——BIP39 抽樣
 
-`samples[]` 每筆：`entropy_hex`、`checksum_hex`、`words`（24 詞陣列）、`source`（`seeded:<n>`／`edge`）。
+`samples`（陣列）每筆：`entropy_hex`、`checksum_hex`、`words`（24 詞陣列）、`source`（`seeded:<n>`／`edge`）。
