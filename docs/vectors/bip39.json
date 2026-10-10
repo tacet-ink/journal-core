@@ -1,6 +1,6 @@
 {
   "format": "journal-core-vectors/1",
-  "package_version": "0.3.0",
+  "package_version": "0.3.1",
   "spec": "docs/format-spec.md",
   "generator": "scripts/generate-vectors.ts",
   "note": "Frozen evidence generated once by calling the real primitives; not recomputed in CI (random iv/salt). Verify gate [26] checks presence and shape only.",

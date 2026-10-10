@@ -27,6 +27,8 @@
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
+import type { KeyStore } from './keys.js';
+
 export interface NoteCryptoConfig {
   /** guest 時代 KDF 前綴，如 'journal-note-u1'。 */
   guestKdfPrefix: string;
@@ -75,7 +77,7 @@ export interface NoteCryptoConfig {
   /** 本機 IDB 密文前綴（jr1d.，notes store stored 形）。未配置 = local API 拒絕（未配置行為不變）。 */
   cipherLocal?: string;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
-  store: import('./keys').KeyStore;
+  store: KeyStore;
 }
 
 export const PBKDF2_ITERATIONS = 600_000; // OWASP 2023 建議值

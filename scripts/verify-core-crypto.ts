@@ -2810,7 +2810,7 @@ secOpen(23, '[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳——
 // 單向契約：源碼 → scripts/generate-vectors.ts → JSON（凍結證據，commit 入 repo）→ 本段只檢存在＋shape。
 // 本段不依賴產生器、不重算 KDF（向量含隨機 iv/鹽＝重算即漂移）；BIP39 是確定性轉寫，逐組對照現行原語。
 // teeth：payload 位元組長度＝b64 解碼真值、fields 拼接＝payload 逐位元組、布局長度＝規格表列、
-// 欄位名逐一在規格檔、凍結 blob 逐字＝本閘 KAT 字面（[14]/[17]/[20]）、RFC 9106 期望值＝argon2.ts 常數。
+// 欄位名限定形逐一在規格對應節、凍結 blob 逐字＝本閘 KAT 字面（[14]/[17]/[20]）、RFC 9106 期望值＋參數＝argon2.ts 常數。
 secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vectors 存在性＋shape）'); if (secEnter(26)) {
 {
   const readJson26 = async (rel: string): Promise<Record<string, unknown> | null> => {
@@ -2851,16 +2851,37 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
       const head = v.layout === 'salt-embedded' ? v.fields[0]?.name === 'pinSalt' && v.fields[0]?.len === 16 : v.fields[0]?.name === 'iv';
       return want === v.payload_len && head && specRows26.some((l) => l.startsWith('| `' + v.prefix + '`') && l.includes('| ' + v.layout + ' | ' + lenCol + ' |'));
     }));
-  const KKEYS26 = ['rfc9106', 'frozen_blobs', 'credentials', 'expected_tag_hex', 'expected_note_key_hex', 'expected_hex', 'samples', 'entropy_hex', 'checksum_hex', 'words', 'source'];
-  await A('[26] 欄位名對規格：families 每筆欄名＋fields 子欄（name/offset/len/hex）＋kat/bip39 欄名，逐一以 `欄名` 形出現在 format-spec.md',
-    spec26.length > 0 && [...HEAD26, ...VKEYS26, 'name', 'offset', 'len', 'hex', ...KKEYS26].every((k) => spec26.includes('`' + k + '`'))
-    && KKEYS26.slice(0, 3).every((k) => !!kat26 && k in kat26) && !!bip26 && 'samples' in bip26);
+  // 欄位名限定形（通用字 name/len/hex/source… 在規格檔隨處可見＝裸字檢查無咬力）：頂層欄＝§7 頭表／§7.1／§7.2 對應節
+  // 的表列 `| \`欄\` |`；巢狀欄＝限定形 `父[].欄`／`rfc9106.欄` 逐字在規格檔。欄名集取自向量檔實際鍵（新增欄未入規格＝紅）。
+  const sec26 = (from: string, to: string): string => { const i = spec26.indexOf(from); const j = to ? spec26.indexOf(to, i + 1) : spec26.length; return i < 0 || j < 0 ? '' : spec26.slice(i, j); };
+  const s7h26 = sec26('## 7. ', '### 7.1 '), s71_26 = sec26('### 7.1 ', '### 7.2 '), s72_26 = sec26('### 7.2 ', '### 7.3 '), s73_26 = sec26('### 7.3 ', '');
+  const row26 = (sec: string, k: string): boolean => sec.includes('\n| `' + k + '` |');
+  const keysOf26 = (xs: unknown): string[] => [...new Set((Array.isArray(xs) ? xs : []).flatMap((x) => (x && typeof x === 'object' ? Object.keys(x) : [])))];
+  const fieldKeys26 = keysOf26(vecs26.flatMap((v) => (Array.isArray(v.fields) ? v.fields : [])));
+  const rfcKeys26 = Object.keys((kat26?.rfc9106 ?? {}) as object);
+  const frozenKeys26 = keysOf26(kat26?.frozen_blobs), credKeys26 = keysOf26(kat26?.credentials), sampleKeys26 = keysOf26(bip26?.samples);
+  // 反空轉下限：實際鍵集須涵蓋閘面讀取的欄（鍵集取自資料＝資料缺欄時下限擋住空集合真值）
+  const floor26 = (ks: string[], need: string[]): boolean => need.every((k) => ks.includes(k));
+  await A('[26] 欄位名對規格（限定形）：頂層欄＝§7 頭表／§7.1 vectors 表／§7.2 kat 表逐列；巢狀欄逐一以 `fields[].欄`／`rfc9106.欄`／`frozen_blobs[].欄`／`credentials[].欄`／`samples[].欄` 出現在對應節（欄名集取自向量檔實鍵＋閘讀欄下限）',
+    spec26.length > 0 && !!kat26 && !!bip26
+    && HEAD26.every((k) => row26(s7h26, k)) && keysOf26(vecs26).every((k) => row26(s71_26, k)) && VKEYS26.every((k) => row26(s71_26, k))
+    && ['rfc9106', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
+    && floor26(fieldKeys26, ['name', 'offset', 'len', 'hex']) && fieldKeys26.every((k) => s71_26.includes('`fields[].' + k + '`'))
+    && floor26(rfcKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password_hex', 'salt_hex', 'expected_tag_hex']) && rfcKeys26.every((k) => s72_26.includes('`rfc9106.' + k + '`'))
+    && floor26(frozenKeys26, ['prefix', 'wire', 'payload_len', 'expected_note_key_hex', 'source']) && frozenKeys26.every((k) => s72_26.includes('`frozen_blobs[].' + k + '`'))
+    && floor26(credKeys26, ['kind', 'expected_hex']) && credKeys26.every((k) => s72_26.includes('`credentials[].' + k + '`'))
+    && floor26(sampleKeys26, ['entropy_hex', 'checksum_hex', 'words', 'source']) && sampleKeys26.every((k) => s73_26.includes('`samples[].' + k + '`')));
   const gate26 = await srcOf('./verify-core-crypto.ts');
   const frozen26 = (Array.isArray(kat26?.frozen_blobs) ? kat26!.frozen_blobs : []) as { prefix: string; wire: string; payload_len: number; expected_note_key_hex: string; source: string }[];
   const rfc26 = (kat26?.rfc9106 ?? {}) as Record<string, unknown>;
   const creds26 = (Array.isArray(kat26?.credentials) ? kat26!.credentials : []) as { kind: string; expected_hex: string }[];
-  await A('[26] kat 對帳：RFC 9106 expected_tag_hex＝ARGON_RFC9106_EXPECTED（argon2.ts 常數）；凍結 blob 7 筆逐字＝本閘 KAT 字面（[14]/[17]/[20]）且 payload_len＝解碼真長；憑證樣本 5 筆 hex64',
-    (await import('../src/client/argon2.ts')).ARGON_RFC9106_EXPECTED === rfc26.expected_tag_hex
+  const argon26 = await import('../src/client/argon2.ts');
+  const kp26 = argon26.ARGON_RFC9106_PARAMS;
+  await A('[26] kat 對帳：RFC 9106 expected_tag_hex＝ARGON_RFC9106_EXPECTED、參數 m/t/p/tag/pwd/salt＝ARGON_RFC9106_PARAMS（argon2.ts 常數——verifyArgonKat／產生器同源）；凍結 blob 7 筆逐字＝本閘 KAT 字面（[14]/[17]/[20]）且 payload_len＝解碼真長；憑證樣本 5 筆 hex64',
+    argon26.ARGON_RFC9106_EXPECTED === rfc26.expected_tag_hex
+    && rfc26.memory_kib === kp26.memoryKib && rfc26.iterations === kp26.iterations && rfc26.parallelism === kp26.parallelism
+    && rfc26.tag_len === kp26.tagLen && kp26.tagLen === argon26.ARGON_TAG_LEN
+    && rfc26.password_hex === kp26.passwordByte.toString(16).padStart(2, '0').repeat(kp26.passwordLen) && rfc26.salt_hex === '00'.repeat(kp26.saltLen)
     && frozen26.length === 7 && frozen26.every((b) => gate26.includes("'" + b.wire + "'") && b.wire.startsWith(b.prefix)
       && unb64Mod(b.wire.slice(b.prefix.length)).length === b.payload_len && /^[0-9a-f]{64}$/.test(b.expected_note_key_hex))
     && creds26.length === 5 && creds26.every((c) => /^[0-9a-f]{64}$/.test(c.expected_hex)));
