@@ -1,4 +1,4 @@
-// vendor-hash-wasm.cjs — hash-wasm argon2 瀏覽器載體 vendor 產生器（0.3.1 批 A3；@scure/bip39 母型：devDeps＋生成期 vendor）。
+// vendor-hash-wasm.cjs — hash-wasm argon2 瀏覽器載體 vendor 產生器（@scure/bip39 母型：devDeps＋生成期 vendor）。
 // 執行：node scripts/vendor-hash-wasm.cjs（需 npm ci 裝齊 devDeps）。
 // 產物：src/client/vendor/hash-wasm-argon2.ts——hash-wasm dist/argon2.umd.min.js 原檔嵌於
 // VENDOR-BEGIN／VENDOR-END 標記間（wasm 本體已是原檔內嵌 base64＝零網路請求），包進工廠函式

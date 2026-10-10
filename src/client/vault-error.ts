@@ -1,5 +1,5 @@
 /**
- * vault-error.ts — 高階 Vault API 的型別化錯誤家族（0.3.1 批 A3）。
+ * vault-error.ts — 高階 Vault API 的型別化錯誤家族。
  *
  * 低階原語面不動（throw 'ERR_*' 字串錯誤＋unwrap 恆 null 的混態照舊）——只在 vault.ts／
  * argon-auto.ts 邊界轉譯：高階 API 一律 throw VaultError，呼叫端以 `code` 分流，不比對 message。

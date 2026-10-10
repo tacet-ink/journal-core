@@ -1,5 +1,5 @@
 /**
- * argon-worker.ts — Argon2id Web Worker 載體（0.3.1 批 A3）：登入不卡畫面。
+ * argon-worker.ts — Argon2id Web Worker 載體：登入不卡畫面。
  *
  * Worker 本體＝內嵌 blob 形（免 bundle 步）：vendor 工廠 hashWasmArgon2Factory 的原文
  *（Function#toString）＋訊息膠水組成 Worker 源碼字串 → Blob → object URL → new Worker。

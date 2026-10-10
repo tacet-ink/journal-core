@@ -1,5 +1,5 @@
 /**
- * argon-auto.ts — Argon2id 載體平台預設（0.3.1 批 A3）。
+ * argon-auto.ts — Argon2id 載體平台預設。
  *
  * 優先序（向後相容鐵律：setArgonLoader 照舊優先）：
  *   1. 呼叫端已 setArgonLoader 注入（非本模組自裝）＝'injected'——本模組零介入。
