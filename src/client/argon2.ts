@@ -140,7 +140,7 @@ export interface Argon3Config {
   wrapDual4?: string;
 }
 
-interface HashWasmArgon2id {
+export interface HashWasmArgon2id {
   (params: {
     password: string | Uint8Array;
     salt: Uint8Array;
@@ -152,13 +152,18 @@ interface HashWasmArgon2id {
   }): Promise<Uint8Array | string>;
 }
 
-type ArgonLoader = () => Promise<{ argon2id: HashWasmArgon2id }>;
+export type ArgonLoader = () => Promise<{ argon2id: HashWasmArgon2id }>;
 
 let injectedLoader: ArgonLoader | null = null;
 
 /** 載體注入（瀏覽器端由接線層指定 hash-wasm；node 端不注入走 node:crypto 原生）。 */
 export function setArgonLoader(loader: ArgonLoader | null): void {
   injectedLoader = loader;
+}
+
+/** 現行注入載體（唯讀查詢；未注入＝null）。argon-auto.ts 據此判「呼叫端覆寫優先」——0.3.1 新增 export。 */
+export function getArgonLoader(): ArgonLoader | null {
+  return injectedLoader;
 }
 
 /**
