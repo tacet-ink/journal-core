@@ -90,7 +90,7 @@ import {
   AUTH_RATE,
   type CipherFormats,
 } from '../src/server/auth.ts';
-import { checkRate, isRateAllowed, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
+import { checkRate, isRateAllowed, normalizeRateIp, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
 import { generateSessionToken, timingSafeEq } from '../src/server/hash.ts';
 import { CORS_HEADERS, corsResponse } from '../src/server/cors.ts';
 import {
@@ -157,7 +157,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-10 實測 506——A3 [27] +14）；帳面語意契約（逐段「案 X/帳」
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-11 實測 521——[12] 限流鍵 /64 正規化 +14＋IPv4-mapped 面 +1）；帳面語意契約（逐段「案 X/帳」
 // 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
 // [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
 // 在本機樹由 [8]（登入憑證 Argon2id 派生）內登入 lane 的訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
@@ -166,7 +166,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 50, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 14 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 65, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 14 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -773,7 +773,7 @@ secOpen(12, '[12] 伺服器端原語（auth/ratelimit/hash）＋ 本機鎖定（
 // UPSERT…RETURNING 於 wrangler 4.129.0 workerd 逐發回真值；併發首發兩發計數 1→2）。
 type RateRow = { ip: string; window_start: number; count: number };
 const RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 3 };
-const makeRateDb = (): {
+const makeRateDb = (cr: typeof checkRate = checkRate): {
   db: {
     exec: (s: string) => void;
     prepare: (s: string) => { all: (...p: unknown[]) => Array<Record<string, unknown>>; get: (...p: unknown[]) => Record<string, unknown> | undefined };
@@ -798,7 +798,7 @@ const makeRateDb = (): {
   runRaw: (sql) => db.exec(sql),
     // 真 checkRate 直驅：?1/?2/?3 有名參數語意在 node:sqlite 與 workerd 一致（端對端探針實證，見卡 comments）。
     check: (ip) =>
-      checkRate(
+      cr(
         {
           DB: {
             prepare: (sql: string) => ({
@@ -871,6 +871,120 @@ await A('rate：RETURNING 異形回應守衛 fail-open（results 空／alias 斷
 })());
 await A('rate：SQL_RATE_BUMP 常數形（UPSERT…RETURNING…count AS n；{table} 佔位）',
   /^INSERT INTO \{table\} \(ip, window_start, count\) VALUES \(\?1, \?2, 1\)\n\s+ON CONFLICT\(ip\) DO UPDATE SET\n\s+count\s+= CASE WHEN window_start <= \?3 THEN 1 ELSE count \+ 1 END,\n\s+window_start = CASE WHEN window_start <= \?3 THEN \?2 ELSE window_start END\n\s+RETURNING count AS n$/.test(SQL_RATE_BUMP));
+// 限流鍵正規化（t_b30cbc5f）：checkRate 入口 normalizeRateIp——IPv6 聚合至 /64（尾段漂移不再每發新鍵）。
+// v6 面謂詞以模組參數化：同一謂詞本體先對真模組（綠）、再對拷貝樹毒化模組（IPv6 聚合分支摘除）須逐案真翻紅。
+type RateMod12 = { checkRate: typeof checkRate; normalizeRateIp: typeof normalizeRateIp };
+const rateReal12: RateMod12 = { checkRate, normalizeRateIp };
+const v6Cases12: Array<[string, (m: RateMod12) => Promise<boolean>]> = [
+  ['rate：IPv6 同 /64 尾段漂移兩地址（2001:db8:5678::1／2001:db8:5678:0:ffff:ffff:ffff:9）經真 checkRate 共用鍵 2001:db8:5678::/64 計數 2（裸地址不入表）', async (m) => {
+    const r = makeRateDb(m.checkRate);
+    await r.check('2001:db8:5678::1'); await r.check('2001:db8:5678:0:ffff:ffff:ffff:9');
+    return r.row('2001:db8:5678::/64')?.count === 2 && r.row('2001:db8:5678::1') === undefined;
+  }],
+  ['rate：IPv6 同 /64 輪換四個介面 ID → 三發 pass、第四發 reject（尾段漂移不再繞過 max）', async (m) => {
+    const r = makeRateDb(m.checkRate);
+    const seq: boolean[] = [];
+    for (const ip of ['2001:db8:77::1', '2001:db8:77::2', '2001:db8:77:0:a:b:c:d', '2001:db8:77::ffff']) seq.push(await r.check(ip));
+    return seq.join() === 'true,true,true,false';
+  }],
+  ['rate：IPv6 跨 /64 分鍵（2001:db8:5678::1／2001:db8:9999::1 → 兩 /64 鍵各計 1）', async (m) => {
+    const r = makeRateDb(m.checkRate);
+    await r.check('2001:db8:5678::1'); await r.check('2001:db8:9999::1');
+    return r.row('2001:db8:5678::/64')?.count === 1 && r.row('2001:db8:9999::/64')?.count === 1;
+  }],
+  ['rate：IPv6 同 /48 異 /64 分鍵（第 4 hextet 屬前綴：2001:db8:5678::1 → 2001:db8:5678::/64、2001:db8:5678:ffff::9 → 2001:db8:5678:ffff::/64 各計 1——聚合粒度恰 /64 非 /48）', async (m) => {
+    const r = makeRateDb(m.checkRate);
+    await r.check('2001:db8:5678::1'); await r.check('2001:db8:5678:ffff::9');
+    return r.row('2001:db8:5678::/64')?.count === 1 && r.row('2001:db8:5678:ffff::/64')?.count === 1;
+  }],
+  ['normalizeRateIp RFC 5952 形：2001:0DB8:0000:000A::1 → 2001:db8:0:a::/64（前導零摘、小寫、內部單零組不壓縮、尾零串 ::）；2001:db8:a::1 → 2001:db8:a::/64 異鍵（零組不吞＝前綴不碰撞）', async (m) =>
+    m.normalizeRateIp('2001:0DB8:0000:000A::1') === '2001:db8:0:a::/64' && m.normalizeRateIp('2001:db8:a::1') === '2001:db8:a::/64'],
+  ['normalizeRateIp 邊界：::1／0000:0000:0000:0000:1:2:3:4（全零前綴）／:: → 恆 ::/64（IPv4-mapped 位址另行回點分 IPv4，見下案）', async (m) =>
+    ['::1', '0000:0000:0000:0000:1:2:3:4', '::'].every((ip) => m.normalizeRateIp(ip) === '::/64')],
+  ['rate：normalizeRateIp IPv4-mapped 回點分 IPv4 鍵（/32 契約）：::ffff:192.0.2.1 → 192.0.2.1；hex 尾組同主機 twin ::ffff:c000:201 同鍵 192.0.2.1（mapped 裸形絕不入表）；兩台相異 mapped 主機經真 checkRate 各自鍵各計 1（不共 ::/64 桶）', async (m) => {
+    const r = makeRateDb(m.checkRate);
+    await r.check('::ffff:192.0.2.1'); await r.check('::ffff:c000:201'); await r.check('::ffff:192.0.2.2');
+    return m.normalizeRateIp('::ffff:192.0.2.1') === '192.0.2.1'
+      && m.normalizeRateIp('::ffff:c000:201') === '192.0.2.1'
+      && r.row('192.0.2.1')?.count === 2
+      && r.row('192.0.2.2')?.count === 1
+      && r.row('::ffff:192.0.2.1') === undefined && r.row('::ffff:c000:201') === undefined
+      && r.row('::/64') === undefined;
+  }],
+  ['normalizeRateIp zone id 剝除＋輸出小寫＋嵌入 IPv4 末組：fe80::1%eth0 → fe80::/64；FE80::ABCD → fe80::/64；1:2:3:4:5:6:1.2.3.4 → 1:2:3:4::/64', async (m) =>
+    m.normalizeRateIp('fe80::1%eth0') === 'fe80::/64' && m.normalizeRateIp('FE80::ABCD') === 'fe80::/64'
+    && m.normalizeRateIp('1:2:3:4:5:6:1.2.3.4') === '1:2:3:4::/64'],
+];
+const plainCases12: Array<[string, (m: RateMod12) => Promise<boolean>]> = [
+  ['rate：IPv4 原樣鍵（192.0.2.1 經真 checkRate 鍵面＝self、計數 1）', async (m) => {
+    const r = makeRateDb(m.checkRate);
+    await r.check('192.0.2.1');
+    return m.normalizeRateIp('192.0.2.1') === '192.0.2.1' && r.row('192.0.2.1')?.count === 1;
+  }],
+  ["rate：'unknown'／空串原樣鍵（經真 checkRate 照樣進表＝可見面，不靜默丟鍵）", async (m) => {
+    const r = makeRateDb(m.checkRate);
+    await r.check('unknown'); await r.check('');
+    return m.normalizeRateIp('unknown') === 'unknown' && m.normalizeRateIp('') === ''
+      && r.row('unknown')?.count === 1 && r.row('')?.count === 1;
+  }],
+  ['normalizeRateIp 無法解析形原樣且零 throw（IPv4 五段／IPv6 單段 2001／缺組／雙 ::／:::／非 hex／9 組／:: 外 8 組／嵌入 IPv4 越界／方括號／前導空白／非字串）', async (m) => {
+    const bad = ['1.2.3.4.5', '2001', '2001:db8', '1::2::3', ':::', '2001:db8::g', '1:2:3:4:5:6:7:8:9', '1:2:3:4:5:6:7:8::', '::ffff:999.0.0.1', '[2001:db8::1]', ' 2001:db8::1'];
+    try {
+      return bad.every((ip) => m.normalizeRateIp(ip) === ip)
+        && (m.normalizeRateIp(undefined as unknown as string) as unknown) === undefined;
+    } catch { return false; }
+  }],
+];
+for (const [name, pred] of [...v6Cases12, ...plainCases12]) await A(name, await pred(rateReal12));
+await A('index barrel 匯出 normalizeRateIp（＝ratelimit 子路徑同一函式——單一真相）',
+  (await import('../src/index.ts')).normalizeRateIp === normalizeRateIp);
+// 毒化（拷貝樹 in-gate，[23] 母型）：IPv6 聚合分支入口 `if (!g) return ip;` → `return ip;`（IPv6 一律原樣成鍵）
+// → v6 面謂詞逐案真翻紅（false 非 crash）、非 v6 面照綠（毒面恰此面翻）。毒化跑在 /tmp 拷貝＝本 repo 樹零接觸、樹出生即棄。
+{
+  const gb12 = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const fs12 = gb12('node:fs') as {
+    mkdtempSync: (p: string) => string;
+    writeFileSync: (p: string, s: string, e: string) => void;
+    rmSync: (p: string, o?: unknown) => void;
+    existsSync: (p: string) => boolean;
+  } | undefined;
+  const os12 = gb12('node:os') as { tmpdir: () => string } | undefined;
+  const path12 = gb12('node:path') as { join: (...p: string[]) => string } | undefined;
+  const url12 = gb12('node:url') as { pathToFileURL: (p: string) => { href: string } } | undefined;
+  const needle12 = '  if (!g) return ip;\n';
+  const src12 = await srcOf('../src/server/ratelimit.ts');
+  const cnt12 = src12.split(needle12).length - 1;
+  await A('rate 毒化錨恰 1（IPv6 聚合分支入口單點承載）', cnt12 === 1, 'cnt=' + cnt12);
+  if (!fs12 || !os12 || !path12 || !url12) {
+    await A('rate 毒化面（原語缺席環境）＝顯性 RED 行，毒化證據缺席顯形非 silent true', false, 'node fs/os/path/url 原語缺席');
+  } else if (cnt12 === 1) {
+    const tree12 = fs12.mkdtempSync(path12.join(os12.tmpdir(), 't12-ratekey-'));
+    const flipped12: string[] = [];
+    const held12: string[] = [];
+    let plainOk12 = false;
+    try {
+      fs12.writeFileSync(path12.join(tree12, 'ratelimit.ts'), src12.replace(needle12, '  return ip;\n'), 'utf8');
+      fs12.writeFileSync(path12.join(tree12, 'env.ts'), await srcOf('../src/server/env.ts'), 'utf8');
+      const modP12 = (await import(url12.pathToFileURL(path12.join(tree12, 'ratelimit.ts')).href)) as RateMod12;
+      for (const [name, pred] of v6Cases12) {
+        let res: string;
+        try { res = String(await pred(modP12)); } catch (e) { res = 'crash: ' + String((e as Error).message).slice(0, 80); }
+        (res === 'false' ? flipped12 : held12).push(name.slice(0, 40) + ' → ' + res);
+      }
+      plainOk12 = (await Promise.all(plainCases12.map(([, pred]) => pred(modP12)))).every((x) => x);
+    } catch (e) {
+      held12.push('poison import crash: ' + String((e as Error).message).slice(0, 120));
+    } finally {
+      fs12.rmSync(tree12, { recursive: true, force: true });
+    }
+    await A('rate 毒化（IPv6 聚合分支摘除）→ v6 面謂詞逐案真翻紅（' + v6Cases12.length + ' 案全 false、零 crash）',
+      held12.length === 0 && flipped12.length === v6Cases12.length,
+      'flipped=' + flipped12.length + '/' + v6Cases12.length + (held12.length ? '；未翻：' + held12.join('｜') : ''));
+    await A('rate 毒化面精準：非 v6 面照綠（IPv4／unknown／無效形——毒面恰 IPv6 聚合面翻）＋毒化樹出生即棄（本 repo 樹零接觸）',
+      plainOk12 && !fs12.existsSync(tree12));
+  }
+}
 await A('AUTH_RATE 契約（60s 窗 max 10）', AUTH_RATE.windowMs === 60_000 && AUTH_RATE.max === 10);
 const sessA = generateSessionToken();
 const sessB = generateSessionToken();

@@ -14,6 +14,10 @@
  * 放行判準：RETURNING 的 count <= max（窗口內超額後的每一發都回實際 count，
  * 由呼叫端以 count <= max 拒絕——計數不封頂，超額仍逐發累計）。
  *
+ * 限流鍵（2026-10-11 定案）：checkRate 入口經 normalizeRateIp 正規化——IPv6 聚合至 /64
+ * （單一終端可自由輪換 /64 內尾段＝完整地址當鍵即每發新鍵、限流失效）；IPv4-mapped
+ * 位址回點分 IPv4（＝原生 IPv4 同 /32 鍵，review r1 MAJOR-1 收口）；IPv4 與非 IPv6 形原樣。
+ *
  * 呼叫端須自建表（無 GC 機制：舊 IP 列不清，表隨活躍 IP 數緩慢增長——
  * 每列 ~40 bytes，量級可忽略；如需回收見下方 GC 註記）：
  *   CREATE TABLE IF NOT EXISTS {table} (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER);
@@ -71,6 +75,49 @@ async function bumpRate(env: Env, w: RateWindow, ip: string): Promise<boolean> {
   }
 }
 
+const HEXTET = /^[0-9a-f]{1,4}$/i;
+const IPV4_OCTET = /^(0|[1-9]\d{0,2})$/;
+
+/** IPv6 文字形 → 8 組 hextet 數值（RFC 4291 §2.2：`::` 至多一處、嵌入 IPv4 僅居末）；非法形回 null。 */
+function parseIpv6(s: string): number[] | null {
+  const halves = s.split('::');
+  if (halves.length > 2) return null;
+  const parts = halves.map((h) => (h === '' ? [] : h.split(':')));
+  const last = parts[parts.length - 1];
+  const v4: number[] = [];
+  if (last.length > 0 && last[last.length - 1].includes('.')) {
+    const q = last.pop()!.split('.');
+    if (q.length !== 4 || !q.every((o) => IPV4_OCTET.test(o) && Number(o) <= 255)) return null;
+    v4.push(Number(q[0]) * 256 + Number(q[1]), Number(q[2]) * 256 + Number(q[3]));
+  }
+  if (!parts.every((p) => p.every((g) => HEXTET.test(g)))) return null;
+  const n = parts.reduce((a, p) => a + p.length, 0) + v4.length;
+  const hex = (p: string[]): number[] => p.map((g) => parseInt(g, 16));
+  if (halves.length === 1) return n === 8 ? [...hex(parts[0]), ...v4] : null;
+  if (n > 7) return null;
+  return [...hex(parts[0]), ...new Array<number>(8 - n).fill(0), ...hex(parts[1]), ...v4];
+}
+
+/**
+ * 限流鍵正規化（單一真相；純函式、零 throw）：
+ * - IPv6 → /64 前綴＋`/64` 標記（RFC 5952 規範形：hextet 前導零摘除、小寫、零串壓縮），
+ *   例 `2001:0DB8:0000:000A::1` → `2001:db8:0:a::/64`、`::1` → `::/64`；zone id（`%…`）先剝除。
+ *   介面 ID 歸零後末 4 組恆零＝最長零串恆為尾串（前綴內零串至多 3 組），故壓縮形＝前綴摘尾零組＋`::`。
+ * - IPv4-mapped（::/96 前綴＋映射尾組，RFC 4291 §2.5.5.2）→ 點分 IPv4 原鍵——mapped 位址就是 IPv4
+ *   節點的表示法，回 /32 與原生同鍵（hex 尾組 twin `::ffff:c000:201` 同鍵 192.0.2.1；禁併入 ::/64 全域桶）。
+ * - IPv4／`'unknown'`／空串／無法解析形：原樣返回（鍵照樣進表＝可見面，不靜默丟鍵）。
+ */
+export function normalizeRateIp(ip: string): string {
+  if (typeof ip !== 'string' || !ip.includes(':')) return ip;
+  const pct = ip.indexOf('%');
+  const g = parseIpv6(pct >= 0 ? ip.slice(0, pct) : ip);
+  if (!g) return ip;
+  if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0xffff) return [g[6] >> 8, g[6] & 255, g[7] >> 8, g[7] & 255].join('.');
+  const net = g.slice(0, 4);
+  while (net.length > 0 && net[net.length - 1] === 0) net.pop();
+  return net.map((h) => h.toString(16)).join(':') + '::/64';
+}
+
 export function checkRate(env: Env, w: RateWindow, ip: string): Promise<boolean> {
-  return bumpRate(env, w, ip);
+  return bumpRate(env, w, normalizeRateIp(ip));
 }

@@ -86,7 +86,7 @@ export {
   type CipherFormats,
   type KeyPackage,
 } from './server/auth.ts';
-export { checkRate, type RateWindow } from './server/ratelimit.ts';
+export { checkRate, normalizeRateIp, type RateWindow } from './server/ratelimit.ts';
 export { corsResponse, CORS_HEADERS } from './server/cors.ts';
 export {
   sha256Hex,
