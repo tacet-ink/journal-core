@@ -10,10 +10,51 @@
 
 > **English**: Zero-knowledge journaling core — E2E-encrypted notes, passphrase-as-identity auth, transport & rate-limiting primitives. The server never sees a single word: the passphrase never crosses the wire, and all key wrapping and encryption happen client-side. See the [English summary](#english-summary) below.
 
+高階 Vault API（`client/vault`）：`createVault(pass, { app })` 零設定建 vault → 記錄包裹加解密 → 解鎖／24 詞復原 → PH1 登入憑證，一個子路徑走完。
+
 這是 [默·Tacet（tacet.ink）](https://tacet.ink) 的客戶端/伺服端核心原語層，
 從多個姊妹產品共用的密碼學本體抽取而成，以品牌前綴參數化（前綴契約見下表）。
 
 ## Quickstart
+
+```ts
+// example.mts
+import { createVault, unlockVault, recoverVault, deriveVaultPh1, isVaultError }
+  from '@tacet-ink/journal-core/client/vault';
+
+const PASS = 'correct horse battery staple';
+const cfg = { app: 'myapp', recovery: true };  // 零設定：全前綴由 app 推導（myapp1v./myapp4w./myapp1r.…）；recovery＝復原套件 opt-in
+
+// 1. 建 vault：隨機 noteKey＋Argon2id 密語包裹。serverRecord＝上傳伺服器的包裹欄；kit＝復原套件（只顯示一次）
+const { vault, serverRecord, recovery: kit } = await createVault(PASS, cfg);
+
+// 2. 記錄加解密：AAD 綁 app+recordId——密文搬到別筆 recordId 即 ERR_VAULT_DECRYPT
+const blob = await vault.encrypt('note-1', { title: '今天', body: '寫了一點東西。' });
+console.log(blob.slice(0, 8));                         // 'myapp1v.'
+console.log(await vault.decrypt('note-1', blob));      // { title: '今天', body: '寫了一點東西。' }
+
+// 3. 換裝置解鎖：密語＋伺服器帶回的 serverRecord（同一 cfg）
+const unlocked = await unlockVault(PASS, serverRecord, cfg);
+console.log(await unlocked.decrypt('note-1', blob));   // 同上
+try { await unlockVault('wrong passphrase', serverRecord, cfg); }
+catch (e) { console.log(isVaultError(e, 'ERR_VAULT_WRONG_PASSPHRASE')); }  // true（拋出碼恆 ERR_VAULT_WRAP_MISMATCH）
+
+// 4. 忘記密語：24 詞復原（伺服器存 kit.wrappedRec＋kit.recTokenHash；詞只給使用者抄寫）
+if (!kit) throw new Error('recovery kit missing');    // cfg 未開 recovery＝null
+console.log(kit.words.length);                         // 24
+const recovered = await recoverVault(kit.words, kit.wrappedRec, cfg);
+console.log(await recovered.decrypt('note-1', blob));  // 同上
+const newRecord = await recovered.changePassphrase('a new passphrase');  // 設新密語 → 覆存 serverRecord
+
+// 5. 登入憑證：PH1（hex64）上線、密語本體不過線；鹽＝per-product 固定域鹽（⚠️ 見下方「PH1 派生」節鹽域警告）
+const ph1 = await deriveVaultPh1(PASS, new TextEncoder().encode('myapp-ph1-v1'));
+console.log(ph1.length);                               // 64
+// server（fork 端，'@tacet-ink/journal-core/server/auth'）：return loginRouteCore(env, store, ip, ph1);
+```
+
+run: `npm install @tacet-ink/journal-core && node example.mts`（0.3.4 起；Node ≥ 24.7——dist ESM 直載免 strip-types 旗標，`.mts` 不受 package.json `type` 影響；Argon2id 走內建 `node:crypto` 免注入 loader）
+
+源碼 clone 跑驗證閘：
 
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
@@ -21,32 +62,7 @@ npm ci --ignore-scripts
 npm run verify   # 522 assertions, all green, run against the real modules (no mocks); 0.3.3: 519 inside the published package ([21] SKIP line)
 ```
 
-```ts
-// example.ts
-import { makeHeldKey, generateNoteKey, encryptNote, decryptNote } from './src/index.ts';
-import { makeKeyStore } from './src/client/keys.ts';
-
-const cfg = {
-  guestKdfPrefix: 'myapp-note-u1',
-  recSaltPrefix: 'myapp-note-rec1:',
-  cipherGuest: 'jr1g.',      // your own brand prefix family (guest era, opt-in)
-  cipherBound: 'jr1b.',
-  wrap: 'jr1w.',
-  store: makeKeyStore({ brand: 'myapp' }),
-};
-
-const held = makeHeldKey();
-held.set(await generateNoteKey());             // bound era: random 256-bit noteKey
-const identity = { current: () => 'acct-xxxxxxxxxxxxxxxx' };
-
-const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'noteId:n1', identity);
-console.log(cipher.slice(0, 5));  // 'jr1b.' — ciphertext; nobody reads it without the key
-console.log(await decryptNote(cfg, held, cipher, 'noteId:n1', identity));  // '今天寫了一點東西。' — roundtrip
-```
-
-run: `node --experimental-strip-types example.ts`
-
-完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
+上例為高階 Vault API；錯誤碼見[例外契約](#例外契約錯誤碼語意)（`VaultError` 表）。低階原語範例（note-crypto 兩時代加解密、前綴自配）與完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
 （驗證頁：[https://tacet.ink/verify](https://tacet.ink/verify)）。
 安全回報流程見 [SECURITY.md](./SECURITY.md)、版本歷史見 [CHANGELOG.md](./CHANGELOG.md)。
 
@@ -162,6 +178,35 @@ import { makeKeyStore, makeHeldKey, generateNoteKey, encryptNote, decryptNote } 
 // 或子路徑：'@tacet-ink/journal-core/client/note-crypto'
 ```
 
+低階原語最小 roundtrip（源碼 clone 形，import `./src/*`）：
+
+```ts
+// example.ts
+import { makeHeldKey, generateNoteKey, encryptNote, decryptNote } from './src/index.ts';
+import { makeKeyStore } from './src/client/keys.ts';
+
+const cfg = {
+  guestKdfPrefix: 'myapp-note-u1',
+  recSaltPrefix: 'myapp-note-rec1:',
+  cipherGuest: 'jr1g.',      // your own brand prefix family (guest era, opt-in)
+  cipherBound: 'jr1b.',
+  wrap: 'jr1w.',
+  store: makeKeyStore({ brand: 'myapp' }),
+};
+
+const held = makeHeldKey();
+held.set(await generateNoteKey());             // bound era: random 256-bit noteKey
+const identity = { current: () => 'acct-xxxxxxxxxxxxxxxx' };
+
+const cipher = await encryptNote(cfg, held, '今天寫了一點東西。', 'noteId:n1', identity);
+console.log(cipher.slice(0, 5));  // 'jr1b.' — ciphertext; nobody reads it without the key
+console.log(await decryptNote(cfg, held, cipher, 'noteId:n1', identity));  // '今天寫了一點東西。' — roundtrip
+```
+
+run: `node --experimental-strip-types example.ts`
+
+npm 安裝形（完整 cfg 欄位）：
+
 ```ts
 import { generateNoteKey, encryptNote, decryptNote, makeHeldKey,
          wrapNoteKey, unwrapNoteKey } from '@tacet-ink/journal-core/client/note-crypto';
@@ -250,6 +295,31 @@ catch）＋套用 `migrations/0011-ph2-ladder.sql`（＋0012 索引修正）；�
 | `ERR_ARGON2_TAGLEN` | Argon2id 載體 tag 非 32B（載體契約面） |
 | `ERR_ARGON2_UNAVAILABLE` | 無 Argon2id 載體（node<24.7 且無 hash-wasm 注入——禁 fallback） |
 
+**高階 Vault API（client/vault）**
+
+低階原語面不動（throw 'ERR_*' 字串錯誤＋unwrap 恆 null 的混態照舊）——只在 vault.ts／argon-auto.ts 邊界轉譯：高階 API 一律 throw VaultError，呼叫端以 `code` 分流，不比對 message。
+失敗面刻意不細分「密語錯」與「密文竄改」（同一 GCM 失敗——細分＝oracle）。
+
+`VaultError`（`e.code`）＋型別守衛 `isVaultError(e, code?)`：14 個拋出碼＋1 個查詢別名。
+
+| 錯誤碼 | 拋出面 |
+| --- | --- |
+| `ERR_VAULT_CONFIG` | 配置缺欄／畸形（app、cipher、argon.wrap4、recovery 兩欄一體…）——opt-in 未配置即拒 |
+| `ERR_VAULT_BAD_RECORD` | serverRecord 缺 wrapped/salt 欄或形不符（不猜） |
+| `ERR_VAULT_WRAP_UNKNOWN` | wrapped 前綴不屬任何已配置家族（未知世代／他產品前綴） |
+| `ERR_VAULT_WRAP_MISMATCH` | 家族辨識成功但解包失敗：密語／PIN 錯或包裹竄改（刻意不分） |
+| `ERR_VAULT_WRONG_PASSPHRASE` | 查詢別名（拋出面恆 WRAP_MISMATCH）：`isVaultError(e, 'ERR_VAULT_WRONG_PASSPHRASE')` 與查 `ERR_VAULT_WRAP_MISMATCH` 雙向等值；本 API 不拋此碼 |
+| `ERR_VAULT_PIN_REQUIRED` | 雙因子家族（jr2w./jr3d./jr4d. 形）缺 PIN |
+| `ERR_VAULT_BAD_PASSPHRASE` | 密語空值／非字串 |
+| `ERR_VAULT_BAD_PIN` | PIN 正規化後為空 |
+| `ERR_VAULT_KDF_UNSUPPORTED` | Argon2id 載體缺席或失效（zero-fallback：禁 PBKDF2／zeros 兜底） |
+| `ERR_VAULT_BAD_RECORD_ID` | recordId 非字串或空 |
+| `ERR_VAULT_BAD_DATA` | encrypt 資料形不支援（undefined、BigInt、循環 JSON、非 Uint8Array 的 ArrayBuffer 族…） |
+| `ERR_VAULT_BAD_BLOB` | 密文 blob 形不符（前綴／base64／長度／型別標記） |
+| `ERR_VAULT_DECRYPT` | 密文解密失敗：recordId（AAD）不符、金鑰不符或密文竄改（刻意不分） |
+| `ERR_VAULT_RECOVERY` | 復原套件形不符（recToken 非 hex64／24 詞不符、wrappedRec 前綴不符）或解包失敗 |
+| `ERR_VAULT_INTERNAL` | 未預期的低階錯誤（`cause` 帶原錯） |
+
 **伺服端（server/）＋閘**
 
 | 錯誤碼 | 拋出面 |
@@ -284,6 +354,17 @@ MIT。安全問題聯絡 security@tacet.ink（安全回報流程見 [SECURITY.md
 **What this is.** `@tacet-ink/journal-core` is the cryptographic and server-primitive layer powering
 [默·Tacet (tacet.ink)](https://tacet.ink), a zero-knowledge journal: the server stores only ciphertext
 and salted hashes, and never learns your passphrase or the content of any note.
+
+**High-level Vault API.** `@tacet-ink/journal-core/client/vault` (0.3.4+) wraps the primitives in a
+single flow. `createVault(passphrase, { app: 'myapp', recovery: true })` derives every prefix from
+`app` (zero config), wraps a random note key with Argon2id, and returns the `serverRecord` to upload
+plus an opt-in 24-word recovery kit. `vault.encrypt(recordId, data)` / `vault.decrypt(recordId, blob)`
+bind each record to `app:recordId` as AAD, so a ciphertext moved to another record fails to decrypt.
+`unlockVault(passphrase, serverRecord, cfg)` reopens the vault on another device, and
+`recoverVault(words, wrappedRec, cfg)` reopens it from the recovery kit. `deriveVaultPh1(passphrase, salt)`
+produces the hex64 login credential your server passes to `loginRouteCore(env, store, ip, ph1)`.
+Failures throw a `VaultError` with a stable `code`; a wrong passphrase and a tampered wrap
+deliberately share one code, since telling them apart would create an oracle.
 
 **Security model.**
 
@@ -355,7 +436,8 @@ spec and test vectors.
 and Workers can import it directly — no bundler and no strip-types needed (the 0.2.x "must bundle"
 requirement is retired). A source checkout can still run `src/` with `node --experimental-strip-types`.
 In browsers, inject the hash-wasm Argon2id carrier via `setArgonLoader()`; Node ≥ 24.7 uses the
-built-in `node:crypto`. See the code sample in the 使用 section above.
+built-in `node:crypto`. The Quickstart opens with a runnable Vault walkthrough (create → encrypt →
+unlock → recover → PH1); the low-level primitive samples are in the 使用 section.
 
 **Honest limits.** The guest era is obfuscation-grade, not E2E. PH1 derivation is defined by each
 product (fast hash or Argon2id); this layer only validates its hex64 form. Product concerns
