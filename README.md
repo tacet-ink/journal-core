@@ -136,7 +136,7 @@ npm run verify   # 522 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   522 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→519，SKIP 顯形非靜默）
+                 #   522 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→519（=522−3；消費端帳數真相源＝本行，隨版記帳——閘 SKIP 行摘死數字指回本行），SKIP 顯形非靜默）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
                  # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
                  # ＋高階 Vault API [27]（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）

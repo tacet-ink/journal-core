@@ -2661,7 +2661,10 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
     await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
       srcPy21.includes('npm ci --ignore-scripts'));
   } else {
-    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行——消費端計數帳 503）',
+    // F-1（t_0eb70367）：僵字面帳數摘除——舊形寫死『消費端計數帳 503』每版必過期；執行期插值
+    // 不可行（tarball 全帳含 secCases 體系外段，secCases 求和≠帳總——插值即印錯數，比僵字面更糟）。
+    // 對帳值真相源＝README「CI 供應鏈面」行（發布輪隨版維護）；本行語意只聲明 SKIP 顯形與帳差 −3。
+    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行，帳差 −3；消費端計數帳對照 README「CI 供應鏈面」行隨版記帳）',
       true, 'no .github dir — consumption tree face');
   }
   // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
