@@ -12,18 +12,20 @@
 與裸位址可辨；zone id 先剝、大寫／零壓縮正規化），**IPv4-mapped 位址回點分 IPv4
 原生 /32 鍵**（mapped 依 RFC 4291 §2.5.5.2 即 IPv4 節點——塌縮 ::/64 桶會形成全球
 lockout DoS 向量）；IPv4／`unknown`／空串／無法解析形原樣（鍵照樣入表＝可見面）。
-checkRate 入口接線，呼叫端介面零變；限流聚合語意變更標記（行為變更）。
+checkRate 入口接線，呼叫端介面零變；限流聚合語意變更標記（行為變更）——升級影響三點：既有 IPv6 逐址鍵升級當下計數視窗一次性重置、mapped 位址併入點分 IPv4 桶、同 /64 多主機共額度。
 驗證閘 [12] 新段 +15 案（50→65）：同 /64 共鍵、跨 /64 分鍵、同 /48 異 /64 不共鍵、
 RFC 5952 規範形＋零組不碰撞、::/64 邊界、zone id／大寫／嵌入 IPv4、mapped→點分
 IPv4 twin 同鍵＋相異主機各鍵、非 v6 原樣三案、barrel 同物件、拷貝樹毒化聚合分支
 摘除＝v6 八案真翻紅。verify 帳 506→521。
 
+**Added** — 根入口新公開匯出 `normalizeRateIp`：限流鍵 IPv6 /64 正規化的單一真相入口
+（詳 **Changed** 節）——0.3.1 的 72 個 exports 至本版 73 個，唯一新增即此。
+
 **Added** — GC（garbage collection）排程面：伺服器維護 GC 條目（幽靈帳號／孤立
 session／分享包裹／附件孤兒／授權超額）由前端 worker 每日低峰排程（Cloudflare
 Workers Cron Triggers，每日 UTC 19:00＝台灣 03:00 離峰）觸發；既有 1/200 抽樣
 fallback 保留（cron 為主、抽樣為 fallback；GC_EVERY_N 與 GC 門檻常數不動）。
-（排程主體 commit 在 tacet.ink 伺服器側 repo；本節為核心面依「發布確定後」位址
-律回填措辭。）
+（排程主體 commit 在 tacet.ink 伺服器側 repo；本節為核心面依發布確定後節位回填。）
 
 ## [0.3.1] — 2026-10-10
 
