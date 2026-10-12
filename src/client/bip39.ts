@@ -143,3 +143,22 @@ export function spotCheckIndexes(): number[] {
   }
   return pool.slice(0, 4).sort((a, b) => a - b);
 }
+
+/** 24 詞固定長 tuple（BIP39 英文——復原套件詞形契約面；wordsToRecToken/recTokenToWords 的載體形）。 */
+export type Bip39Words = [
+  string, string, string, string, string, string, string, string,
+  string, string, string, string, string, string, string, string,
+  string, string, string, string, string, string, string, string,
+];
+
+/**
+ * 詞形輸入正規化（normalizeWords 的公開收口）：字串形＝既有路（NFKC→trim→lower→split(/\s+/)→filter）；
+ * 陣列形＝每詞 NFKC→trim→lower 同構（wordsToRecToken 陣列腿同契約）、非字串元素入空串後濾除。
+ * 呼叫端：recoverVault 詞形入參先經此再走 wordsToRecToken——任何不符（錯數/詞表外/checksum）照舊 null。
+ */
+export function normalizeWordInput(input: string | string[]): string[] {
+  if (typeof input === 'string') return normalizeWords(input);
+  return (Array.isArray(input) ? input : [])
+    .map((w) => (typeof w === 'string' ? w.normalize('NFKC').trim().toLowerCase() : ''))
+    .filter((w) => w.length > 0);
+}

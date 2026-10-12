@@ -53,6 +53,17 @@ PIN 恆 opt-in
 全量回歸直通）＋⑧f 顯式路徑 app 契約放寬回歸案（顯式全配置 app 契約外字面——空白／帶點——
 直通＝家族面照常＋跨碼恆非 CONFIG）。帳 525→530。
 
+**Added** — 復原套件 24 詞形（bip39 轉寫層既有原語上車）：`VaultRecoveryKit` 加 `words` 欄
+（＝`recTokenToWords(recToken)` 的 BIP39 英文 24 詞；`recToken` hex64 欄保留——雙形相容既有 kit
+消費端）。`recoverVault` 入參 `recToken` 收三形：hex64（既有契約原樣）／24 詞空格分隔單字串／
+24 詞字串陣列——詞形內部 `wordsToRecToken` 轉回 hex64 後走原驗證路（正規化 NFKC＋小寫照
+bip39.ts 轉寫層契約；任何不符——錯詞 checksum／錯數／詞表外——照舊 `ERR_VAULT_RECOVERY`）。
+線上契約零變更：rec_hash＝SHA-256(hex64)、wrappedRec 逐位不動；24 詞 ⇄ hex64 可逆互轉＝熵等價。
+
+**驗證閘（W5 補記）** — [27] 加一腿：復原套件 24 詞形（kit.words 恆等 recTokenToWords(recToken)
+＋words⇄hex64 roundtrip 恆同、recoverVault 三形入參同解同密文＋復原動線同構、詞形非法三毒
+（錯詞／23 詞／詞表外）同碼 ERR_VAULT_RECOVERY）。帳 530→531。
+
 ## [0.3.3] — 2026-10-12
 
 **驗證閘** — [12] 限流鍵段就地加力：無法解析形案改以 `Object.is` 驗原樣回傳，並補齊
