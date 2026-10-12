@@ -169,7 +169,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 22 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -3345,6 +3345,29 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
       && (await codeOf27(recoverVault('xyz', kit27!.wrappedRec, CFG27))) === 'ERR_VAULT_RECOVERY'
       && (await codeOf27(recoverVault(kit27!.recToken, 'jr1w.' + kit27!.wrappedRec.slice(5), CFG27))) === 'ERR_VAULT_RECOVERY'
       && (await codeOf27(recoverVault(kit27!.recToken, kit27!.wrappedRec, { ...CFG27, recovery: undefined }))) === 'ERR_VAULT_CONFIG');
+
+    // ⑨＋ 復原套件 24 詞形（W5）：words 欄＋recoverVault 三形入參（hex64／空格單字串／陣列）——詞形轉回 hex64 恆走原驗證路
+    const rvWords27 = (await bip.recTokenToWords(kit27!.recToken)) as string[];
+    const wvHex27 = await recoverVault(kit27!.recToken, kit27!.wrappedRec, CFG27);
+    const wvStr27 = await recoverVault(rvWords27!.join(' '), kit27!.wrappedRec, CFG27);
+    const wvArr27 = await recoverVault(rvWords27!, kit27!.wrappedRec, CFG27);
+    const wvFamNull27 = wvStr27.family === null && wvStr27.serverRecord === null && wvStr27.carrier === null; // changePassphrase 前取值（handle 換密語後 family 轉 wrap4——同 ⑨ rvFamNull27）
+    const wvCp27 = await wvStr27.changePassphrase('recovered-words 27');
+    const wvU27 = await unlockVault('recovered-words 27', wvCp27, CFG27);
+    const wvWrong27 = [...rvWords27]; wvWrong27[3] = wvWrong27[3] === 'abandon' ? 'ability' : 'abandon';
+    await A('[27] 復原套件 24 詞形：createVault kit 恆帶 words（恰等 recTokenToWords(recToken)；wordsToRecToken roundtrip 恆同 recToken hex64——hex64 欄保留＝雙形相容）；recoverVault 入參三形（hex64 原樣／24 詞空格單字串／24 詞陣列——詞形內部轉回 hex64 走原驗證路）同解同密文、family／serverRecord／carrier 皆 null、upgrade＝BAD_RECORD、changePassphrase→unlock 解通；詞形非法三毒（錯詞 checksum 當場抓／23 詞錯數／詞表外非詞「not a word」）恆 ERR_VAULT_RECOVERY 不誤拋 WRAP_UNKNOWN',
+      !!rvWords27 && rvWords27!.length === 24
+      && !!kit27!.words && kit27!.words.length === 24 && kit27!.words.join(' ') === rvWords27!.join(' ')
+      && (await bip.wordsToRecToken(rvWords27!)) === kit27!.recToken
+      && (await wvHex27.decrypt('rec-s', bS27)) === str27 && (await wvStr27.decrypt('rec-s', bS27)) === str27
+      && (await wvArr27.decrypt('rec-b', bB27) as Uint8Array).length === bytes27.length
+      && wvFamNull27
+      && (await codeOf27(wvHex27.upgrade(PASS27))) === 'ERR_VAULT_BAD_RECORD'
+      && wvCp27.wrapped.startsWith('jr4w.')
+      && (await wvU27.decrypt('rec-b', bB27) as Uint8Array).length === bytes27.length
+      && (await codeOf27(recoverVault(wvWrong27, kit27!.wrappedRec, CFG27))) === 'ERR_VAULT_RECOVERY'
+      && (await codeOf27(recoverVault(rvWords27!.slice(0, 23).join(' '), kit27!.wrappedRec, CFG27))) === 'ERR_VAULT_RECOVERY'
+      && (await codeOf27(recoverVault(rvWords27!.slice(0, 23).concat('not a word'), kit27!.wrappedRec, CFG27))) === 'ERR_VAULT_RECOVERY');
 
     // ⑩ 載體覆寫顯形（setArgonLoader 注入恆優先；錯值載體 KAT 拒用）
     let cnt27 = 0;

@@ -44,6 +44,7 @@ import {
   derivePh1ArgonV3,
   type Argon3Config,
 } from './argon2.ts';
+import { recTokenToWords, wordsToRecToken, normalizeWordInput, type Bip39Words } from './bip39.ts';
 import type { KeyStore } from './keys.ts';
 import { VaultError, isVaultError, type VaultErrorCode } from './vault-error.ts';
 import { ensureArgonCarrier, argonCarrierFailures, type ArgonCarrierKind, type ArgonCarrierOptions } from './argon-auto.ts';
@@ -185,6 +186,9 @@ export interface VaultServerRecord {
 /** 復原套件：recToken 只顯示一次（可經 bip39.ts 轉 24 詞）；伺服器存 wrappedRec＋recTokenHash。 */
 export interface VaultRecoveryKit {
   recToken: string;
+  /** 24 詞形（＝recTokenToWords(recToken) 的 BIP39 轉寫；伺服器零存——bip39 轉寫層可逆再導出；
+   *  recToken hex64 欄保留＝雙形相容既有 kit）。 */
+  words: Bip39Words;
   wrappedRec: string;
   recTokenHash: string;
 }
@@ -570,9 +574,10 @@ export function createVault(passphrase: string, opts: VaultOptions | VaultConfig
     let recovery: VaultRecoveryKit | null = null;
     if (opts.recovery) {
       const recToken = generateRecToken();
+      const words = (await recTokenToWords(recToken)) as Bip39Words; // generateRecToken 恆 hex64——null 不可能
       // identity 不入 HKDF 世代 KEK（identity-free by design）——空字串僅滿足簽名。
       const wrappedRec = await wrapNoteKeyWithRecToken(recoveryCfg(cfg), noteKey, recToken, '');
-      recovery = { recToken, wrappedRec, recTokenHash: await recTokenHash(recToken) };
+      recovery = { recToken, words, wrappedRec, recTokenHash: await recTokenHash(recToken) };
     }
     const vault = makeHandle(cfg, noteKey, { rec: w.rec, family: w.family, carrier }, opts.carrier);
     return { vault, serverRecord: { ...w.rec }, recovery };
@@ -609,15 +614,24 @@ export function unlockVault(passphrase: string, serverRecord: VaultServerRecord,
 /** 復原：recToken（hex64）＋wrappedRec（<app>1r.）→ handle（無包裹欄——呼叫端隨即 changePassphrase 設新密語）。
  *  前綴零手填態同上：recovery 未配置＝ERR_VAULT_CONFIG（零鹽選擇不可靜默——opt-in 鐵律；resolver 對
  *  `recovery: true` 推導零鹽契約、物件形＝顯式零動）。輸入形 VaultOptions | VaultConfigInput。 */
-export function recoverVault(recToken: string, wrappedRec: string, opts: VaultOptions | VaultConfigInput): Promise<VaultHandle> {
+export function recoverVault(recToken: string | string[], wrappedRec: string, opts: VaultOptions | VaultConfigInput): Promise<VaultHandle> {
   return translate(async () => {
     const o = resolveVaultConfig(opts);
     const cfg = o.config;
     validateConfig(cfg);
     if (!cfg.recovery || cfg.recovery === true) throw new VaultError('ERR_VAULT_CONFIG', 'recovery'); // true＝resolver opt-in 形——顯式路徑（argon/cipher 在場）未推導＝與未配置同拒
-    if (typeof recToken !== 'string' || !HEX64_RE.test(recToken)) throw new VaultError('ERR_VAULT_RECOVERY', 'recToken');
+    let token: string;
+    if (typeof recToken === 'string' && HEX64_RE.test(recToken)) {
+      token = recToken; // hex64 既有契約原樣
+    } else {
+      // 詞形入參（24 詞空格單字串／24 詞陣列）：正規化→轉回 hex64→後續恆走原驗證路；
+      // 任何不符（錯詞 checksum／錯數／詞表外）＝ERR_VAULT_RECOVERY 照舊（不洩漏哪類錯）。
+      const hex = await wordsToRecToken(normalizeWordInput(recToken));
+      if (hex === null || !HEX64_RE.test(hex)) throw new VaultError('ERR_VAULT_RECOVERY', 'recToken');
+      token = hex;
+    }
     if (typeof wrappedRec !== 'string' || !wrappedRec.startsWith(cfg.recovery.wrapRec)) throw new VaultError('ERR_VAULT_RECOVERY', 'wrappedRec prefix');
-    const noteKey = await unwrapNoteKeyWithRecToken(recoveryCfg(cfg), wrappedRec, recToken, '');
+    const noteKey = await unwrapNoteKeyWithRecToken(recoveryCfg(cfg), wrappedRec, token, '');
     if (!noteKey) throw new VaultError('ERR_VAULT_RECOVERY');
     return makeHandle(cfg, noteKey, { rec: null, family: null, carrier: null }, opts.carrier);
   });
