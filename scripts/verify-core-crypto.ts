@@ -3191,7 +3191,7 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
     // ⑧b deriveVaultPh1（PH1 v3 入口收口）
     const ph1Salt27 = new TextEncoder().encode('core-gate-ph1-v3-domain-a1');
     const ph1Gate27 = await deriveVaultPh1(PASS27, ph1Salt27);
-    await A('[27] deriveVaultPh1(pass, ph1Salt)：hex64＋與 derivePh1ArgonV3 同 pass 同鹽逐位元一致（委派單一真相）；正規化面真承載——全形 pass（無首尾空白）派生＝NFKC 常態 pass 派生同值、大小寫仍分流、首尾空白仍分流；createVault/unlockVault 簽名與返回形不變（additive 鐵律）',
+    await A('[27] deriveVaultPh1(pass, ph1Salt)：hex64＋與 derivePh1ArgonV3 同 pass 同鹽逐位元一致（委派單一真相）；正規化面真承載——全形 pass（無首尾空白）派生＝NFKC 常態 pass 派生同值、大小寫仍分流、首尾空白仍分流；createVault/unlockVault arity 面不變（additive 鐵律——函式體形零動，arity 為本面所斷真值）',
       /^[0-9a-f]{64}$/.test(ph1Gate27)
       && ph1Gate27 === (await derivePh1ArgonV3(PASS27, ph1Salt27))
       && (await deriveVaultPh1('ＰＡＳＳ-ｗｉｄｅ-27', ph1Salt27)) === (await deriveVaultPh1('PASS-wide-27', ph1Salt27))
@@ -3203,7 +3203,7 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
     // ⑧c 錯密語拋出面：unlockVault/upgrade 恆 WRAP_MISMATCH；別名只在查詢面
     const wrCode27 = await codeOf27(unlockVault(OLD27, rec27, CFG27));
     const wrAliasErr27 = (await (async () => { try { await unlockVault(OLD27, rec27, CFG27); return null; } catch (e) { return e; } })()) as VaultError | null;
-    await A('[27] 錯密語仍拋 ERR_VAULT_WRAP_MISMATCH（拋出面不變——別名只在查詢面、不產生新拋出碼）；isVaultError 查詢別名雙向命中：(err, WRONG_PASSPHRASE)／(err, WRAP_MISMATCH) 皆真、裸 isVaultError(err) 真值不變；別名查詢對其餘錯誤碼（DECRYPT／PIN_REQUIRED／WRAP_UNKNOWN／BAD_RECORD／BAD_PASSPHRASE）恆不命中——毒化面',
+    await A('[27] 錯密語仍拋 ERR_VAULT_WRAP_MISMATCH（拋出面不變——別名只在查詢面、不產生新拋出碼）；isVaultError 查詢別名雙向命中：(err, WRONG_PASSPHRASE)／(err, WRAP_MISMATCH) 皆真、裸 isVaultError(err) 真值不變；別名查詢對其餘錯誤碼（DECRYPT／PIN_REQUIRED／WRAP_UNKNOWN／BAD_RECORD／BAD_PASSPHRASE）恆不命中——毒化面；別名查詢直接形：以 WRONG_PASSPHRASE 查五拋出碼實例（DECRYPT／PIN_REQUIRED／WRAP_UNKNOWN／BAD_RECORD／BAD_PASSPHRASE）與非 VaultError 值恆 false——over-broad 別名回歸即翻紅',
       wrCode27 === 'ERR_VAULT_WRAP_MISMATCH'
       && wrAliasErr27 !== null && wrAliasErr27.code === 'ERR_VAULT_WRAP_MISMATCH'
       && isVaultError(wrAliasErr27, 'ERR_VAULT_WRONG_PASSPHRASE')
@@ -3213,7 +3213,13 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
       && isVaultError(new VaultError('ERR_VAULT_WRONG_PASSPHRASE'), 'ERR_VAULT_WRONG_PASSPHRASE')
       && !isVaultError(wrAliasErr27, 'ERR_VAULT_DECRYPT') && !isVaultError(wrAliasErr27, 'ERR_VAULT_PIN_REQUIRED')
       && !isVaultError(wrAliasErr27, 'ERR_VAULT_WRAP_UNKNOWN') && !isVaultError(wrAliasErr27, 'ERR_VAULT_BAD_RECORD')
-      && !isVaultError(wrAliasErr27, 'ERR_VAULT_BAD_PASSPHRASE'));
+      && !isVaultError(wrAliasErr27, 'ERR_VAULT_BAD_PASSPHRASE')
+      && !isVaultError(new VaultError('ERR_VAULT_DECRYPT'), 'ERR_VAULT_WRONG_PASSPHRASE')
+      && !isVaultError(new VaultError('ERR_VAULT_PIN_REQUIRED'), 'ERR_VAULT_WRONG_PASSPHRASE')
+      && !isVaultError(new VaultError('ERR_VAULT_WRAP_UNKNOWN'), 'ERR_VAULT_WRONG_PASSPHRASE')
+      && !isVaultError(new VaultError('ERR_VAULT_BAD_RECORD'), 'ERR_VAULT_WRONG_PASSPHRASE')
+      && !isVaultError(new VaultError('ERR_VAULT_BAD_PASSPHRASE'), 'ERR_VAULT_WRONG_PASSPHRASE')
+      && !isVaultError('not-an-error', 'ERR_VAULT_WRONG_PASSPHRASE'));
 
     // ⑨ 復原套件
     const rv27 = await recoverVault(kit27!.recToken, kit27!.wrappedRec, CFG27);

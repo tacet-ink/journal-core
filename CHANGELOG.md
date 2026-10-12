@@ -19,11 +19,14 @@ Argon2id(normalizePassphrase(pass), 鹽, m=64MiB, t=3, p=1)→hex64），派生�
 `isVaultError(e, 'ERR_VAULT_WRONG_PASSPHRASE')` 對 code === 'ERR_VAULT_WRAP_MISMATCH'
 回 true、反之亦然（雙向別名；對其餘錯誤碼恆 false）。拋出面零變更——錯密語仍拋
 `ERR_VAULT_WRAP_MISMATCH`（失敗面刻意不細分密語錯／包裹竄改：同一 GCM 失敗，細分＝
-oracle——vault-error.ts 檔頭設計契約原文不動），別名只在查詢面。
+oracle——vault-error.ts 檔頭設計契約原文不動），別名只在查詢面。下游披露：union 增寬——
+窮舉 `switch`／`Record<VaultErrorCode,…>` 表若加 `ERR_VAULT_WRONG_PASSPHRASE` case，
+因拋出面恆 `ERR_VAULT_WRAP_MISMATCH`，該 case 必永不命中（別名只在查詢面）。
 
 **驗證閘** — [27] 加三腿：deriveVaultPh1 行為面（hex64＋委派逐位元一致＋正規化收容面
 ——全形＝NFKC 常態同值、大小寫與首尾空白仍分流）、錯密語拋出面＋查詢別名雙向命中＋
-跨碼恆不命中（毒化面）、獨立 export 靜態面＋拋出面零轉拋。帳 522→525。
+跨碼恆不命中（毒化面）、獨立 export 靜態面＋拋出面零轉拋。⑧c 補 over-broad 別名回歸齒：
+查詢帶別名對五拋出碼實例＋非 VaultError 值恆 false（直接形毒化面）。帳 522→525。
 
 ## [0.3.3] — 2026-10-12
 
