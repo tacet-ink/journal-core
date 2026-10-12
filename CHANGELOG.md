@@ -191,6 +191,7 @@ npm metadata 補齊（homepage／repository／bugs——npm 頁側欄 repo 連�
 兩時代金鑰模型、帶內版本化前綴契約、pinlock／雙因子合鑰／分享包裹原語、
 Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 
+[0.3.3]: https://github.com/tacet-ink/journal-core/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/tacet-ink/journal-core/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/tacet-ink/journal-core/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tacet-ink/journal-core/compare/v0.2.5...v0.3.0
