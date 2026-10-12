@@ -106,6 +106,7 @@ function parseIpv6(s: string): number[] | null {
  * - IPv4-mapped（::/96 前綴＋映射尾組，RFC 4291 §2.5.5.2）→ 點分 IPv4 原鍵——mapped 位址就是 IPv4
  *   節點的表示法，回 /32 與原生同鍵（hex 尾組 twin `::ffff:c000:201` 同鍵 192.0.2.1；禁併入 ::/64 全域桶）。
  * - IPv4／`'unknown'`／空串／無法解析形：原樣返回（鍵照樣進表＝可見面，不靜默丟鍵）。
+ * - embedded-IPv4 三家族刻意聚合進其所屬前綴的 /64（deliberate nondecision）：IPv4-compatible（RFC 4291 §2.5.5.1 已棄）::192.0.2.1 → ::/64、SIIT ::ffff:0:192.0.2.1 → ::/64、NAT64 64:ff9b::192.0.2.1 → 64:ff9b::/64——僅 IPv4-mapped（§2.5.5.2）還原點分 IPv4。
  */
 export function normalizeRateIp(ip: string): string {
   if (typeof ip !== 'string' || !ip.includes(':')) return ip;

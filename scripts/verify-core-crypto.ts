@@ -157,7 +157,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-11 實測 521——[12] 限流鍵 /64 正規化 +14＋IPv4-mapped 面 +1）；帳面語意契約（逐段「案 X/帳」
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-12 實測 522——[12] 限流鍵 /64 正規化 +14＋IPv4-mapped 面 +1＋NIT-b 接線錨 +1（NIT-a nonstring 五型 Object.is＝既有案就地強化 +0））；帳面語意契約（逐段「案 X/帳」
 // 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
 // [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
 // 在本機樹由 [8]（登入憑證 Argon2id 派生）內登入 lane 的訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
@@ -166,7 +166,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 65, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 14 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 14 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -927,17 +927,24 @@ const plainCases12: Array<[string, (m: RateMod12) => Promise<boolean>]> = [
     return m.normalizeRateIp('unknown') === 'unknown' && m.normalizeRateIp('') === ''
       && r.row('unknown')?.count === 1 && r.row('')?.count === 1;
   }],
-  ['normalizeRateIp 無法解析形原樣且零 throw（IPv4 五段／IPv6 單段 2001／缺組／雙 ::／:::／非 hex／9 組／:: 外 8 組／嵌入 IPv4 越界／方括號／前導空白／非字串）', async (m) => {
+  ['normalizeRateIp 無法解析形原樣且零 throw（IPv4 五段／IPv6 單段 2001／缺組／雙 ::／:::／非 hex／9 組／:: 外 8 組／嵌入 IPv4 越界／方括號／前導空白；nonstring 五型 undefined／null／NaN／object＋bad 字串面皆 Object.is 原樣回傳）', async (m) => {
     const bad = ['1.2.3.4.5', '2001', '2001:db8', '1::2::3', ':::', '2001:db8::g', '1:2:3:4:5:6:7:8:9', '1:2:3:4:5:6:7:8::', '::ffff:999.0.0.1', '[2001:db8::1]', ' 2001:db8::1'];
+    const obj = { ip: '2001:db8::1' };
     try {
-      return bad.every((ip) => m.normalizeRateIp(ip) === ip)
-        && (m.normalizeRateIp(undefined as unknown as string) as unknown) === undefined;
+      return bad.every((ip) => Object.is(m.normalizeRateIp(ip), ip))
+        && [undefined, null, NaN, obj].every((v) => Object.is(m.normalizeRateIp(v as unknown as string), v));
     } catch { return false; }
   }],
 ];
 for (const [name, pred] of [...v6Cases12, ...plainCases12]) await A(name, await pred(rateReal12));
 await A('index barrel 匯出 normalizeRateIp（＝ratelimit 子路徑同一函式——單一真相）',
   (await import('../src/index.ts')).normalizeRateIp === normalizeRateIp);
+{
+  const src = await srcOf('../src/server/ratelimit.ts');
+  const needle = 'bumpRate(env, w, normalizeRateIp(ip))';
+  const n = src.split(needle).length - 1;
+  await A('checkRate 入口接線（單呼叫點）：bumpRate 收 normalizeRateIp 產物（wiring 靜態錨恰 1——摘 normalize 直通形翻紅面）', n === 1, 'n=' + n);
+}
 // 毒化（拷貝樹 in-gate，[23] 母型）：IPv6 聚合分支入口 `if (!g) return ip;` → `return ip;`（IPv6 一律原樣成鍵）
 // → v6 面謂詞逐案真翻紅（false 非 crash）、非 v6 面照綠（毒面恰此面翻）。毒化跑在 /tmp 拷貝＝本 repo 樹零接觸、樹出生即棄。
 {
