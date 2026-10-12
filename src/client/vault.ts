@@ -1,5 +1,5 @@
 /**
- * vault.ts — 高階 Vault API：createVault／unlockVault／recoverVault → VaultHandle。
+ * vault.ts — 高階 Vault API：createVault／unlockVault／recoverVault → VaultHandle＋零設定前綴推導 resolver。
  *
  * 定位：低階原語（note-crypto.ts／argon2.ts）的**呼叫端**——additive-only，零改動原語語意。
  * 一個 vault＝一把隨機 256-bit noteKey（generateNoteKey）＋伺服器存的包裹欄（wrapped＋salt）
@@ -61,6 +61,74 @@ export {
 } from './argon-auto.ts';
 export { argonWorkerSource, createBlobArgonWorker, type ArgonWorkerLike } from './argon-worker.ts';
 
+/** 復原套件規格形（= 既顯式物件形；resolver 對 app 推導同形輸出——名稱是接線層措語，型別零新增）。 */
+export type VaultRecoverySpec = { wrapRec: string; recKekHkdf: string; recKekSalt?: string };
+
+/**
+ * resolveVaultConfig(input)：零設定前綴推導（resolver）。
+ * 輸入 `{ app, ...任意顯式欄位 }`，輸出完整 VaultConfig＋defaulted 旗標：
+ * `defaulted`＝真時 cipher/argon/legacy/recovery 四組**整組**由 app 決定性推導（10 欄，recovery opt-in 時含）——
+ * 命名自定（語意＝resolveVaultConfig：`{app}`＋零設定前綴推導）：前綴零手填、家族尾碼恆固定（契約三要素 app＋尾碼＋佈局；
+ * 帶內版本化：尾碼代即版本代，升級＝新尾碼；家族佈局不隨字面——README 前綴契約節同源）。
+ * `defaulted`＝假時輸入即顯式全配置（回歸 diff 恆 0——validateConfig 逐對檢查照守）。
+ *
+ * 推導表（app 契約 `^[A-Za-z0-9_-]+$`——前綴字面＝線上 ASCII 契約；**契約閘＝零設定（推導）路徑專載**：
+ * 零設定路徑上 app 在場但含契約外字元＝ERR_VAULT_CONFIG fail-closed 不猜；顯式全配置路徑
+ * app 字面照 0.3.3 既有契約零驗形（非 ASCII／帶點 app 走顯式全配置照舊）——契約閘不跨路徑加寬）：
+ *   cipher='foo1v.'／wrap4='foo4w.'／wrapDual4='foo4d.'／pinSalt3Prefix='foo3s:'（鹽域 ':' 同 tacet 形）
+ *   wrap3='foo3w.'／wrapDual3='foo3d.'／legacy wrap='foo1w.'／wrapDual='foo2w.'／pinSaltPrefix='foo1s.'
+ *   recovery（`recovery: true` 時）wrapRec='foo1r.'／recKekHkdf='fookek1'（KEK info 域帶 k 代——刻意
+ *   異於 wrapRec 字面：HKDF info 域與前綴域恆非前綴關係，鹽外置 payload 邊界不重疊）；
+ *   wrap3／wrapDual3 舊世代讀面同由 app 推導（`app + '3w.'`／`app + '3d.'`——app 族半顯式 legacy 槽的推導殘部）。
+ *   `foo`＝示例形；任兩推導值互不為前綴（startsWith 唯一性前提）；尾碼代＝家族表 README 行。
+ *
+ * 顯式路徑判別：`argon` 或 `cipher` 任一在場＝顯式全配置路徑（resolver 不再推導任何欄位——
+ * 顯式欄位優先、缺欄照 validateConfig 拒＝opt-in 母型；app 契約閘不跨路徑加寬——**契約閘＝
+ * 零設定路徑專載**（顯式全配置路徑 app 字面照 0.3.3 契約零驗；`resolveVaultConfig(opts)`
+ * 三入口單點接線共用）。
+ * recovery 物件形同判（呼叫端自管面）。半顯式態（argon 組推導＋legacy 物件槽顯式欄位共存）：
+ * 推導值與顯式值同進前綴互斥檢查（validateConfig——例 `legacy: { wrap: 'foo4w.bait' }` 與推導
+ * wrap4 'foo4w.' 互為前綴＝CONFIG 拒；歧義配置不猜。
+ */
+export function resolveVaultConfig(input: VaultOptions | VaultConfigInput): { config: VaultConfig; defaulted: boolean } {
+  if (!input || typeof input !== 'object') throw new VaultError('ERR_VAULT_CONFIG', 'input missing');
+  const appIn = (input as { app?: unknown }).app;
+  const opts = input as Partial<VaultOptions> & { legacy?: VaultConfig['legacy'] | boolean };
+  const explicit = opts.argon !== undefined || opts.cipher !== undefined
+    || (opts.recovery !== undefined && typeof opts.recovery === 'object');
+  if (explicit) return { config: input as VaultConfig, defaulted: false };
+  // app 契約閘＝零設定（推導）路徑專載——契約閘不跨路徑加寬（顯式全配置路徑 app 字面照 0.3.3
+  // 既有契約零驗；非契約 app 誤入零設定＝推導值帶契約外字元入前綴域＝fail-closed 不猜）。
+  if (typeof appIn !== 'string' || !APP_RE.test(appIn)) {
+    throw new VaultError('ERR_VAULT_CONFIG', 'app contract (^[A-Za-z0-9_-]+$)');
+  }
+  const app = appIn;
+  let legacy: NonNullable<VaultConfig['legacy']>;
+  if (opts.legacy === true) {
+    legacy = { wrap: app + '1w.', wrapDual: app + '2w.', pinSaltPrefix: app + '1s.' };
+  } else if (opts.legacy === undefined || opts.legacy === false) {
+    legacy = { wrap: false };
+  } else {
+    const l = opts.legacy;
+    legacy = {
+      wrap: l.wrap === undefined ? app + '1w.' : l.wrap,
+      wrapDual: l.wrapDual ?? app + '2w.',
+      pinSaltPrefix: l.pinSaltPrefix ?? app + '1s.',
+    };
+  }
+  const recovery = opts.recovery === true ? { wrapRec: app + '1r.', recKekHkdf: app + 'kek1' } : undefined;
+  return {
+    config: {
+      app,
+      cipher: app + '1v.',
+      argon: { wrap4: app + '4w.', wrapDual4: app + '4d.', pinSalt3Prefix: app + '3s:', wrap3: app + '3w.', wrapDual3: app + '3d.' },
+      legacy,
+      recovery,
+    },
+    defaulted: true,
+  };
+}
+
 // ── 型別 ────────────────────────────────────────────────────────────────────
 
 export interface VaultConfig {
@@ -71,10 +139,34 @@ export interface VaultConfig {
   /** Argon2id 家族前綴：`wrap4` 必填（寫面）；`wrapDual4`＋`pinSalt3Prefix`＝PIN 寫面；
    *  `wrap3`／`wrapDual3`＝舊世代讀面（unlock＋upgrade 來源）。`wrapShare3` 本 API 不用。 */
   argon: Argon3Config;
-  /** PBKDF2 舊世代讀面（jr1w.＝`wrap`；jr2w.＝`wrapDual`＋`pinSaltPrefix`）。只讀不寫。 */
-  legacy?: { wrap?: string; wrapDual?: string; pinSaltPrefix?: string };
-  /** 復原套件（jr1r. HKDF 世代；兩欄一體）。未配置＝createVault 不產復原套件、recoverVault 拒。 */
-  recovery?: { wrapRec: string; recKekHkdf: string; recKekSalt?: string };
+  /** PBKDF2 舊世代讀面（jr1w.＝`wrap`；jr2w.＝`wrapDual`＋`pinSaltPrefix`）。只讀不寫。
+   *  `wrap: false`＝舊契約回落腿關閉（零設定 vault 預設語意——identity 綁域的 jr1w. 復原套件不屬本 API）。 */
+  legacy?: { wrap?: string | false; wrapDual?: string; pinSaltPrefix?: string };
+  /** 復原套件（jr1r. HKDF 世代；兩欄一體）。物件形＝顯式（呼叫端自管前綴與鹽域）；
+   *  true＝opt-in 零設定（wrapRec／recKekHkdf 由 resolver 以 app 推導；recKekSalt 未指定＝零鹽契約）；
+   *  false／undefined＝不產生復原套件（recoverVault 拒）。 */
+  recovery?: VaultRecoverySpec | boolean;
+}
+
+/** VaultConfigInput：resolveVaultConfig 輸入形（三入口共用——零設定 `{app}` 與顯式全配置同形進位；
+ *  pin／carrier＝入口進位欄，resolver 不消費）。 */
+export interface VaultConfigInput {
+  /** app 契約 `^[A-Za-z0-9_-]+$`：零設定路徑 fail-closed（缺 app 亦拒——推導無從）；顯式路徑放行顯式全配置。 */
+  app?: string;
+  /** 顯式記錄密文前綴（在場＝顯式全配置路徑——resolver 不推導）。 */
+  cipher?: string;
+  /** 顯式 Argon3 家族前綴組（在場＝顯式全配置路徑）。 */
+  argon?: Argon3Config;
+  /** 舊世代讀面 opt-in：true＝全推導；false／undefined＝falsable 預設 `{ wrap: false }`（wrap 舊契約回落腿關閉）；
+   *  物件形＝顯式欄位優先、缺欄由 app 推導（`wrap: false` 原樣保留）。 */
+  legacy?: VaultConfig['legacy'] | boolean;
+  /** 復原套件 opt-in：true＝resolver 推導（wrapRec＝`<app>1r.`、recKekHkdf＝`<app>kek1`、零鹽契約）；
+   *  物件形＝顯式（呼叫端自管前綴與鹽域——＝顯式路徑判別）；false／undefined＝無（recoverVault 拒）。 */
+  recovery?: VaultRecoverySpec | boolean;
+  /** PIN 第二因子（入口進位欄——resolver 不消費；VaultOptions 同欄）。 */
+  pin?: string;
+  /** Argon2id 載體選項（入口進位欄——resolver 不消費；VaultOptions 同欄）。 */
+  carrier?: ArgonCarrierOptions;
 }
 
 export interface VaultOptions extends VaultConfig {
@@ -129,6 +221,8 @@ export interface VaultHandle {
 
 const HEX32_RE = /^[0-9a-f]{32}$/;
 const HEX64_RE = /^[0-9a-f]{64}$/;
+/** app 契約（前綴字面＝線上 ASCII 契約）：字母／數字／底線／減號。 */
+const APP_RE = /^[A-Za-z0-9_-]+$/;
 
 const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
@@ -146,8 +240,8 @@ const FAMILIES: readonly FamilySpec[] = [
   { family: 'wrapDual4', dual: true, current: true, argon: true, prefix: (c) => (c.argon.pinSalt3Prefix ? c.argon.wrapDual4 : undefined) },
   { family: 'wrap3', dual: false, current: false, argon: true, prefix: (c) => c.argon.wrap3 },
   { family: 'wrapDual3', dual: true, current: false, argon: true, prefix: (c) => (c.argon.pinSalt3Prefix ? c.argon.wrapDual3 : undefined) },
-  { family: 'wrap', dual: false, current: false, argon: false, prefix: (c) => c.legacy?.wrap },
-  { family: 'wrapDual', dual: true, current: false, argon: false, prefix: (c) => (c.legacy?.pinSaltPrefix ? c.legacy?.wrapDual : undefined) },
+  { family: 'wrap', dual: false, current: false, argon: false, prefix: (c) => (c.legacy?.wrap === false ? undefined : c.legacy?.wrap) },
+  { family: 'wrapDual', dual: true, current: false, argon: false, prefix: (c) => (c.legacy?.wrap === false ? undefined : (c.legacy?.pinSaltPrefix ? c.legacy?.wrapDual : undefined)) },
 ];
 
 function specOf(family: VaultWrapFamily): FamilySpec {
@@ -159,12 +253,24 @@ function validateConfig(c: VaultConfig): void {
   if (!nonEmpty(c.app)) throw new VaultError('ERR_VAULT_CONFIG', 'app');
   if (!nonEmpty(c.cipher)) throw new VaultError('ERR_VAULT_CONFIG', 'cipher');
   if (!c.argon || !nonEmpty(c.argon.wrap4)) throw new VaultError('ERR_VAULT_CONFIG', 'argon.wrap4');
+  if (c.legacy !== undefined) {
+    if (typeof c.legacy !== 'object' || Array.isArray(c.legacy)) throw new VaultError('ERR_VAULT_CONFIG', 'legacy');
+    const lv = c.legacy as { wrap?: string | false; wrapDual?: string; pinSaltPrefix?: string };
+    if (lv.wrap !== undefined && lv.wrap !== false && !nonEmpty(lv.wrap)) throw new VaultError('ERR_VAULT_CONFIG', 'legacy.wrap');
+    if (lv.wrapDual !== undefined && !nonEmpty(lv.wrapDual)) throw new VaultError('ERR_VAULT_CONFIG', 'legacy.wrapDual');
+    if (lv.pinSaltPrefix !== undefined && !nonEmpty(lv.pinSaltPrefix)) throw new VaultError('ERR_VAULT_CONFIG', 'legacy.pinSaltPrefix');
+  }
   const prefixes: string[] = [c.cipher];
   for (const f of FAMILIES) {
     const p = f.prefix(c);
     if (p !== undefined && p !== '') prefixes.push(p);
   }
   if (c.recovery !== undefined) {
+    // 物件形契約（resolver `recovery: true` opt-in 推導前的原始形＝boolean 進位——顯式路徑直通時 true/false 恆拒：
+    // true＝推導語意非顯式規格；false＝「無復原」語意不入 validateConfig 面）。
+    if (c.recovery === true || c.recovery === false || typeof c.recovery !== 'object' || Array.isArray(c.recovery)) {
+      throw new VaultError('ERR_VAULT_CONFIG', 'recovery');
+    }
     const r = c.recovery;
     // 兩欄一體（ERR_REC_CFG_PARTIAL 母型）：部分配置拒——禁寫出跨契約 blob。
     if (!r || !nonEmpty(r.wrapRec) || !nonEmpty(r.recKekHkdf)) throw new VaultError('ERR_VAULT_CONFIG', 'recovery.wrapRec+recKekHkdf');
@@ -198,20 +304,22 @@ function checkDualWritable(c: VaultConfig): void {
 const NO_STORE: KeyStore = { get: () => null, set: () => {}, remove: () => {}, noteKeyWrap: (k: string) => k };
 
 function legacyCfg(c: VaultConfig): NoteCryptoConfig {
+  const lw = c.legacy?.wrap === false ? '' : c.legacy?.wrap ?? '';
   return {
     guestKdfPrefix: '',
     recSaltPrefix: '',
     cipherBound: c.cipher,
-    wrap: c.legacy?.wrap ?? '',
+    wrap: lw,
     wrapDual: c.legacy?.wrapDual,
     pinSaltPrefix: c.legacy?.pinSaltPrefix,
     store: NO_STORE,
   };
 }
 
-/** 復原面專用 cfg：wrap='' ＝舊契約回落腿關閉（identity 綁域的 jr1w. 復原套件不屬本 API）。 */
+/** 復原面專用 cfg：wrap='' ＝舊契約回落腿關閉（identity 綁域的 jr1w. 復原套件不屬本 API）。
+ *  呼叫端先收口：boolean 形 recovery 已由 validateConfig 拒（createVault）／recoverVault 入口拒——本函式唯物件形。 */
 function recoveryCfg(c: VaultConfig): NoteCryptoConfig {
-  const r = c.recovery!;
+  const r = c.recovery as VaultRecoverySpec;
   return {
     guestKdfPrefix: '',
     recSaltPrefix: '',
@@ -440,64 +548,77 @@ export async function deriveVaultPh1(passphrase: string, ph1Salt: Uint8Array): P
   return derivePh1ArgonV3(passphrase, ph1Salt);
 }
 
-/** 新 vault：隨機 noteKey＋最新家族包裹（pin＝jr4d.，否則 jr4w.）＋選配復原套件（jr1r.）。 */
-export function createVault(passphrase: string, opts: VaultOptions): Promise<{
+/** 新 vault：隨機 noteKey＋最新家族包裹（pin＝<app>4d.，否則 <app>4w.）＋選配復原套件（<app>1r.）。
+ *  前綴零手填態（resolver）：`{ app }` 最小設定——全前綴由 app 決定性推導（resolveVaultConfig；
+ *  `recovery: true` opt-in、PIN 帶值＝同族尾碼推導 <app>4d. 不拒）；顯式 `argon`／`cipher` 在場
+ *  ＝顯式全配置路徑（零設定語意退出——缺欄照 validateConfig 拒）。輸入形 VaultOptions | VaultConfigInput。 */
+export function createVault(passphrase: string, opts: VaultOptions | VaultConfigInput): Promise<{
   vault: VaultHandle;
   serverRecord: VaultServerRecord;
   recovery: VaultRecoveryKit | null;
 }> {
   return translate(async () => {
-    validateConfig(opts);
+    const o = resolveVaultConfig(opts);
+    const cfg = o.config;
+    validateConfig(cfg);
     checkPassphrase(passphrase);
     const pin = opts.pin === undefined ? null : opts.pin;
-    if (pin !== null) { checkPin(pin); checkDualWritable(opts); }
+    if (pin !== null) { checkPin(pin); checkDualWritable(cfg); }
     const carrier = await ensureArgonCarrier(opts.carrier);
     const noteKey = await generateNoteKey();
-    const w = await wrapCurrent(opts, noteKey, passphrase, pin);
+    const w = await wrapCurrent(cfg, noteKey, passphrase, pin);
     let recovery: VaultRecoveryKit | null = null;
     if (opts.recovery) {
       const recToken = generateRecToken();
       // identity 不入 HKDF 世代 KEK（identity-free by design）——空字串僅滿足簽名。
-      const wrappedRec = await wrapNoteKeyWithRecToken(recoveryCfg(opts), noteKey, recToken, '');
+      const wrappedRec = await wrapNoteKeyWithRecToken(recoveryCfg(cfg), noteKey, recToken, '');
       recovery = { recToken, wrappedRec, recTokenHash: await recTokenHash(recToken) };
     }
-    const vault = makeHandle(opts, noteKey, { rec: w.rec, family: w.family, carrier }, opts.carrier);
+    const vault = makeHandle(cfg, noteKey, { rec: w.rec, family: w.family, carrier }, opts.carrier);
     return { vault, serverRecord: { ...w.rec }, recovery };
   });
 }
 
 /** 解鎖：serverRecord（wrapped＋salt 成對）按前綴辨識家族（新→舊次序），舊世代照解；
- *  needsUpgrade() 為真時呼叫端可於同一動線 upgrade(passphrase) 靜默重包（Argon 遷移契約同構）。 */
-export function unlockVault(passphrase: string, serverRecord: VaultServerRecord, opts: VaultOptions): Promise<VaultHandle> {
+ *  前綴零手填態（resolver）：整組前綴缺省＝全前綴由 app 推導（resolveVaultConfig）；顯式欄位
+ *  在場＝顯式全配置路徑（零推導）。needsUpgrade() 為真時呼叫端可於同一動線
+ *  upgrade(passphrase) 靜默重包（Argon 遷移契約同構）。輸入形 VaultOptions | VaultConfigInput。 */
+export function unlockVault(passphrase: string, serverRecord: VaultServerRecord, opts: VaultOptions | VaultConfigInput): Promise<VaultHandle> {
   return translate(async () => {
-    validateConfig(opts);
+    const o = resolveVaultConfig(opts);
+    const cfg = o.config;
+    validateConfig(cfg);
     const r = serverRecord as Partial<VaultServerRecord> | null | undefined;
     if (!r || typeof r !== 'object' || !nonEmpty(r.wrapped) || typeof r.salt !== 'string' || !HEX32_RE.test(r.salt)) {
       throw new VaultError('ERR_VAULT_BAD_RECORD');
     }
     checkPassphrase(passphrase);
     const rec: VaultServerRecord = { wrapped: r.wrapped, salt: r.salt };
-    const f = detectFamily(opts, rec.wrapped);
+    const f = detectFamily(cfg, rec.wrapped);
     if (!f) throw new VaultError('ERR_VAULT_WRAP_UNKNOWN');
     if (f.dual) {
       if (opts.pin === undefined) throw new VaultError('ERR_VAULT_PIN_REQUIRED');
       checkPin(opts.pin);
     }
     const carrier = f.argon ? await ensureArgonCarrier(opts.carrier) : null;
-    const noteKey = await unwrapOrThrow(f, opts, rec, passphrase, opts.pin ?? '');
-    return makeHandle(opts, noteKey, { rec, family: f.family, carrier }, opts.carrier);
+    const noteKey = await unwrapOrThrow(f, cfg, rec, passphrase, opts.pin ?? '');
+    return makeHandle(cfg, noteKey, { rec, family: f.family, carrier }, opts.carrier);
   });
 }
 
-/** 復原：recToken（hex64）＋wrappedRec（jr1r.）→ handle（無包裹欄——呼叫端隨即 changePassphrase 設新密語）。 */
-export function recoverVault(recToken: string, wrappedRec: string, opts: VaultOptions): Promise<VaultHandle> {
+/** 復原：recToken（hex64）＋wrappedRec（<app>1r.）→ handle（無包裹欄——呼叫端隨即 changePassphrase 設新密語）。
+ *  前綴零手填態同上：recovery 未配置＝ERR_VAULT_CONFIG（零鹽選擇不可靜默——opt-in 鐵律；resolver 對
+ *  `recovery: true` 推導零鹽契約、物件形＝顯式零動）。輸入形 VaultOptions | VaultConfigInput。 */
+export function recoverVault(recToken: string, wrappedRec: string, opts: VaultOptions | VaultConfigInput): Promise<VaultHandle> {
   return translate(async () => {
-    validateConfig(opts);
-    if (!opts.recovery) throw new VaultError('ERR_VAULT_CONFIG', 'recovery');
+    const o = resolveVaultConfig(opts);
+    const cfg = o.config;
+    validateConfig(cfg);
+    if (!cfg.recovery || cfg.recovery === true) throw new VaultError('ERR_VAULT_CONFIG', 'recovery'); // true＝resolver opt-in 形——顯式路徑（argon/cipher 在場）未推導＝與未配置同拒
     if (typeof recToken !== 'string' || !HEX64_RE.test(recToken)) throw new VaultError('ERR_VAULT_RECOVERY', 'recToken');
-    if (typeof wrappedRec !== 'string' || !wrappedRec.startsWith(opts.recovery.wrapRec)) throw new VaultError('ERR_VAULT_RECOVERY', 'wrappedRec prefix');
-    const noteKey = await unwrapNoteKeyWithRecToken(recoveryCfg(opts), wrappedRec, recToken, '');
+    if (typeof wrappedRec !== 'string' || !wrappedRec.startsWith(cfg.recovery.wrapRec)) throw new VaultError('ERR_VAULT_RECOVERY', 'wrappedRec prefix');
+    const noteKey = await unwrapNoteKeyWithRecToken(recoveryCfg(cfg), wrappedRec, recToken, '');
     if (!noteKey) throw new VaultError('ERR_VAULT_RECOVERY');
-    return makeHandle(opts, noteKey, { rec: null, family: null, carrier: null }, opts.carrier);
+    return makeHandle(cfg, noteKey, { rec: null, family: null, carrier: null }, opts.carrier);
   });
 }
