@@ -29,7 +29,9 @@ oracle——vault-error.ts 檔頭設計契約原文不動），別名只在查�
 `recovery: true` opt-in 推導 `<app>1r.`＋HKDF info 域 `<app>kek1`、零鹽契約）。
 `createVault`／`unlockVault`／`recoverVault` 三入口接線：整組前綴缺省＝resolver 推導預設、
 顯式 `argon`／`cipher` 在場＝顯式全配置路徑（零推導、回歸 diff 恆 0）；app 契約
-`^[A-Za-z0-9_-]+$`（非契約 app＝`ERR_VAULT_CONFIG` fail-closed 不猜）。PIN 恆 opt-in
+`^[A-Za-z0-9_-]+$`＝**零設定路徑專載**（非契約 app 誤入零設定＝`ERR_VAULT_CONFIG`
+fail-closed 不猜；顯式全配置路徑 app 字面照 0.3.3 既有契約零驗——契約閘不跨路徑加寬）。
+PIN 恆 opt-in
 （帶值＝同族尾碼推導不拒）；recovery 缺省恆不推導（零鹽選擇不可靜默——opt-in 鐵律）；
 `legacy.wrap: false`＝零設定 vault 預設語意（舊契約回落腿關閉——identity 綁域的 jr1w.
 復原套件不屬本 API）。`VaultErrorCode` union 零新碼（推導拒恆走 `ERR_VAULT_CONFIG`）。
@@ -37,13 +39,19 @@ oracle——vault-error.ts 檔頭設計契約原文不動），別名只在查�
 **Added** — `VaultRecoverySpec` 型別匯入（＝既顯式物件形別名）＋`VaultConfigInput` 輸入形
 （三入口共用——零設定 `{app}` 與顯式全配置同形進位）。
 
-**驗證閘** — [27] 加四腿：零設定推導表（全前綴決定性＋defaulted 旗標＋app 契約 fail-closed）、
+**驗證閘（W1 補記）** — 0.3.4 W1 輪：[27] 加三腿（`deriveVaultPh1` 行為面 hex64＋委派
+逐位一致＋正規化收容、錯密語拋出面＋`isVaultError` 查詢別名雙向命中＋跨碼恆不命中、
+`deriveVaultPh1` 獨立 export 靜態面＋拋出面零轉拋）＋⑧c over-broad 別名回歸齒。帳 522→525。
+
+**驗證閘** — [27] 加四腿：零設定推導表（全前綴決定性＋defaulted 旗標＋app 契約 fail-closed
+——契約閘＝零設定路徑專載）、
 零設定端到端（三入口全動線——`createVault(pass, { app })` 最小設定三行跑通＋changePassphrase
 帶 PIN 同族推導 jr4d.＋recoverVault 復原動線＋跨設定形隔離）、零設定讀舊＋upgrade 沿帳戶家族形
 （半顯式 legacy 槽推導殘部讀 <app>3w./<app>1w./<app>3d.、upgrade 同鑰重包沿帳戶形）、
 靜態接線錨（resolver 字面恰 10＋接線形恰 3＋app 契約 regex 錨＋推導表尾碼錨——毒化齒）。
 ⑧ 顯式路徑回歸帳添三案（推導域共存前綴互斥 bait、PIN 進位直通 OK面、resolver 顯式 CFG27
-全量回歸直通）。帳 525→529。
+全量回歸直通）＋⑧f 顯式路徑 app 契約放寬回歸案（顯式全配置 app 契約外字面——空白／帶點——
+直通＝家族面照常＋跨碼恆非 CONFIG）。帳 525→530。
 
 ## [0.3.3] — 2026-10-12
 

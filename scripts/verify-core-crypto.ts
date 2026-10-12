@@ -169,7 +169,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 21 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 22 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -3252,7 +3252,7 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
   // ⑧d 零設定前綴推導（resolveVaultConfig ⑴）：推導表＋app 契約 fail-closed＋頂欄恰集
   const zc27 = resolveVaultConfig({ app: 'foo', recovery: true, legacy: true });
   const zcArgon27 = zc27.config.argon as Record<string, unknown>;
-  await A('[27] 零設定推導表（resolveVaultConfig({app}) 全前綴決定性推導）：cipher foo1v.／wrap4 foo4w.／wrapDual4 foo4d.／pinSalt3Prefix foo3s:／wrap3 foo3w.／wrapDual3 foo3d.／legacy wrap foo1w.／wrapDual foo2w.／pinSaltPrefix foo1s.／recovery wrapRec foo1r.＋recKekHkdf fookek1（KEK info 域與 wrapRec 非前綴關係）；defaulted true；頂欄恰 app/argon/cipher/legacy/recovery；recovery 恰兩欄（零鹽契約——recKekSalt 不在場）；wrapShare3 不推導；app 契約 ^[A-Za-z0-9_-]+$（缺 app／含點／含空白＝ERR_VAULT_CONFIG fail-closed 不猜）；顯式欄位優先',
+  await A('[27] 零設定推導表（resolveVaultConfig({app}) 全前綴決定性推導）：cipher foo1v.／wrap4 foo4w.／wrapDual4 foo4d.／pinSalt3Prefix foo3s:／wrap3 foo3w.／wrapDual3 foo3d.／legacy wrap foo1w.／wrapDual foo2w.／pinSaltPrefix foo1s.／recovery wrapRec foo1r.＋recKekHkdf fookek1（KEK info 域與 wrapRec 非前綴關係）；defaulted true；頂欄恰 app/argon/cipher/legacy/recovery；recovery 恰兩欄（零鹽契約——recKekSalt 不在場）；wrapShare3 不推導；app 契約 ^[A-Za-z0-9_-]+$＝零設定路徑專載（缺 app／含點／含空白＝ERR_VAULT_CONFIG fail-closed 不猜；顯式路徑 app 字面 0.3.3 契約零驗——放寬回歸帶載 ⑧f）；顯式欄位優先',
       zc27.defaulted === true
       && zc27.config.app === 'foo' && zc27.config.cipher === 'foo1v.'
       && zcArgon27['wrap4'] === 'foo4w.' && zcArgon27['wrapDual4'] === 'foo4d.'
@@ -3264,8 +3264,9 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
       && !('recKekSalt' in (zc27.config.recovery as object))
       && JSON.stringify(Object.keys(zc27.config).sort()) === JSON.stringify(['app', 'argon', 'cipher', 'legacy', 'recovery'])
       && (await zcErr27(() => resolveVaultConfig({} as never)))
-      && (await zcErr27(() => resolveVaultConfig({ app: 'foo bar' })))
+      && (await zcErr27(() => createVault(PASS27, { app: 'foo bar' })))
       && (await zcErr27(() => resolveVaultConfig({ app: '日記.app' }))));
+    // app 契約閘面三錨＝零設定路徑形／入口形各錨——閘先於路徑判別（跨路徑加寬回歸）即翻紅。
 
     // ⑧e 零設定端到端（三入口全動線 ⑴⑶⑸）：createVault(pass, { app }) 最小設定三行實證
     const zcApp27 = 'gate-zero-config-w3';
@@ -3324,6 +3325,11 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
       && fam27(zcUpdU27) === 'wrapDual4'
       && (await zcErr27(() => createVault(PASS27, { app: zcApp27, argon: { wrap4: 'jr4w.' } })))
       && (await zcErr27(() => createVault(PASS27, { app: zcApp27, cipher: 'jr1v.' }))));
+    // M-1 回歸帶（resolver 顯式全配置路徑 app 字面契約零驗——契約閘＝零設定路徑專載）：
+    const zcWideApp27 = await codeOf27(unlockVault(OLD27, zcRec27, { app: 'a  b', cipher: ZC1V27, argon: { wrap4: zcApp27 + '4w.', wrap3: zcApp27 + '3w.', wrapDual4: zcApp27 + '4d.', wrapDual3: zcApp27 + '3d.', pinSalt3Prefix: zcApp27 + '3s:' }, legacy: { wrap: ZC1W27 } }));
+    const zcDotApp27 = await codeOf27(unlockVault(OLD27, zcRec27, { app: 'foo.v2', cipher: ZC1V27, argon: { wrap4: zcApp27 + '4w.', wrap3: zcApp27 + '3w.', wrapDual4: zcApp27 + '4d.', wrapDual3: zcApp27 + '3d.', pinSalt3Prefix: zcApp27 + '3s:' }, legacy: { wrap: ZC1W27 } }));
+    await A('[27] resolver 顯式全配置路徑 app 契約零驗（契約閘＝零設定路徑專載——M-1 修回歸帶）：顯式全配置 app 契約外字面（空白／帶點——0.3.3 舊帳混合形）直通＝KDF 家族面照常（錯密語＝WRAP_MISMATCH 面、非 CONFIG 拒；跨路徑加寬回歸即翻紅）',
+      zcWideApp27 === 'ERR_VAULT_WRAP_MISMATCH' && zcDotApp27 === 'ERR_VAULT_WRAP_MISMATCH');
 
     // ⑨ 復原套件
     const rv27 = await recoverVault(kit27!.recToken, kit27!.wrappedRec, CFG27);

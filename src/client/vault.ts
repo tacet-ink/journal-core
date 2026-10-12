@@ -67,13 +67,14 @@ export type VaultRecoverySpec = { wrapRec: string; recKekHkdf: string; recKekSal
 /**
  * resolveVaultConfig(input)：零設定前綴推導（resolver）。
  * 輸入 `{ app, ...任意顯式欄位 }`，輸出完整 VaultConfig＋defaulted 旗標：
- * `defaulted`＝真時 cipher/argon/legacy/recovery 四組**整組**由 app 決定性推導（11 欄）——
+ * `defaulted`＝真時 cipher/argon/legacy/recovery 四組**整組**由 app 決定性推導（10 欄，recovery opt-in 時含）——
  * 命名自定（語意＝resolveVaultConfig：`{app}`＋零設定前綴推導）：前綴零手填、家族尾碼恆固定（契約三要素 app＋尾碼＋佈局；
  * 帶內版本化：尾碼代即版本代，升級＝新尾碼；家族佈局不隨字面——README 前綴契約節同源）。
  * `defaulted`＝假時輸入即顯式全配置（回歸 diff 恆 0——validateConfig 逐對檢查照守）。
  *
- * 推導表（app 契約 `^[A-Za-z0-9_-]+$`——前綴字面＝線上 ASCII 契約；app 在場但含契約外字元
- * ＝ERR_VAULT_CONFIG fail-closed 不猜；app 缺席＝顯式全配置路徑既有契約）：
+ * 推導表（app 契約 `^[A-Za-z0-9_-]+$`——前綴字面＝線上 ASCII 契約；**契約閘＝零設定（推導）路徑專載**：
+ * 零設定路徑上 app 在場但含契約外字元＝ERR_VAULT_CONFIG fail-closed 不猜；顯式全配置路徑
+ * app 字面照 0.3.3 既有契約零驗形（非 ASCII／帶點 app 走顯式全配置照舊）——契約閘不跨路徑加寬）：
  *   cipher='foo1v.'／wrap4='foo4w.'／wrapDual4='foo4d.'／pinSalt3Prefix='foo3s:'（鹽域 ':' 同 tacet 形）
  *   wrap3='foo3w.'／wrapDual3='foo3d.'／legacy wrap='foo1w.'／wrapDual='foo2w.'／pinSaltPrefix='foo1s.'
  *   recovery（`recovery: true` 時）wrapRec='foo1r.'／recKekHkdf='fookek1'（KEK info 域帶 k 代——刻意
@@ -82,8 +83,9 @@ export type VaultRecoverySpec = { wrapRec: string; recKekHkdf: string; recKekSal
  *   `foo`＝示例形；任兩推導值互不為前綴（startsWith 唯一性前提）；尾碼代＝家族表 README 行。
  *
  * 顯式路徑判別：`argon` 或 `cipher` 任一在場＝顯式全配置路徑（resolver 不再推導任何欄位——
- * 顯式欄位優先、缺欄照 validateConfig 拒＝opt-in 母型；**app 含契約外字元時仍拋 ERR_VAULT_CONFIG**
- * ──app 是 AAD 域不是前綴，契約不隨路徑放寬；`resolveVaultConfig(opts)` 三入口單點接線共用）。
+ * 顯式欄位優先、缺欄照 validateConfig 拒＝opt-in 母型；app 契約閘不跨路徑加寬——**契約閘＝
+ * 零設定路徑專載**（顯式全配置路徑 app 字面照 0.3.3 契約零驗；`resolveVaultConfig(opts)`
+ * 三入口單點接線共用）。
  * recovery 物件形同判（呼叫端自管面）。半顯式態（argon 組推導＋legacy 物件槽顯式欄位共存）：
  * 推導值與顯式值同進前綴互斥檢查（validateConfig——例 `legacy: { wrap: 'foo4w.bait' }` 與推導
  * wrap4 'foo4w.' 互為前綴＝CONFIG 拒；歧義配置不猜。
@@ -91,15 +93,16 @@ export type VaultRecoverySpec = { wrapRec: string; recKekHkdf: string; recKekSal
 export function resolveVaultConfig(input: VaultOptions | VaultConfigInput): { config: VaultConfig; defaulted: boolean } {
   if (!input || typeof input !== 'object') throw new VaultError('ERR_VAULT_CONFIG', 'input missing');
   const appIn = (input as { app?: unknown }).app;
-  if (appIn !== undefined && (typeof appIn !== 'string' || !APP_RE.test(appIn))) {
-    throw new VaultError('ERR_VAULT_CONFIG', 'app contract (^[A-Za-z0-9_-]+$)');
-  }
   const opts = input as Partial<VaultOptions> & { legacy?: VaultConfig['legacy'] | boolean };
   const explicit = opts.argon !== undefined || opts.cipher !== undefined
     || (opts.recovery !== undefined && typeof opts.recovery === 'object');
   if (explicit) return { config: input as VaultConfig, defaulted: false };
+  // app 契約閘＝零設定（推導）路徑專載——契約閘不跨路徑加寬（顯式全配置路徑 app 字面照 0.3.3
+  // 既有契約零驗；非契約 app 誤入零設定＝推導值帶契約外字元入前綴域＝fail-closed 不猜）。
+  if (typeof appIn !== 'string' || !APP_RE.test(appIn)) {
+    throw new VaultError('ERR_VAULT_CONFIG', 'app contract (^[A-Za-z0-9_-]+$)');
+  }
   const app = appIn;
-  if (!app) throw new VaultError('ERR_VAULT_CONFIG', 'app');
   let legacy: NonNullable<VaultConfig['legacy']>;
   if (opts.legacy === true) {
     legacy = { wrap: app + '1w.', wrapDual: app + '2w.', pinSaltPrefix: app + '1s.' };
@@ -238,7 +241,7 @@ const FAMILIES: readonly FamilySpec[] = [
   { family: 'wrap3', dual: false, current: false, argon: true, prefix: (c) => c.argon.wrap3 },
   { family: 'wrapDual3', dual: true, current: false, argon: true, prefix: (c) => (c.argon.pinSalt3Prefix ? c.argon.wrapDual3 : undefined) },
   { family: 'wrap', dual: false, current: false, argon: false, prefix: (c) => (c.legacy?.wrap === false ? undefined : c.legacy?.wrap) },
-  { family: 'wrapDual', dual: true, current: false, argon: false, prefix: (c) => (c.legacy?.pinSaltPrefix && c.legacy?.wrapDual && c.legacy?.wrap === false ? undefined : (c.legacy?.wrap === false ? undefined : c.legacy?.wrapDual)) },
+  { family: 'wrapDual', dual: true, current: false, argon: false, prefix: (c) => (c.legacy?.wrap === false ? undefined : (c.legacy?.pinSaltPrefix ? c.legacy?.wrapDual : undefined)) },
 ];
 
 function specOf(family: VaultWrapFamily): FamilySpec {
