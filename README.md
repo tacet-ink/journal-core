@@ -209,7 +209,19 @@ catch）＋套用 `migrations/0011-ph2-ladder.sql`（＋0012 索引修正）；�
 把 v3 鹽域值餵 v2 派生（或 fork 把同一 saltArg 帶到兩面）＝NFKC-effective 密語與 v2 raw 密語
 同值撞 ph2，跨世代帳戶空間混合。v3 的 `saltArg` 必須異於本 product 的 v2 鹽域值。
 
-### 例外契約（錯誤碼語意）
+高階 Vault API 零設定前綴（`resolveVaultConfig`，0.3.4）：`createVault(pass, { app })` 最小設定
+——全前綴由 app 決定性推導：記錄密文 `<app>1v.`、寫面 `<app>4w.`／PIN `<app>4d.`、
+鹽域 `<app>3s:`、舊世代讀面 `<app>3w.`/`<app>3d.`/`<app>1w.`/`<app>2w.`/`<app>1s.`；
+`recovery: true` opt-in（復原套件 `<app>1r.`＋HKDF info 域 `<app>kek1`，recKekSalt 未指定＝
+零鹽契約照舊）——**未指定恆不推導**（零鹽選擇不可靜默）。app 契約 `^[A-Za-z0-9_-]+$`
+（前綴字面＝線上 ASCII 契約；非契約 app＝`ERR_VAULT_CONFIG` fail-closed 不猜）。
+**顯式路徑判別**：`argon` 或 `cipher` 任一在場＝顯式全配置路徑（resolver 零推導——既有
+五值手填契約照舊、顯式配置回歸 diff 恆 0）；半顯式態（argon 組推導＋`legacy` 物件槽顯式欄位）
+推導值與顯式值同進前綴互斥檢查（例 `legacy: { wrap: <app>4w.bait }` 與推導 `<app>4w.` 互為
+前綴＝拒——歧義配置不猜）。跨設定形前綴隔離照舊（推導包裹顯式設定不解、顯式包裹他設定不解
+＝`ERR_VAULT_WRAP_UNKNOWN`，app 即前綴契約域）。
+
+#### 例外契約（錯誤碼語意）
 
 **客戶端（client/）**
 
