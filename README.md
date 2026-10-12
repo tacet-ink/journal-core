@@ -244,7 +244,7 @@ raw 'PASS' 撞同一 ph2）。派生輸入吃 `normalizePassphrase`（NFKC-only�
 大小寫差恆不同 ph2）；v2/legacy 派生面零變更（舊帳戶憑證 raw 契約）。兩代 ph2 可並存查表＝
 tacet 遷移層職責（v0.2.0 世代收口）。
 
-server 登入動線（fork 端）：`loginRouteCore(request-ish, store, ip, ph1)` 內建
+server 登入動線（fork 端）：`loginRouteCore(env, store, ip, ph1)` 內建
 ladder 查表守衛——現值 miss 時經 `AuthStore.ladderLookup`（optional）查 ph2_ladder，
 命中回舊帳不建幽靈、兩面 miss 才 `createUser`；未配置＝行為與 0.2.3 單查恆等。
 接法：store 實作 `ladderLookup`（tacet 參考形＝`SQL_FIND_PH2_LADDER_BY_OLD`＋fail-open
@@ -387,7 +387,7 @@ deliberately share one code, since telling them apart would create an oracle.
 - **Key hygiene.** Any key that must be exported/wrapped is imported with `extractable=true`;
   KEK and guest keys are permanently non-extractable.
 
-**Server login wiring.** `loginRouteCore(store, ip, ph1)` ships with the ladder guard built in
+**Server login wiring.** `loginRouteCore(env, store, ip, ph1)` ships with the ladder guard built in
 (v0.2.4, external-review #8 ghost-account fix): on a current-value (PH2) miss it consults the
 `ph2_ladder` table via the optional `AuthStore.ladderLookup` — a ladder hit returns the
 existing account (no ghost creation); a ladder miss, an unconfigured lookup, or a
