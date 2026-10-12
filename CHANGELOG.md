@@ -5,6 +5,21 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.3.3] — 2026-10-12
+
+**驗證閘** — [12] 限流鍵段就地加力：無法解析形案改以 `Object.is` 驗原樣回傳，並補齊
+非字串四型（undefined／null／NaN／物件）；新增 checkRate 入口靜態接線錨（限流模組內
+`bumpRate(env, w, normalizeRateIp(ip))` 恰出現一次——入口摘除正規化即翻紅），帳 521→522。
+[21] SKIP 標籤可維護性：tarball 環境的顯性 SKIP 行不再寫死消費端帳數（舊標籤 503 每版
+必過期），改記帳差 −3 並指回 README「CI 供應鏈面」行——消費端帳數真相源單一化、隨版記帳。
+
+**文件** — `normalizeRateIp` 文件註解補記嵌入 IPv4 三家族的刻意不還原：IPv4-compatible
+`::192.0.2.1`、SIIT `::ffff:0:192.0.2.1` 聚合進 `::/64`，NAT64 `64:ff9b::192.0.2.1` 聚合進
+`64:ff9b::/64`——僅 IPv4-mapped 還原點分 IPv4（0.3.2 既有行為，純註解）。
+
+行為面零變更：本版無 Added／Changed／Fixed／Security 條目——0.3.2 出車後的變更全屬
+驗證閘、原始碼註解與帳面文件。
+
 ## [0.3.2] — 2026-10-12
 
 **Changed** — 限流鍵 IPv6 /64 聚合正規載具（0.3.1 未含此正規化，本版起承載）：
