@@ -103,6 +103,7 @@ import {
   createVault,
   unlockVault,
   recoverVault,
+  deriveVaultPh1,
   VaultError,
   isVaultError,
   currentArgonCarrier,
@@ -166,7 +167,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 14 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 17 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -3187,6 +3188,33 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
       && (await codeOf27(createVault(PASS27, { ...CFG27, argon: { wrap4: 'jr4w.' }, pin: '1234' }))) === 'ERR_VAULT_CONFIG'
       && (await codeOf27(createVault('', CFG27))) === 'ERR_VAULT_BAD_PASSPHRASE');
 
+    // ⑧b deriveVaultPh1（PH1 v3 入口收口）
+    const ph1Salt27 = new TextEncoder().encode('core-gate-ph1-v3-domain-a1');
+    const ph1Gate27 = await deriveVaultPh1(PASS27, ph1Salt27);
+    await A('[27] deriveVaultPh1(pass, ph1Salt)：hex64＋與 derivePh1ArgonV3 同 pass 同鹽逐位元一致（委派單一真相）；正規化面真承載——全形 pass（無首尾空白）派生＝NFKC 常態 pass 派生同值、大小寫仍分流、首尾空白仍分流；createVault/unlockVault 簽名與返回形不變（additive 鐵律）',
+      /^[0-9a-f]{64}$/.test(ph1Gate27)
+      && ph1Gate27 === (await derivePh1ArgonV3(PASS27, ph1Salt27))
+      && (await deriveVaultPh1('ＰＡＳＳ-ｗｉｄｅ-27', ph1Salt27)) === (await deriveVaultPh1('PASS-wide-27', ph1Salt27))
+      && (await deriveVaultPh1('Pass-wide-27', ph1Salt27)) !== (await deriveVaultPh1('PASS-wide-27', ph1Salt27))
+      && (await deriveVaultPh1(' PASS-wide-27 ', ph1Salt27)) !== (await deriveVaultPh1('PASS-wide-27', ph1Salt27))
+      && ph1Salt27.length === 26 && new TextDecoder().decode(ph1Salt27).includes('core-gate-ph1-v3-domain')
+      && createVault.length === 2 && unlockVault.length === 3);
+
+    // ⑧c 錯密語拋出面：unlockVault/upgrade 恆 WRAP_MISMATCH；別名只在查詢面
+    const wrCode27 = await codeOf27(unlockVault(OLD27, rec27, CFG27));
+    const wrAliasErr27 = (await (async () => { try { await unlockVault(OLD27, rec27, CFG27); return null; } catch (e) { return e; } })()) as VaultError | null;
+    await A('[27] 錯密語仍拋 ERR_VAULT_WRAP_MISMATCH（拋出面不變——別名只在查詢面、不產生新拋出碼）；isVaultError 查詢別名雙向命中：(err, WRONG_PASSPHRASE)／(err, WRAP_MISMATCH) 皆真、裸 isVaultError(err) 真值不變；別名查詢對其餘錯誤碼（DECRYPT／PIN_REQUIRED／WRAP_UNKNOWN／BAD_RECORD／BAD_PASSPHRASE）恆不命中——毒化面',
+      wrCode27 === 'ERR_VAULT_WRAP_MISMATCH'
+      && wrAliasErr27 !== null && wrAliasErr27.code === 'ERR_VAULT_WRAP_MISMATCH'
+      && isVaultError(wrAliasErr27, 'ERR_VAULT_WRONG_PASSPHRASE')
+      && isVaultError(wrAliasErr27, 'ERR_VAULT_WRAP_MISMATCH')
+      && isVaultError(wrAliasErr27)
+      && isVaultError(new VaultError('ERR_VAULT_WRONG_PASSPHRASE'), 'ERR_VAULT_WRAP_MISMATCH')
+      && isVaultError(new VaultError('ERR_VAULT_WRONG_PASSPHRASE'), 'ERR_VAULT_WRONG_PASSPHRASE')
+      && !isVaultError(wrAliasErr27, 'ERR_VAULT_DECRYPT') && !isVaultError(wrAliasErr27, 'ERR_VAULT_PIN_REQUIRED')
+      && !isVaultError(wrAliasErr27, 'ERR_VAULT_WRAP_UNKNOWN') && !isVaultError(wrAliasErr27, 'ERR_VAULT_BAD_RECORD')
+      && !isVaultError(wrAliasErr27, 'ERR_VAULT_BAD_PASSPHRASE'));
+
     // ⑨ 復原套件
     const rv27 = await recoverVault(kit27!.recToken, kit27!.wrappedRec, CFG27);
     const rvFamNull27 = rv27.family === null && rv27.serverRecord === null && rv27.carrier === null && !rv27.needsUpgrade();
@@ -3326,6 +3354,16 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
     && vaultSrc27.includes('new TextEncoder().encode(app + \':\' + recordId)')
     && vaultSrc27.split('TextEncoder().encode(app + \':\' + recordId)').length - 1 === 1
     && !/['"]PBKDF2['"]|from '\.\/note-crypto/.test(autoSrc27));
+
+  // ⑮ deriveVaultPh1 獨立 export 靜態面＋WRAP_MISMATCH 拋出面別名（回傳形 contract 靜態對帳）
+  const errSrc27 = await srcOf('../src/client/vault-error.ts');
+  await A('[27] deriveVaultPh1 獨立 export：vault.ts 帶 export async function deriveVaultPh1 簽名行＋本體委派 return derivePh1ArgonV3(passphrase, ph1Salt)（派生語意單一真相同在 argon2.ts）；vault-error.ts canon 投影恰一組三處（type＋判準兩呼叫）＋別名字面恰 4（union 1＋docstring 2＋別名常數 1）；拋出面零轉拋——vault-error.ts 無別名碼建構面（新 VaultError 恆拋 WRAP_MISMATCH，細分＝oracle 契約不動）',
+    vaultSrc27.includes('export async function deriveVaultPh1(passphrase: string, ph1Salt: Uint8Array): Promise<string> {')
+    && vaultSrc27.includes('return derivePh1ArgonV3(passphrase, ph1Salt);')
+    && (vaultSrc27.split('deriveVaultPh1').length - 1) === 2
+    && (errSrc27.split('canonVaultErrorCode').length - 1) === 3
+    && (errSrc27.split('ERR_VAULT_WRONG_PASSPHRASE').length - 1) === 4
+    && !errSrc27.includes("new VaultError('ERR_VAULT_WRONG_PASSPHRASE'"));
 }
 }
 

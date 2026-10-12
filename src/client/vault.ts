@@ -41,6 +41,7 @@ import {
   unwrapNoteKeyDual4,
   unwrapNoteKey3,
   unwrapNoteKeyDual3,
+  derivePh1ArgonV3,
   type Argon3Config,
 } from './argon2.ts';
 import type { KeyStore } from './keys.ts';
@@ -422,6 +423,22 @@ function makeHandle(c: VaultConfig, noteKey: CryptoKey, st: HandleState, carrier
 }
 
 // ── 入口 ────────────────────────────────────────────────────────────────────
+
+/**
+ * deriveVaultPh1(passphrase, ph1Salt)：高階 Vault API 的 PH1 登入憑證派生（hex64）。
+ * 本體委派 `derivePh1ArgonV3(pass, ph1Salt)`（PH1 v3：Argon2id(normalizePassphrase(pass), 鹽, m=64MiB, t=3, p=1)→hex64）
+ * ——語意單一真相同在 argon2.ts，本函式只是 vault 子路徑的入口收口位（呼叫端免跨 import argon2）。
+ *
+ * ⚠️ 契約三行（README PH1 節同款）：
+ * 1. 鹽一經選定恆固定（per-product）——PH2 UNIQUE 約束：同一密語必須恆生同一 PH2；
+ *    per-user 鹽會摧毀它。改鹽＝帶內版本化換鹽尾碼重遷移，禁原地改語意。
+ * 2. `PH1_V3_SALT`（'tacet-ph1-v2'）禁當 saltArg 餵 v2 派生面 `derivePh1Argon`——
+ *    反之亦然：同鹽域值跨面餵入＝NFKC-effective 密語與 v2 raw 密語同值撞 PH2（鹽撞位警告）。
+ * 3. 其他產品用自有鹽域——禁硬編 tacet 鹽當預設；必須顯式帶入 `ph1Salt`。
+ */
+export async function deriveVaultPh1(passphrase: string, ph1Salt: Uint8Array): Promise<string> {
+  return derivePh1ArgonV3(passphrase, ph1Salt);
+}
 
 /** 新 vault：隨機 noteKey＋最新家族包裹（pin＝jr4d.，否則 jr4w.）＋選配復原套件（jr1r.）。 */
 export function createVault(passphrase: string, opts: VaultOptions): Promise<{

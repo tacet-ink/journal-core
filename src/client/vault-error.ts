@@ -15,6 +15,10 @@ export type VaultErrorCode =
   | 'ERR_VAULT_WRAP_UNKNOWN'
   /** 家族辨識成功但解包失敗：密語／PIN 錯或包裹竄改（刻意不分）。 */
   | 'ERR_VAULT_WRAP_MISMATCH'
+  /** 查詢別名字面：`isVaultError(e, 'ERR_VAULT_WRONG_PASSPHRASE')` 對 code === 'ERR_VAULT_WRAP_MISMATCH'
+   *  回 true（反之亦然）。拋出面零動——仍拋 WRAP_MISMATCH；失敗面刻意不細分密語錯／竄改
+   *  （同 GCM 失敗——細分＝oracle）。別名只在查詢面：本 union 判準仍以拋出碼為單一真相。 */
+  | 'ERR_VAULT_WRONG_PASSPHRASE'
   /** 雙因子家族（jr2w./jr3d./jr4d.）缺 PIN。 */
   | 'ERR_VAULT_PIN_REQUIRED'
   /** 密語空值／非字串。 */
@@ -45,7 +49,15 @@ export class VaultError extends Error {
   }
 }
 
-/** 型別守衛：`isVaultError(e)` 或指定碼 `isVaultError(e, 'ERR_VAULT_DECRYPT')`。 */
+/** 型別守衛：`isVaultError(e)` 或指定碼 `isVaultError(e, 'ERR_VAULT_DECRYPT')`。
+ *  查詢別名（雙向）：`'ERR_VAULT_WRONG_PASSPHRASE'` 是 `'ERR_VAULT_WRAP_MISMATCH'` 的查詢面別名——
+ *  查詢帶別名、或錯誤實例帶別名（union 收了別名字面，手建實例可能），判定時兩側都投影到
+ *  拋出碼 WRAP_MISMATCH 再比；對其餘錯誤碼恆 false。拋出面恆 WRAP_MISMATCH（別名不產生第四碼形）。 */
+const VAULT_ERROR_CODE_ALIAS = 'ERR_VAULT_WRONG_PASSPHRASE';
+const canonVaultErrorCode = (c: VaultErrorCode | undefined): VaultErrorCode | undefined =>
+  c === VAULT_ERROR_CODE_ALIAS ? 'ERR_VAULT_WRAP_MISMATCH' : c;
 export function isVaultError(e: unknown, code?: VaultErrorCode): e is VaultError {
-  return e instanceof VaultError && (code === undefined || e.code === code);
+  const q = canonVaultErrorCode(code);
+  const ec = e instanceof VaultError ? canonVaultErrorCode(e.code) : undefined;
+  return e instanceof VaultError && (q === undefined || ec === q);
 }
