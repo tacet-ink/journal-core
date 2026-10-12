@@ -5,6 +5,29 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.3.4] — Unreleased
+
+**Added** — vault 子路徑新獨立 export `deriveVaultPh1(passphrase, ph1Salt)`（高階 Vault API 的
+PH1 登入憑證派生，hex64）：本體委派 `derivePh1ArgonV3`（PH1 v3＝
+Argon2id(normalizePassphrase(pass), 鹽, m=64MiB, t=3, p=1)→hex64），派生語意單一真相
+仍在 argon2.ts，本函式只是 vault 側入口收口位。鹽契約三行照 README PH1 節：
+鹽一經選定恆固定（per-product，PH2 UNIQUE 約束）、`PH1_V3_SALT` 禁當 v2 派生面
+`saltArg` 餵入（反之亦然——鹽撞位警告）、其他產品用自有鹽域（禁硬編 tacet 鹽當預設）。
+`createVault`／`unlockVault` 簽名與返回形零變更（additive 鐵律）。
+
+**Added** — `VaultErrorCode` union 新增 `ERR_VAULT_WRONG_PASSPHRASE` 查詢別名字面：
+`isVaultError(e, 'ERR_VAULT_WRONG_PASSPHRASE')` 對 code === 'ERR_VAULT_WRAP_MISMATCH'
+回 true、反之亦然（雙向別名；對其餘錯誤碼恆 false）。拋出面零變更——錯密語仍拋
+`ERR_VAULT_WRAP_MISMATCH`（失敗面刻意不細分密語錯／包裹竄改：同一 GCM 失敗，細分＝
+oracle——vault-error.ts 檔頭設計契約原文不動），別名只在查詢面。下游披露：union 增寬——
+窮舉 `switch`／`Record<VaultErrorCode,…>` 表若加 `ERR_VAULT_WRONG_PASSPHRASE` case，
+因拋出面恆 `ERR_VAULT_WRAP_MISMATCH`，該 case 必永不命中（別名只在查詢面）。
+
+**驗證閘** — [27] 加三腿：deriveVaultPh1 行為面（hex64＋委派逐位元一致＋正規化收容面
+——全形＝NFKC 常態同值、大小寫與首尾空白仍分流）、錯密語拋出面＋查詢別名雙向命中＋
+跨碼恆不命中（毒化面）、獨立 export 靜態面＋拋出面零轉拋。⑧c 補 over-broad 別名回歸齒：
+查詢帶別名對五拋出碼實例＋非 VaultError 值恆 false（直接形毒化面）。帳 522→525。
+
 ## [0.3.3] — 2026-10-12
 
 **驗證閘** — [12] 限流鍵段就地加力：無法解析形案改以 `Object.is` 驗原樣回傳，並補齊
@@ -199,6 +222,7 @@ Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 [0.2.4]: https://github.com/tacet-ink/journal-core/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/tacet-ink/journal-core/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...v0.2.2
+[0.3.4]: https://github.com/tacet-ink/journal-core/compare/v0.3.3...HEAD
 [未發布]: https://github.com/tacet-ink/journal-core/compare/v0.3.0...HEAD
 [0.2.1]: https://github.com/tacet-ink/journal-core/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tacet-ink/journal-core/compare/v0.1.6...v0.2.0
