@@ -18,7 +18,7 @@
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 506 assertions, all green, run against the real modules (no mocks)
+npm run verify   # 521 assertions, all green, run against the real modules (no mocks)
 ```
 
 ```ts
@@ -136,7 +136,7 @@ npm run verify   # 521 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   506 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→503，SKIP 顯形非靜默）
+                 #   521 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→518，SKIP 顯形非靜默）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
                  # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
                  # ＋高階 Vault API [27]（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）
@@ -331,7 +331,7 @@ prefix family (`families.json`), known-answer vectors (RFC 9106 Argon2id, the ga
 `scripts/generate-vectors.ts` against the real primitives and committed as frozen evidence; the
 verify gate checks their presence and shape (section [26]) and does not regenerate them.
 
-**Verification.** `npm run verify` runs 506 assertions against the real modules (no mocks):
+**Verification.** `npm run verify` runs 521 assertions against the real modules (no mocks):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
 login ladder-guard behavior suite (external audit #8), and presence/shape checks for the format
