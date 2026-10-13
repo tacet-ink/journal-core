@@ -59,7 +59,7 @@ run: `npm install @tacet-ink/journal-core && node example.mts`（0.3.4 起；Nod
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 522 assertions, all green, run against the real modules (no mocks); 0.3.3: 519 inside the published package ([21] SKIP line)
+npm run verify   # 531 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
 ```
 
 上例為高階 Vault API；錯誤碼見[例外契約](#例外契約錯誤碼語意)（`VaultError` 表）。低階原語範例（note-crypto 兩時代加解密、前綴自配）與完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
@@ -96,8 +96,10 @@ npm run verify   # 522 assertions, all green, run against the real modules (no m
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效；IPv6 鍵經 `normalizeRateIp` 聚合至 /64；IPv4-mapped 位址回點分 IPv4 鍵（＝原生同 /32 鍵）） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
-發行形（0.3.0 起）：`dist/`＝tsc 原生 emit 的 ESM `.js`＋`.d.ts`，`exports` 全部子路徑指向 dist；
-`src/` 同包隨附（稽核／閱讀用，import 恆走 dist）。
+發行形（0.3.0 起）：`dist/`＝tsc 原生 emit 的 ESM `.js`＋`.d.ts`，`exports` 全部子路徑指向 dist。
+0.3.4 起發行包 dist-only：`files` 白名單恰 `dist`／`docs`／`migrations`／README／LICENSE——`src/`、`scripts/`
+不再隨包（驗證閘與向量產生器為 repo 樹面，走源碼 clone 動線）；稽核／閱讀路徑＝GitHub 瀏覽 `src/`＋
+[docs/format-spec.md](./docs/format-spec.md) 規格＋[docs/vectors/](./docs/vectors/) 向量（`docs/` 仍隨包）。
 
 ## 前綴契約（家族表：13 個資料前綴＋閘對照組 jr1g.）
 
@@ -140,7 +142,7 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 
 ```sh
 npm ci --ignore-scripts
-npm run verify   # 522 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 531 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -152,7 +154,7 @@ npm run verify   # 522 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   522 帳＝repo 樹——發行包內無 .github＝[21] 四條 workflow 錨收斂為 1 顯性 SKIP 行→519（=522−3；消費端帳數真相源＝本行，隨版記帳——閘 SKIP 行摘死數字指回本行，0.3.3 實測），SKIP 顯形非靜默）
+                 #   531 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
                  # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
                  # ＋高階 Vault API [27]（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）
@@ -413,8 +415,10 @@ carrier: `node:crypto` ≥ Node 24.7 / hash-wasm in browsers, RFC 9106 test vect
 PH1→PH2 login flow, inbound cipher/package validation and paired key-package selection
 (`auth.ts`; PH2-UNIQUE conflict and session revocation are caller-owned wiring), per-IP
 (IPv6 keyed per /64 prefix; IPv4-mapped addresses un-map to the native dotted IPv4 key) fixed-window rate limiting on D1 (`ratelimit.ts`), shared CORS/hash utilities. Since 0.3.0 the
-package ships `dist/` (tsc-emitted ESM `.js` + `.d.ts`); every `exports` subpath resolves to dist,
-and `src/` is included for reading and auditing only.
+package ships `dist/` (tsc-emitted ESM `.js` + `.d.ts`); every `exports` subpath resolves to dist.
+Since 0.3.4 the package is dist-only: `src/` and `scripts/` no longer ship (the tarball carries `dist/`,
+`docs/`, `migrations/`, README and LICENSE). To read or audit the source, browse `src/` on GitHub
+alongside the format spec and test vectors in `docs/`.
 
 **Format spec & test vectors.** The byte-level wire format of every prefix family — payload layout
 and field lengths, KDF parameters, AAD strings, and the in-band versioning contract — is specified
@@ -426,7 +430,7 @@ prefix family (`families.json`), known-answer vectors (RFC 9106 Argon2id, the ga
 `scripts/generate-vectors.ts` against the real primitives and committed as frozen evidence; the
 verify gate checks their presence and shape (section [26]) and does not regenerate them.
 
-**Verification.** `npm run verify` runs 522 assertions against the real modules (no mocks; 0.3.3: the in-package count is 519 because the [21] workflow anchors skip as one line):
+**Verification.** `npm run verify` runs 531 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
 login ladder-guard behavior suite (external audit #8), and presence/shape checks for the format
