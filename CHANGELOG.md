@@ -5,7 +5,7 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
-## [0.3.4] — Unreleased
+## [0.3.4] — 2026-10-13
 
 **Added** — vault 子路徑新獨立 export `deriveVaultPh1(passphrase, ph1Salt)`（高階 Vault API 的
 PH1 登入憑證派生，hex64）：本體委派 `derivePh1ArgonV3`（PH1 v3＝
@@ -71,8 +71,7 @@ bip39.ts 轉寫層契約；任何不符——錯詞 checksum／錯數／詞表�
 閘與向量產生器為 repo 樹面；稽核閱讀路徑＝GitHub 瀏覽 src＋docs/format-spec 規格＋docs/vectors
 向量——`docs/` 仍隨包）；[21] 包內 SKIP 對照帳段隨瘦身退役（發行包不再帶閘——README quickstart
 對照行同步收口）；[22]／[26]／[27] 三錨隨窗 reshape（scripts 封閉集恰 2 檔→零 scripts 在場；
-產生器／vendor 排除行→files 零 src／scripts＋`scripts/generate-vectors.ts`／
-`scripts/vendor-hash-wasm.cjs` 樹面在場錨），verify 帳 531 不變（reshape 零增刪斷言）。
+產生器／vendor 樹面在場錨），verify 帳 531 不變（reshape 零增刪斷言）。
 行為面零變更：`exports` 全子路徑恆指 dist，消費端 import 面不受影響（dts-fixture 兩組
 moduleResolution 照綠）。
 
@@ -270,7 +269,7 @@ Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 [0.2.4]: https://github.com/tacet-ink/journal-core/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/tacet-ink/journal-core/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...v0.2.2
-[0.3.4]: https://github.com/tacet-ink/journal-core/compare/v0.3.3...HEAD
+[0.3.4]: https://github.com/tacet-ink/journal-core/compare/v0.3.3...v0.3.4
 [未發布]: https://github.com/tacet-ink/journal-core/compare/v0.3.0...HEAD
 [0.2.1]: https://github.com/tacet-ink/journal-core/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tacet-ink/journal-core/compare/v0.1.6...v0.2.0
