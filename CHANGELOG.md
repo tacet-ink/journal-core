@@ -64,6 +64,18 @@ bip39.ts 轉寫層契約；任何不符——錯詞 checksum／錯數／詞表�
 ＋words⇄hex64 roundtrip 恆同、recoverVault 三形入參同解同密文＋復原動線同構、詞形非法三毒
 （錯詞／23 詞／詞表外）同碼 ERR_VAULT_RECOVERY）。帳 530→531。
 
+**Changed** — 發行面 dist-only 瘦身（用戶裁定 A 案）：package.json `files` 白名單由
+`dist`／`docs`／`src`／`scripts`（＋三行 `!scripts/*` 排除）收斂為恰 `dist`／`docs`／`migrations`／
+`README.md`／`LICENSE`——tarball 65 檔→45 檔（unpacked 902,051→383,521 bytes，同樹 dist 對照實測；
+0.3.3 registry 帳 65 檔／843,325 bytes）；src／scripts 隨包退役（0.3.0–0.3.3 隨包→0.3.4 dist-only：
+閘與向量產生器為 repo 樹面；稽核閱讀路徑＝GitHub 瀏覽 src＋docs/format-spec 規格＋docs/vectors
+向量——`docs/` 仍隨包）；[21] 包內 SKIP 對照帳段隨瘦身退役（發行包不再帶閘——README quickstart
+對照行同步收口）；[22]／[26]／[27] 三錨隨窗 reshape（scripts 封閉集恰 2 檔→零 scripts 在場；
+產生器／vendor 排除行→files 零 src／scripts＋`scripts/generate-vectors.ts`／
+`scripts/vendor-hash-wasm.cjs` 樹面在場錨），verify 帳 531 不變（reshape 零增刪斷言）。
+行為面零變更：`exports` 全子路徑恆指 dist，消費端 import 面不受影響（dts-fixture 兩組
+moduleResolution 照綠）。
+
 ## [0.3.3] — 2026-10-12
 
 **驗證閘** — [12] 限流鍵段就地加力：無法解析形案改以 `Object.is` 驗原樣回傳，並補齊

@@ -1313,7 +1313,7 @@ await A('openNoteKey 直接呼叫：壞 base64 → null 不拋（本體吞收點
 
 //── 13-3. 發行 tarball 治理面（外審 #7 的封閉集承載——open-card-pr.sh 摘除的 tarball 面對位；t_87ef62dd）──
 //（pack 驗證讀 package.json files 白名單——npm 不可用環境 = 顯性 SKIP 形自守衛，非 silent true）
-await A('[22] 發行 tarball 零 open-card-pr.sh（治理掃蕩面——pack 白名單逐檔對帳），pack 不可用 = SKIP 顯形', await (async () => {
+await A('[22] 發行 tarball 零 open-card-pr.sh＋scripts 摘除——dist-only 發行（治理掃蕩面——pack 白名單逐檔對帳：scripts/ 零在場，0.3.4 起閘與產生器恆 repo 樹面），pack 不可用 = SKIP 顯形', await (async () => {
   try {
     const cp132 = (globalThis as unknown as { process?: { getBuiltinModule?: (id: string) => { execFileSync?: (c: string, a: string[], o: Record<string, unknown>) => { toString(enc: string): string } } } }).process?.getBuiltinModule?.('node:child_process');
     if (!cp132?.execFileSync) return false; // 自守衛：缺席＝顯性 FAIL（非 silent true）
@@ -1321,7 +1321,7 @@ await A('[22] 發行 tarball 零 open-card-pr.sh（治理掃蕩面——pack 白
     const j132 = JSON.parse(out132.toString('utf8')) as { files?: { path: string }[] }[];
     const files132 = (j132[0]?.files ?? []).map((f) => f.path);
     const g132 = files132.filter((p) => p === 'scripts/open-card-pr.sh' || p.startsWith('scripts/'));
-    return files132.length > 0 && !files132.includes('scripts/open-card-pr.sh') && g132.length === 2;
+    return files132.length > 0 && !files132.includes('scripts/open-card-pr.sh') && g132.length === 0;
   } catch { return false; }
 })());
 
@@ -2643,8 +2643,9 @@ secOpen(20, '[20] 復原套件專用前綴（wrapRec=jr1r. opt-in）＋KEK_rec H
 // 靜態錨面：workflow YAML 本體的接線（job-if C1 母型＋actor 分流＋runs-on fromJSON 陣列形）。
 secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 分流）'); if (secEnter(21)) {
 {
-  // 環境鍵＝.github 目錄存在（存在性鍵非檔名硬讀——r1 MINOR-3）：閘 src 檔在 files 白名單
-  // 而 .github 不出包——tarball 消費樹硬讀 workflows＝未守衛 ENOENT，rc=1 尾段全吞。
+  // 環境鍵＝.github 目錄存在（存在性鍵非檔名硬讀——r1 MINOR-3）：.github 不入包
+  //（0.3.4 dist-only——src/scripts/.github 全不在 tarball）——tarball 樹硬讀
+  // workflows＝未守衛 ENOENT，rc=1 尾段全吞。
   // 目錄缺席＝顯性 SKIP 行（消費端常態；[16]/[18] 毒化樹 pristine 基準由此同保線）；
   // 目錄在場而檔案缺席＝srcOf 硬 FAIL（repo 面牙齒不退位——軟讀文件名會把 repo 內
   // 摘 workflow 校準成靜默綠＝掉牙）。
@@ -2666,8 +2667,9 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
   } else {
     // F-1（t_0eb70367）：僵字面帳數摘除——舊形寫死『消費端計數帳 503』每版必過期；執行期插值
     // 不可行（tarball 全帳含 secCases 體系外段，secCases 求和≠帳總——插值即印錯數，比僵字面更糟）。
-    // 對帳值真相源＝README「CI 供應鏈面」行（發布輪隨版維護）；本行語意只聲明 SKIP 顯形與帳差 −3。
-    await A('[21] CI 源碼面：.github 缺席環境（tarball 發行樹常態）＝顯性 SKIP（workflow 斷言 4 收斂為 1 SKIP 行，帳差 −3；消費端計數帳對照 README「CI 供應鏈面」行隨版記帳）',
+    // 0.3.4 dist-only 瘦身後本分支純防禦形：發行包零閘零 src 零 scripts＝可跑閘的樹必帶
+    // .github（repo checkout）——SKIP 分支現實中不可達；語意只聲明 SKIP 顯形非 silent true。
+    await A('[21] CI 源碼面：.github 缺席環境＝顯性 SKIP（非 silent true——0.3.4 dist-only 瘦身後發行包零閘零 workflows，此面為防禦分支；消費端帳數對照 README「CI 供應鏈面」行）',
       true, 'no .github dir — consumption tree face');
   }
   // 摘除自證（t_760f44e8 治理掃蕩補漏；fs 原語缺席環境＝顯性 FAIL 形自守衛——非 silent true）
@@ -3024,8 +3026,13 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
       return true;
     })()));
   const pkg26 = JSON.parse(await srcOf('../package.json')) as { files?: string[] };
-  await A('[26] 發行面：package.json files 含 docs（tarball 帶規格＋向量——消費端可對帳）＋產生器排除（!scripts/generate-vectors.ts——[22] scripts 封閉集 2 檔不動）',
-    Array.isArray(pkg26.files) && pkg26.files.includes('docs') && pkg26.files.includes('!scripts/generate-vectors.ts'));
+  const fs26 = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { existsSync?: (p: string | URL) => boolean } | undefined };
+  }).process?.getBuiltinModule?.('node:fs');
+  await A('[26] 發行面：package.json files 含 docs（tarball 帶規格＋向量——消費端可對帳）＋dist-only（files 零 src／零 scripts——[22] scripts 零在場同窗）＋產生器樹面在場（scripts/generate-vectors.ts；fs 原語缺席＝顯性 FAIL 自守衛）',
+    Array.isArray(pkg26.files) && pkg26.files.includes('docs')
+    && !pkg26.files.some((f) => /^!?(\.\/)?(src|scripts)(\/|$)/.test(f))
+    && !!fs26?.existsSync && fs26.existsSync(new URL('../scripts/generate-vectors.ts', import.meta.url)));
 }
 }
 
@@ -3477,11 +3484,15 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
   const HASH_WASM_PIN27 = 'dcec617a2e1b700fa132d1583a186cb70611113395e869f2dd6cc82b415d3094'; // hash-wasm@4.12.0 dist/argon2.umd.min.js
   const kat27 = await hashWasmArgon2Factory().argon2id({ password: new Uint8Array(32).fill(1), salt: new Uint8Array(16), iterations: 3, parallelism: 4, memorySize: 32, hashLength: 32, outputType: 'hex' });
   const pkg27 = JSON.parse(await srcOf('../package.json')) as { dependencies?: unknown; devDependencies?: Record<string, string>; files?: string[]; exports?: Record<string, { types?: string; default?: string }> };
-  await A('[27] vendor 孿生：去兩格縮排原文 sha256＝HASH_WASM_ARGON2_SHA256＝閘釘選值（hash-wasm@4.12.0）；vendor inline 載體 RFC 9106 KAT 一致且零全域寫入；零 runtime deps（無 dependencies 欄）＋hash-wasm 僅 devDependencies＋產生器 tarball 排除',
+  const fs27 = (globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => { existsSync?: (p: string | URL) => boolean } | undefined };
+  }).process?.getBuiltinModule?.('node:fs');
+  await A('[27] vendor 孿生：去兩格縮排原文 sha256＝HASH_WASM_ARGON2_SHA256＝閘釘選值（hash-wasm@4.12.0）；vendor inline 載體 RFC 9106 KAT 一致且零全域寫入；零 runtime deps（無 dependencies 欄）＋hash-wasm 僅 devDependencies＋產生器不隨包（files 零 scripts＝dist-only；scripts/vendor-hash-wasm.cjs 樹面在場）',
     restored27.length > 20000 && await sha(restored27) === HASH_WASM_ARGON2_SHA256 && HASH_WASM_ARGON2_SHA256 === HASH_WASM_PIN27 && HASH_WASM_VERSION === '4.12.0'
     && kat27 === ARGON_RFC9106_EXPECTED && (globalThis as unknown as { hashwasm?: unknown }).hashwasm === undefined
     && pkg27.dependencies === undefined && typeof pkg27.devDependencies?.['hash-wasm'] === 'string'
-    && !!pkg27.files?.includes('!scripts/vendor-hash-wasm.cjs'));
+    && Array.isArray(pkg27.files) && !pkg27.files.some((f) => /^!?(\.\/)?scripts(\/|$)/.test(f))
+    && !!fs27?.existsSync && fs27.existsSync(new URL('../scripts/vendor-hash-wasm.cjs', import.meta.url)));
 
   // ⑭ exports 子路徑＋分層單向＋靜態錨
   const vaultSrc27 = await srcOf('../src/client/vault.ts');
