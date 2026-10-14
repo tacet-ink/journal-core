@@ -15,6 +15,16 @@
 這是 [默·Tacet（tacet.ink）](https://tacet.ink) 的客戶端/伺服端核心原語層，
 從多個姊妹產品共用的密碼學本體抽取而成，以品牌前綴參數化（前綴契約見下表）。
 
+## Live demo
+
+[https://tacet.ink/secret](https://tacet.ink/secret)：默·Tacet 的一次性分享站，也是本函式庫原語的線上演示。
+read-once（讀取一次即失效）、零帳號、免安裝；伺服器永不落明文，密文經 AES-GCM-256 加密、
+連結 id 是 SHA-256 截斷（兩者皆為本函式庫 WebCrypto 原語的實際呼叫）。單頁、無框架；
+原始碼在 Tacet 主 repo（private），頁尾另有驗證頁入口。
+
+**English**: Live demo: https://tacet.ink/secret. Read-once, zero-account, E2E secret sharing
+built on this library's WebCrypto primitives. Single-page, no framework.
+
 ## Quickstart
 
 ```ts
