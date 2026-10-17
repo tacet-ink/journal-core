@@ -688,6 +688,11 @@ export async function decryptNote(
   idp: IdentityProvider,
 ): Promise<string | null> {
   try {
+    // 空字串密文正規化（2026-10-18 t_b81f22cd 面1）：trim 後空＝拒（null）。
+    // 既有「無前綴＝舊明文原樣返回」相容層對 ''／純空白會原樣回傳＝空/空白密文
+    // 畸形進解密面、被當舊明文落 UI（truthiness 正規化缺失）。空/空白非合法舊明文，
+    // fail-closed 回 null（與本函式任何不符面同一 null 契約，不拋）；非空字串零影響。
+    if (cipher.trim() === '') return null;
     // guest 前綴正規化：畸形配置 ''（空字串）會讓
     // startsWith('') 恆真＝bound 列誤導 guest 分支回 null（解密面整列滅失）。
     // falsy 一律收斂為 undefined，與加密面「未配置即拒」truthiness 對稱。

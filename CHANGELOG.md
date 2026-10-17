@@ -5,6 +5,17 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.3.5] — 2026-10-18
+
+**Fixed** — `decryptNote` 空字串密文正規化：trim 後空（`''`／純空白）從「無前綴＝舊明文
+原樣返回」相容層原樣回傳，改為 fail-closed 回 null（與本函式任何不符面同一 null 契約，
+不拋）。空/空白非合法舊明文——畸形空密文進解密面會被當舊明文落 UI（truthiness 正規化
+缺失）；非空字串零影響（舊明文相容層、bound/guest 兩路徑、未配置 guest 整面拒絕契約全不動）。
+`decryptAttach`／`decryptLocal` 對空恆已回 null（非缺口，本輪零改動）。
+
+**Added** — `verify-core-crypto` 斷言：[2] 空字串／純空白密文 → null 兩案＋[16] P6 毒化案
+（摘 decryptNote 空字串守衛 → 兩新斷言真翻＋還原回綠）。全閘 535 斷言。
+
 ## [0.3.4] — 2026-10-13
 
 **Added** — vault 子路徑新獨立 export `deriveVaultPh1(passphrase, ph1Salt)`（高階 Vault API 的
@@ -270,7 +281,8 @@ Argon2id 與 RFC 9106 KAT、復原套件 24 詞轉寫層。
 [0.2.3]: https://github.com/tacet-ink/journal-core/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tacet-ink/journal-core/compare/v0.2.1...v0.2.2
 [0.3.4]: https://github.com/tacet-ink/journal-core/compare/v0.3.3...v0.3.4
-[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.3.0...HEAD
+[0.3.5]: https://github.com/tacet-ink/journal-core/compare/v0.3.4...v0.3.5
+[未發布]: https://github.com/tacet-ink/journal-core/compare/v0.3.5...HEAD
 [0.2.1]: https://github.com/tacet-ink/journal-core/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tacet-ink/journal-core/compare/v0.1.6...v0.2.0
 [ERR_REC_CFG_PARTIAL]: https://github.com/tacet-ink/journal-core/blob/v0.2.1/src/client/note-crypto.ts

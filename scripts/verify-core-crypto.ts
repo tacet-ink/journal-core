@@ -304,6 +304,13 @@ await A('AAD 防搬移：跨身份 guest 解密失敗回 null',
 
 // 舊版明文相容層：無前綴 = 原樣返回
 await A('舊明文原樣返回', (await decryptNote(TACET, held, '純舊明文', 'x', { current: () => identityA })) === '純舊明文');
+// 空字串密文正規化（2026-10-18 t_b81f22cd 面1）：trim 後空＝拒（null）——
+// 既有相容層對 ''／純空白會原樣回傳＝空/空白密文畸形進解密面當舊明文。
+// fail-closed 回 null（與本函式任何不符面同 null 契約）；非空字串零影響（上方舊明文案承載）。
+await A('空字串密文 → null（truthiness 正規化；trim 後空＝拒）',
+  (await decryptNote(TACET, held, '', 'x', { current: () => identityA })) === null);
+await A('純空白密文 → null（trim 後空＝拒）',
+  (await decryptNote(TACET, held, '   \t\n  ', 'x', { current: () => identityA })) === null);
 
 // ── 3. 包裹三件套（pass / rec / 本機；2026-09-24 效能節——buildBindPayload 兩段
 //      PBKDF2 600k 已收 Promise.all 並行，node 實測 133-152ms→68-84ms） ──
@@ -1865,6 +1872,25 @@ secOpen(16, '[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒�
           ncSrcNow.split('derivePbkdf2Bits(passphrase, salt1, PBKDF2_ITERATIONS)').length === 2);
         await A('[16] O4-src 計數錨（[15] 同形複寫）：jr4d unwrap 入口 normalize 形恰 2（wrap/unwrap 對稱；摘除或反拉即變異）',
           argonSrcNow.split('deriveKek2Argon(cfg, deriveInput(passphrase), pinNorm').length === 3);
+      }
+      // P6 摘 decryptNote 空字串守衛（2026-10-18 t_b81f22cd 面1）→ 空/空白密文翻回
+      // 舊明文原樣返回＝[2] 兩新斷言真翻（designated＝空字串＋純空白兩面；非空面零影響）。
+      // 毒形＝摘 guard 行留註解（removal-form 同族；anchor 帶前導縮排恰一＝no-op 自檢）。
+      {
+        mkTree();
+        const mut = poison16('src/client/note-crypto.ts',
+          "    if (cipher.trim() === '') return null;\n",
+          "");
+        const g = runGate16();
+        const p6emptyRed = g.out.split('\n').some((l: string) => l.includes('空字串密文') && l.trimStart().startsWith('✗'));
+        const p6wsRed = g.out.split('\n').some((l: string) => l.includes('純空白密文') && l.trimStart().startsWith('✗'));
+        await A('[16] P6 摘 decryptNote 空字串守衛 → 空/空白密文翻回原樣返回（nfail>=2＋空字串/純空白名單面）',
+          mut.applied && g.rc === 1 && nfail(g.out) >= 2 && p6emptyRed && p6wsRed,
+          'applied=' + mut.applied + ' rc=' + g.rc + ' nfail=' + nfail(g.out));
+        mut.restore();
+        const g2 = runGate16();
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+        await A('[16] P6 還原回綠（出生即棄樹上還原）', g2.rc === 0, String(g2.rc));
       }
       // 收尾：毒化樹清理自證（封閉集——只核對本 run 喚出的 tree16 路徑；跨執行/
       // 並行/host 殘留零耦合——其他 core-poison-* 不入本判準）；每棵出生即棄 rmSync 強制在場。
