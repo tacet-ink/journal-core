@@ -45,6 +45,7 @@ export {
   unwrapNoteKeyDual4,
   wrapNoteKeyShare3,
   unwrapNoteKeyShare3,
+  createShareEnvelope,
   derivePh1Argon,
   derivePh1ArgonV3,
   PH1_V2_SALT,

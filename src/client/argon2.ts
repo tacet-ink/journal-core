@@ -37,6 +37,8 @@
 import { normalizePin, normalizePassphrase } from './note-crypto.ts';
 import {
   b64, unb64, toHex, hexToBytes, decryptWithKey, importAesGcm, openNoteKey, sealNoteKey,
+  generateNoteKey, makeHeldKey, encryptNote,
+  type NoteCryptoConfig, type IdentityProvider,
 } from './note-crypto.ts';
 
 /** KDF 派生輸入正規化收口（mirror normalizePin 先例）：v3 入口 = normalizePassphrase(pass)；raw 世代入口 = 原密語。
@@ -482,12 +484,16 @@ export async function unwrapNoteKeyDual4(
 // 建立端只收 jr3s.（關閉弱 KDF 建立面）。
 // ⚠️ unwrap 輸出 noteKey 一律 extractable=true（要能解日記密文；鐵律 4）。
 
-/** jr3s. 包裹：salt 隨機 16 bytes（hex 由呼叫端存 shares.salt）。 */
-export async function wrapNoteKeyShare3(cfg: Argon3Config, noteKey: CryptoKey, sharePass: string): Promise<{ wrapped: string; salt: string }> {
+/**
+ * jr3s. 包裹：salt 隨機 16 bytes（hex 由呼叫端存 shares.salt）。
+ * ⚠️ 不可傳入帳戶主鑰（noteKey）——分享包裹的金鑰範圍＝該次分享；
+ * 傳主鑰＝收分享者可解全帳戶（J1；tacet 親例）。
+ */
+export async function wrapNoteKeyShare3(cfg: Argon3Config, shareKey: CryptoKey, sharePass: string): Promise<{ wrapped: string; salt: string }> {
   if (!cfg.wrapShare3) throw new Error('ERR_JR3S_NOT_CONFIGURED');
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const kek = await deriveKekArgon(sharePass, salt);
-  const wrapped = await sealNoteKey(cfg.wrapShare3, noteKey, kek, 'notekey-share');
+  const wrapped = await sealNoteKey(cfg.wrapShare3, shareKey, kek, 'notekey-share');
   return { wrapped, salt: toHex(salt) };
 }
 
@@ -506,6 +512,37 @@ export async function unwrapNoteKeyShare3(cfg: Argon3Config, wrapped: string, sh
   } catch {
     return null;
   }
+}
+
+// ── 單篇分享高階組裝（J1 收口：core 單一真相，0.3.6） ─────────────────────────
+//
+// 分享建立動線的單一步驟 API：一次性 shareKey（與帳戶主鑰隔離——J1：主鑰過分享包＝
+// 收分享者可解全帳戶，tacet 親例已修）＋該次快照密文（AAD 由呼叫端綁 noteId 同律）
+// ＋jr3s. 分享包裹三件一組產出。無狀態純函數：shareKey 每次新生成（module 層無快取
+// 殘留——「envelope 殘部快取 shareKey」否決案：狀態即舊主鑰事故的土壤）。
+// held 恆 set 路徑為主契約：encryptNote 持 shareKey 走 cipherBound 面；idp 是
+// encryptNote 簽名必填（guest 分支不可達——held 先 set，idp 值零影響）。
+
+/**
+ * 單篇分享 envelope：`generateNoteKey()` 一次性 shareKey → `encryptNote`（held 恆 set，
+ * 密文前綴 cfg.cipherBound）→ `wrapNoteKeyShare3`（jr3s.，sharePass 永不過線）。
+ * 回傳三件：ciphertext（該次快照密文）／wrapped（分享金鑰包裹）／salt（16B hex，呼叫端
+ * 存 shares.salt）。⚠️ 產出的包裹金鑰範圍＝該次分享——絕非帳戶主鑰。
+ */
+export async function createShareEnvelope(
+  cfg: NoteCryptoConfig,
+  argon: Argon3Config,
+  plaintext: string,
+  aad: string,
+  sharePass: string,
+  idp: IdentityProvider,
+): Promise<{ ciphertext: string; wrapped: string; salt: string }> {
+  const shareKey = await generateNoteKey();
+  const sHeld = makeHeldKey();
+  sHeld.set(shareKey);
+  const ciphertext = await encryptNote(cfg, sHeld, plaintext, aad, idp);
+  const share = await wrapNoteKeyShare3(argon, shareKey, sharePass);
+  return { ciphertext, wrapped: share.wrapped, salt: share.salt };
 }
 
 // ── ladder 重試鹽面：unwrapNoteKeyDual4WithSalt ────

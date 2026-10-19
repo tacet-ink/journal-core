@@ -5,6 +5,33 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.3.6] — 2026-10-19
+
+**Added** — 高階 API `createShareEnvelope(cfg, argon, plaintext, aad, sharePass, idp)`（`src/client/argon2.ts`，
+根 barrel＋`./client/argon2` 子路徑公開匯出）：單篇分享建立的 core 單一真相——一次性 `shareKey`
+（`generateNoteKey()`，與帳戶主鑰隔離）→ 該次快照密文（`encryptNote`，held 恆 set 走 `cipherBound`）
+→ `jr3s.` 分享包裹（`wrapNoteKeyShare3`）三件一組產出。無狀態純函數：`shareKey` 每次新生成、
+module 層無快取殘留（「envelope 殘部快取 shareKey」否決案）。落點 argon2.ts（note-crypto→argon2
+已是單向 import；放 note-crypto 會造循環）。
+
+**Changed** — `wrapNoteKeyShare`（note-crypto）與 `wrapNoteKeyShare3`（argon2）公開 API 參數
+`noteKey`→`shareKey`（型別不變＝0.3.6 minor 面，零 breaking）＋JSDoc 契約警語「⚠️ 不可傳入帳戶
+主鑰（noteKey）——分享包裹的金鑰範圍＝該次分享；傳主鑰＝收分享者可解全帳戶（J1；tacet 親例）」。
+**Rejected**（外審 J1 收口裁決）：簽名改成拒收主鑰＝否決（core 無法區分主鑰與 shareKey，都是
+AES-256 key）；契約面警告＋更名＝正解。
+
+**Deprecated** — `ph1Of`（note-crypto，legacy 無塩 `SHA-256(pass)`）標 `@deprecated`：登入 wire
+暴露 GPU 可全速爆破的密碼指標，不可與 Argon2id PH1 同時作為上線探證（外審 J2）；新整合恆改用
+`derivePh1ArgonV3`／`deriveVaultPh1`。函式本體零動（legacy 平台登入與 deleteAccount 證明面仍在用；
+退場窗口＝J2a 批，帶內版本化）。
+
+**Added** — `verify-core-crypto` 新段 [28]（分享 envelope 高階 API：三件形／roundtrip＋AAD 跨 noteId／
+錯 sharePass・錯 salt→null／每次呼叫新 shareKey／主鑰 vs shareKey 隔離／無狀態純函數毒化錨（拷貝樹
+wrap 端固定零鑰突變→roundtrip＋同鑰兩面真翻＋POISON_GATE_INNER 遞迴防線）／JSDoc 契約錨／
+ph1Of deprecated 錨／index 匯出面）。README 家族表 `jrsw.`/`jr3s.` 兩行同步契約警語＋`ph1Of`
+退場標＋`createShareEnvelope` 使用節＋帳 531→542。全閘 542 斷言（booking 帳；執行態含本機
+條件面浮動）。
+
 ## [0.3.5] — 2026-10-18
 
 **Fixed** — `decryptNote` 空字串密文正規化：trim 後空（`''`／純空白）從「無前綴＝舊明文

@@ -54,6 +54,7 @@ import {
   unwrapNoteKey3,
   wrapNoteKeyShare3,
   unwrapNoteKeyShare3,
+  createShareEnvelope,
   wrapNoteKeyDual3,
   unwrapNoteKeyDual3,
   wrapNoteKey4,
@@ -169,7 +170,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -3543,6 +3544,110 @@ secOpen(27, '[27] 高階 Vault API（roundtrip 三資料形／新舊前綴解鎖
 }
 }
 
+// ── 28. 分享 envelope 高階 API（createShareEnvelope：J1 收口，core 單一真相） ──
+//
+// 外審 2026-10-18 J1 的 core 側契約面：分享建立＝一次性 shareKey＋該次快照密文＋jr3s.
+// 包裹三件一組（tacet 親例已修，本段防再踩）。主鑰 vs shareKey 隔離＝毒化錨：envelope
+// 每次新生成 shareKey（無狀態純函數）——若殘部快取/復用，兩連呼 unwrap 同鑰即翻紅。
+// JSDoc 契約警告（wrapNoteKeyShare/3 shareKey 參數更名＋主鑰禁傳警告）與 ph1Of
+// @deprecated 退場標＝文件面靜態錨（三面單一真相：本體＋README＋本段）。
+
+secOpen(28, '[28] 分享 envelope 高階 API（createShareEnvelope：J1 收口）'); if (secEnter(28)) {
+const ARGON_SHARE28: Argon3Config = { ...TACET3, wrapShare3: 'jr3s.' };
+const idp28 = { current: () => identityA };
+const env28 = await createShareEnvelope(TACET, ARGON_SHARE28, '今天寫了一點東西。', 'jr1:note-abc', 'share-pass-42', idp28);
+await A('[28] 三件形：ciphertext 前綴 cfg.cipherBound（held 恆 set 走 bound 路徑）＋wrapped jr3s.＋salt 16B hex',
+  env28.ciphertext.startsWith('jr1b.') && env28.wrapped.startsWith('jr3s.') && /^[0-9a-f]{32}$/.test(env28.salt));
+const sk28 = await unwrapNoteKeyShare3(ARGON_SHARE28, env28.wrapped, 'share-pass-42', env28.salt);
+await A('[28] roundtrip：unwrapNoteKeyShare3 救回 shareKey → decryptNote 恰等原文（AAD 綁 noteId 同律）＋AAD 跨 noteId → null',
+  (async () => {
+    const h28 = makeHeldKey(); h28.set(sk28!);
+    return sk28 !== null
+      && (await decryptNote(TACET, h28, env28.ciphertext, 'jr1:note-abc', idp28)) === '今天寫了一點東西。'
+      && (await decryptNote(TACET, h28, env28.ciphertext, 'jr1:note-XYZ', idp28)) === null;
+  })());
+await A('[28] 錯 sharePass → null', (await unwrapNoteKeyShare3(ARGON_SHARE28, env28.wrapped, 'wrong-share-pass', env28.salt)) === null);
+await A('[28] 錯 salt（zz 字元）→ null（salt hex 形檢查）', (await unwrapNoteKeyShare3(ARGON_SHARE28, env28.wrapped, 'share-pass-42', 'zz'.repeat(16))) === null);
+const env28b = await createShareEnvelope(TACET, ARGON_SHARE28, '今天寫了一點東西。', 'jr1:note-abc', 'share-pass-42', idp28);
+const sk28b = await unwrapNoteKeyShare3(ARGON_SHARE28, env28b.wrapped, 'share-pass-42', env28b.salt);
+await A('[28] 每次呼叫新 shareKey（無狀態純函數）：同輸入兩連呼 unwrap 不同鑰（快取/復用殘形即翻紅）',
+  sk28 !== null && sk28b !== null
+  && hex(new Uint8Array(await crypto.subtle.exportKey('raw', sk28))) !== hex(new Uint8Array(await crypto.subtle.exportKey('raw', sk28b))));
+const mainHeld28 = makeHeldKey(); mainHeld28.set(noteKey);
+const mainCipher28 = await encryptNote(TACET, mainHeld28, '今天寫了一點東西。', 'jr1:note-abc', idp28);
+await A('[28] 主鑰 vs shareKey 隔離：unwrap(envelope) 解主鑰面同 AAD 密文＝null（收分享者拿不到全帳）',
+  (await decryptNote(TACET, makeHeldKey(), mainCipher28, 'jr1:note-abc', idp28)) === null);
+await A('[28] 隔離對照：envelope 密文≠主鑰面同明文密文（隨機 shareKey 恆異）＋sk28 對主鑰面密文＝null',
+  env28.ciphertext !== mainCipher28
+  && sk28 !== null && (async () => { const h28b = makeHeldKey(); h28b.set(sk28); return (await decryptNote(TACET, h28b, mainCipher28, 'jr1:note-abc', idp28)) === null; })());
+{
+  // 毒化錨（envelope 無狀態面·「殘部快取 shareKey」形）：wrap 端改固定字串鑰（32B 零鑰＝
+  // 快取/復用殘形——sealNoteKey 恰 32B 形檢通過）＝shareKey 恆定——snapshot 仍走隨機 shareKey：
+  // roundtrip 紅（sk28 解不出快照）＋兩連呼同鑰紅（主鑰≠shareKey 面）＝2 面真翻；對照面
+  // A6/A7（主鑰面隔離）不翻＝分離向量（毒咬的是 envelope 金鑰綁定面，非 unwrap/主鑰面）。
+  // needle 在 src/client/argon2.ts 恰 1（閘檔內字面體不咬＝target 源碼非閘檔）；
+  // POISON_GATE_INNER sentinel＝遞迴防線（[16]/[18] 母型——內層跑份自我跳過毒化節）。
+  const getBuiltin28 = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const cpMod28 = getBuiltin28('node:child_process') as { execFileSync?: (cmd: string, args: string[], opts: { cwd: string; encoding: string; stdio: unknown[]; env?: Record<string, string>; timeout?: number }) => string } | undefined;
+  const fsMod28 = getBuiltin28('node:fs') as { rmSync?: (p: string, o?: { recursive: boolean; force: boolean }) => void; cpSync?: (a: string, b: string, o?: { recursive: boolean; filter?: (src: string) => boolean }) => void; readFileSync?: (p: string, e?: string) => string; writeFileSync?: (p: string, c: string, e?: string) => void; mkdtempSync?: (p: string) => string } | undefined;
+  const osMod28 = getBuiltin28('node:os') as { tmpdir?: () => string } | undefined;
+  const processMod28 = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
+  const inner28 = processMod28?.env?.POISON_GATE_INNER === '1';
+  const nodeEnvOk28 = !!cpMod28?.execFileSync && !!osMod28?.tmpdir && !!fsMod28?.mkdtempSync && !!fsMod28.cpSync && !!fsMod28.readFileSync && !!fsMod28.writeFileSync && !!fsMod28.rmSync;
+  if (inner28 || !nodeEnvOk28) {
+    await A('[28] 毒化矩陣載體就緒（node 內建模組在場；內層遞迴由 sentinel 跳過＝正常；缺席＝顯性 FAIL）', inner28 && !nodeEnvOk28 ? false : inner28, 'env unavailable AND not inner');
+  } else {
+    const repoRoot28 = new URL('..', import.meta.url).pathname;
+    const nm28 = new URL('../node_modules', import.meta.url).pathname;
+    const skip28 = (src: string): boolean => src.endsWith('/.git') || src.includes('/.git/') || src.includes('/node_modules') || src.split('/').pop() === 'node_modules';
+    const tree28 = fsMod28.mkdtempSync!(osMod28.tmpdir!() + '/core-env28-')!;
+    fsMod28.cpSync!(repoRoot28, tree28, { recursive: true, filter: (s: string) => !skip28(s) }); // 零 .git/零 node_modules 實拷
+    fsMod28.rmSync!(tree28 + '/node_modules', { recursive: true, force: true });
+    cpMod28.execFileSync!('ln', ['-s', nm28, tree28 + '/node_modules'], { cwd: tree28, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const srcP28 = tree28 + '/src/client/argon2.ts';
+    const before28 = fsMod28.readFileSync!(srcP28, 'utf8');
+    const needle28 = 'const share = await wrapNoteKeyShare3(argon, shareKey, sharePass);';
+    const cnt28 = before28.split(needle28).length - 1;
+    fsMod28.writeFileSync!(srcP28, before28.split(needle28).join("const share = await wrapNoteKeyShare3(argon, await importAesGcm(hexToBytes('0000000000000000000000000000000000000000000000000000000000000000'), true), sharePass);"), 'utf8');
+    const applied28 = cnt28 === 1 && !fsMod28.readFileSync!(srcP28, 'utf8').includes(needle28);
+    let rc28 = 0; let out28 = '';
+    try { out28 = cpMod28.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts', '--only', '28'], { cwd: tree28, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod28?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 240000 }); }
+    catch (e: unknown) { const err28 = e as { status?: number; stdout?: string; stderr?: string }; rc28 = err28.status ?? 1; out28 = (err28.stdout ?? '') + (err28.stderr ?? ''); }
+    fsMod28.writeFileSync!(srcP28, before28, 'utf8');
+    fsMod28.rmSync!(tree28, { recursive: true, force: true });
+    const nfail28 = out28.split('\n').filter((l: string) => l.trimStart().startsWith('✗')).length;
+    const isoRed28 = out28.split('\n').some((l: string) => l.includes('每次呼叫新 shareKey') && l.trimStart().startsWith('✗'));
+    const rtRed28 = out28.split('\n').some((l: string) => l.includes('roundtrip') && l.trimStart().startsWith('✗'));
+    await A('[28] 毒化錨（envelope 無狀態面）：wrap 端改固定零鑰（快取/復用殘形）＝roundtrip＋兩連呼同鑰兩面真翻（nfail≥2；還原即棄樹回綠前提）',
+      applied28 && rc28 === 1 && nfail28 >= 2 && isoRed28 && rtRed28, 'applied=' + applied28 + ' rc=' + rc28 + ' nfail=' + nfail28);
+  }
+}
+await A('[28] JSDoc 契約錨（wrapNoteKeyShare/3 shareKey 參數名＋主鑰禁傳警告＋createShareEnvelope 本體 generateNoteKey 恰 1）',
+  (async () => {
+    const nc28 = await srcOf('../src/client/note-crypto.ts');
+    const ar28 = await srcOf('../src/client/argon2.ts');
+    return nc28.includes('export async function wrapNoteKeyShare(cfg: NoteCryptoConfig, shareKey: CryptoKey, sharePass: string)')
+      && ar28.includes('export async function wrapNoteKeyShare3(cfg: Argon3Config, shareKey: CryptoKey, sharePass: string)')
+      && (ar28.split('⚠️ 不可傳入帳戶主鑰（noteKey）——分享包裹的金鑰範圍＝該次分享；').length - 1) === 1
+      && (nc28.split('⚠️ 不可傳入帳戶主鑰（noteKey）——分享包裹的金鑰範圍＝該次分享；').length - 1) === 1
+      && (ar28.split('const shareKey = await generateNoteKey();').length - 1) === 1;
+  })());
+await A('[28] ph1Of @deprecated 退場標（本體零動：SHA-256 本體＋index 公開匯出在場）',
+  (async () => {
+    const nc28 = await srcOf('../src/client/note-crypto.ts');
+    const idx28 = await srcOf('../src/index.ts');
+    return nc28.includes('@deprecated 無塩 SHA-256(pass)')
+      && nc28.includes('export function ph1Of(passphrase: string): Promise<string> {\n  return sha256Hex(passphrase);\n}')
+      && idx28.includes('ph1Of,');
+  })());
+await A('[28] index 公開匯出面：createShareEnvelope 在 barrel argon2 組（與 wrapNoteKeyShare3 同窗）',
+  (async () => {
+    const idx28 = await srcOf('../src/index.ts');
+    return idx28.includes('createShareEnvelope,') && (idx28.split('createShareEnvelope').length - 1) === 1;
+  })());
+}
+
 secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級帳面顯形）'); if (secEnter(24)) {
   await A('[24] --only 解析契約（全跑態）：spec 缺席＝onlySet 空集＝secEnter 恆真（CI 形契約不變——npm run verify 全帳；--only 態本面恆真跳過＝帳面由次面承載）',
     !onlyMode() ? (onlySpecRaw === null && parseOnly('').err === 'ERR_ONLY_SPEC_EMPTY' && secEnter(1) && secEnter(23)) : true);
@@ -3575,7 +3680,7 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28];
 const secTotal = secOrder.reduce((a, n) => a + (secCases[n] ?? 0), 0);
 const ranSecs = secOrder.filter((n) => (secRan.get(n) ?? 0) > 0);
 const selTotal = secOrder.filter((n) => !onlyMode() || onlySet.has(n) || n === 24 || n === 25).reduce((a, n) => a + (secCases[n] ?? 0), 0);
