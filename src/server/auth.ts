@@ -225,11 +225,11 @@ export async function loginRouteCore(env: Env & Record<string, unknown>, store: 
   if (!(await checkRate(env, AUTH_RATE, ip))) return errResponse('ERR_RATE_LIMITED', 429);
   const ph1 = validHash64(ph1In);
   if (!ph1) return errResponse('ERR_BAD_REQUEST', 400);
-  // 0.4.0 J2b pepper 收口（t_41d5bb18）：ph2Of 注入點。ph2Raw＝現行 sha256(PH1) 舊形
-  // （恆算——未注入單查＋ladder 守衛單一真相源）；ph2New＝ph2Of(PH1) 新形（HMAC 落庫形，
-  // 只在注入時算）。ph2Of 拋錯外拋（fail-closed 不 fail-open：pepper 讀取缺失/故障＝顯性
-  // 5xx——靜默退回無 pepper 形＝攻擊者部署面小錯差即整線降級，fork 裁定）。
-  const ph2Raw = await sha256Hex(ph1);
+  // 0.4.0 J2b pepper 收口（t_41d5bb18）：ph2Of 注入點。ph2＝現行 sha256(PH1) 舊形
+  // （恆算——未注入單查＋ladder 守衛單一真相源＝[23] 毒化錨字面承載）；ph2New＝ph2Of(PH1)
+  // 新形（HMAC 落庫形，只在注入時算）。ph2Of 拋錯外拋（fail-closed 不 fail-open：pepper
+  // 讀取缺失/故障＝顯性 5xx——靜默退回無 pepper 形＝攻擊者部署面小錯差即整線降級，fork 裁定）。
+  const ph2 = await sha256Hex(ph1);
   const ph2New = store.ph2Of ? await store.ph2Of(ph1) : null;
   let user: AuthRow | null;
   if (ph2New !== null) {
@@ -237,14 +237,14 @@ export async function loginRouteCore(env: Env & Record<string, unknown>, store: 
     // 舊形命中的「順手改寫新形」（users.ph2/ladder 對應值覆蓋）是 fork 責任——本層零寫入面
     //（tacet 走自訂 loginRoute 顯性承載此面；用 loginRouteCore 的兄弟 fork 在 store 層承載）。
     user = (await store.findByIdentityQuery(ph2New))
-      ?? (await store.findByIdentityQuery(ph2Raw))
-      ?? (await ladderGuard(store, ph2Raw));
+      ?? (await store.findByIdentityQuery(ph2))
+      ?? (await ladderGuard(store, ph2));
   } else {
-    // 未注入＝現行單查零變（byte-identical 0.3.x——兄弟 fork 零影響鐵律）。
-    user = (await store.findByIdentityQuery(ph2Raw)) ?? (await ladderGuard(store, ph2Raw));
+    // 未注入＝現行單查零變（byte-identical 0.3.x——兄弟 fork 零影響鐵律；[23] 錨字面恰此面）。
+    user = (await store.findByIdentityQuery(ph2)) ?? (await ladderGuard(store, ph2));
   }
   // 幽靈建帳恆新形（注入）／sha256 舊形（未注入）＝新帳戶落庫即過 pepper 收口。
-  const ph2Create = ph2New ?? ph2Raw;
+  const ph2Create = ph2New ?? ph2;
   const userKey: string = user ? user.userKey : await store.createUser(ph2Create);
   const token = generateSessionToken();
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // PWA：30 天

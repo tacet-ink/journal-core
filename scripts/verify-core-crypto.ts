@@ -3799,11 +3799,11 @@ secOpen(29, '[29] loginRouteCore ph2Of 注入（J2b pepper：未注入零變＋�
         for (const f of fs29.readdirSync!(srcDirUrl29).filter((f) => f.endsWith('.ts'))) fs29.copyFileSync!(new URL('src/server/' + f, pkgRootUrl29), path29.join(tree29, 'src/server', f));
         // 毒化錨（唯一）：注入雙讀三元鏈摘除 → 單查舊形直路（removal-form：
         // 新形 hit 案翻建幽靈＝ph2Of 接線面零承載的行為翻面；未注入案照綠＝行為面恰此面翻）。
-        const needle29 = 'user = (await store.findByIdentityQuery(ph2New))\n      ?? (await store.findByIdentityQuery(ph2Raw))\n      ?? (await ladderGuard(store, ph2Raw));';
+        const needle29 = 'user = (await store.findByIdentityQuery(ph2New))\n      ?? (await store.findByIdentityQuery(ph2))\n      ?? (await ladderGuard(store, ph2));';
         const srcAuth29 = fs29.readFileSync!(new URL('src/server/auth.ts', pkgRootUrl29), 'utf8');
         const cnt29 = srcAuth29.split(needle29).length - 1;
         if (cnt29 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT: ' + cnt29);
-        fs29.writeFileSync!(path29.join(tree29, 'src/server/auth.ts'), srcAuth29.split(needle29).join('user = await store.findByIdentityQuery(ph2Raw);'), 'utf8');
+        fs29.writeFileSync!(path29.join(tree29, 'src/server/auth.ts'), srcAuth29.split(needle29).join('user = await store.findByIdentityQuery(ph2);'), 'utf8');
         try {
           const modP = (await import(url29.pathToFileURL(path29.join(tree29, 'src/server/auth.ts')).href + '?poison29=1')) as unknown as { loginRouteCore: typeof loginRouteCore };
           const tP = mkDb29();
