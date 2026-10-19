@@ -363,7 +363,12 @@ export async function generateNoteKey(): Promise<CryptoKey> {
   return importAesGcm(raw, true);
 }
 
-/** 登入憑證：PH1 = SHA-256(pass)——pass 明文從此不過線（伺服器存 PH2）。 */
+/** 登入憑證：PH1 = SHA-256(pass)——pass 明文從此不過線（伺服器存 PH2）。
+ *  @deprecated 無塩 SHA-256(pass)——登入 wire 用 ph1_legacy 暴露 GPU 可全速爆破的密碼
+ *  指標（外部審查 2026-10-18 J2：不可與 Argon2id PH1 同時作為上線探證；DB 洩後 ph2 的
+ *  離線爆破面＝快雜湊重算命中）。新整合改用 derivePh1ArgonV3／deriveVaultPh1（Argon2id
+ *  派生、固定域鹽）。函式本體零動——legacy 平台登入與 deleteAccount 證明面仍在用
+ *  （帶內版本化：legacy 面不可原地改語意或摘除，退場窗口＝J2a 批）。 */
 export function ph1Of(passphrase: string): Promise<string> {
   return sha256Hex(passphrase);
 }
@@ -458,12 +463,16 @@ export async function unwrapNoteKey(cfg: NoteCryptoConfig, wrapped: string, pass
 // wrapped = 'jrsw.' + b64(payload)。salt 由呼叫端存 D1（shares.salt）；
 // 分享密語永不過線（與 passphrase 同律）。AAD 用獨立字串，兩種包裹結構不可互換。
 
-/** 分享包裹：salt 隨機 16 bytes（hex 由呼叫端存 shares.salt）。 */
-export async function wrapNoteKeyShare(cfg: NoteCryptoConfig, noteKey: CryptoKey, sharePass: string): Promise<{ wrapped: string; salt: string }> {
+/**
+ * 分享包裹：salt 隨機 16 bytes（hex 由呼叫端存 shares.salt）。
+ * ⚠️ 不可傳入帳戶主鑰（noteKey）——分享包裹的金鑰範圍＝該次分享；
+ * 傳主鑰＝收分享者可解全帳戶（J1；tacet 親例）。
+ */
+export async function wrapNoteKeyShare(cfg: NoteCryptoConfig, shareKey: CryptoKey, sharePass: string): Promise<{ wrapped: string; salt: string }> {
   if (!cfg.wrapShare) throw new Error('ERR_SHARE_NOT_CONFIGURED');
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const kek = await deriveKek(sharePass, salt);
-  const wrapped = await sealNoteKey(cfg.wrapShare, noteKey, kek, 'notekey-share');
+  const wrapped = await sealNoteKey(cfg.wrapShare, shareKey, kek, 'notekey-share');
   return { wrapped, salt: toHex(salt) };
 }
 
