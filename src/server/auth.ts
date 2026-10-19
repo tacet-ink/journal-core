@@ -154,6 +154,20 @@ export interface AuthStore {
   ladderInsert?(accountId: string, oldPh2: string, oldKind: 'legacy' | 'v2'): Promise<void>;
   /** ladder 刪列（直銷面；遷移批次同批或後續呼叫端承擔）。 */
   ladderDelete?(accountId: string): Promise<void>;
+  /**
+   * PH2 派生注入點（0.4.0，J2b pepper 收口）：以「PH1 的 hex64」回傳**落庫形 PH2**。
+   * 未注入（undefined）＝loginRouteCore 回落 `sha256Hex(PH1)` 單查，行為與 0.3.x
+   * byte-identical（兄弟 fork 零影響鐵律）。tacet 注入
+   * `HMAC-SHA256(PH2_PEPPER, sha256Hex(PH1))`——D1 外洩面由 pepper 收口（pepper 與 DB
+   * 分離存儲；遺失＝整平台鎖死，已離線備份）。契約：
+   * - 純函數（同 ph1 恆回同值）＝PH2 UNIQUE 查詢鍵的確定性來源；
+   * - 雙讀過渡＝loginRouteCore 先查 `ph2Of(PH1)` 新形、miss 再查 `sha256(PH1)` 舊形
+   *   （＋ladder 守衛）；舊形命中的「順手改寫新形」是 fork 責任（本層零寫入面）；
+   * - 幽靈建帳恆新形（createUser 吃 `ph2Of(PH1)`）＝新帳戶落庫即過 pepper 收口；
+   * - 錯誤外拋（不 fail-open）：pepper 讀取缺失/故障＝顯性 5xx（fork fail-closed 裁定——
+   *   靜默退回無 pepper 形＝攻擊者部署面小錯差即整線降級）。
+   */
+  ph2Of?(ph1Hex: string): Promise<string>;
   revokeAllSessions(userKey: string): Promise<void>;
   insertSession(tokenHash: string, userKey: string, expiresAt: number): Promise<void>;
 }
@@ -211,9 +225,27 @@ export async function loginRouteCore(env: Env & Record<string, unknown>, store: 
   if (!(await checkRate(env, AUTH_RATE, ip))) return errResponse('ERR_RATE_LIMITED', 429);
   const ph1 = validHash64(ph1In);
   if (!ph1) return errResponse('ERR_BAD_REQUEST', 400);
-  const ph2 = await sha256Hex(ph1);
-  const user = (await store.findByIdentityQuery(ph2)) ?? (await ladderGuard(store, ph2));
-  const userKey: string = user ? user.userKey : await store.createUser(ph2);
+  // 0.4.0 J2b pepper 收口（t_41d5bb18）：ph2Of 注入點。ph2Raw＝現行 sha256(PH1) 舊形
+  // （恆算——未注入單查＋ladder 守衛單一真相源）；ph2New＝ph2Of(PH1) 新形（HMAC 落庫形，
+  // 只在注入時算）。ph2Of 拋錯外拋（fail-closed 不 fail-open：pepper 讀取缺失/故障＝顯性
+  // 5xx——靜默退回無 pepper 形＝攻擊者部署面小錯差即整線降級，fork 裁定）。
+  const ph2Raw = await sha256Hex(ph1);
+  const ph2New = store.ph2Of ? await store.ph2Of(ph1) : null;
+  let user: AuthRow | null;
+  if (ph2New !== null) {
+    // 雙讀過渡：先查新形（pepper 收口）→ miss 再查舊形（sha256 舊形＋ladder 守衛）。
+    // 舊形命中的「順手改寫新形」（users.ph2/ladder 對應值覆蓋）是 fork 責任——本層零寫入面
+    //（tacet 走自訂 loginRoute 顯性承載此面；用 loginRouteCore 的兄弟 fork 在 store 層承載）。
+    user = (await store.findByIdentityQuery(ph2New))
+      ?? (await store.findByIdentityQuery(ph2Raw))
+      ?? (await ladderGuard(store, ph2Raw));
+  } else {
+    // 未注入＝現行單查零變（byte-identical 0.3.x——兄弟 fork 零影響鐵律）。
+    user = (await store.findByIdentityQuery(ph2Raw)) ?? (await ladderGuard(store, ph2Raw));
+  }
+  // 幽靈建帳恆新形（注入）／sha256 舊形（未注入）＝新帳戶落庫即過 pepper 收口。
+  const ph2Create = ph2New ?? ph2Raw;
+  const userKey: string = user ? user.userKey : await store.createUser(ph2Create);
   const token = generateSessionToken();
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // PWA：30 天
   await store.insertSession(await sha256Hex(token), userKey, expiresAt);

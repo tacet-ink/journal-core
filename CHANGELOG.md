@@ -5,6 +5,24 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.4.0] — 2026-10-20
+
+**Added** — `AuthStore.ph2Of?(ph1Hex) → Promise<string>` optional 注入點（`src/server/auth.ts`，
+0.4.0 minor，J2b PH2 pepper 收口）：`loginRouteCore` 的 PH2 落庫形派生注入面——注入＝雙讀
+過渡動線（先查 `ph2Of(PH1)` 新形（pepper 收口 HMAC 落庫形）→ miss 再查 `sha256(PH1)` 舊形
+＋ladder 守衛；幽靈建帳恆吃新形 `createUser(ph2Of(PH1))`＝新帳戶落庫即過 pepper）；
+**未注入（undefined）＝`sha256Hex(PH1)` 單查零變**（byte-identical 0.3.x——兄弟 fork 零影響
+鐵律）。契約三行：純函數（同 ph1 恆同值＝PH2 UNIQUE 查詢鍵確定性來源）、舊形命中「順手
+改寫新形」＝fork 責任（本層零寫入面）、**`ph2Of` 拋錯外拋＝fail-closed 不 fail-open**（pepper
+讀取缺失/故障＝顯性 5xx——靜默退回無 pepper 形＝攻擊者部署面小錯差即整線降級）。additive
+optional 欄＝tacet pin 0.3.5 不受影響、兄弟 fork 零改動。
+
+**Added** — `verify-core-crypto` 新段 [29]（loginRouteCore ph2Of 注入：未注入零變（舊形 hit
+單查序恰 [raw]）／注入新形 hit（一查 [new] 舊形面短路）／注入舊形 hit 雙讀過渡（[new,raw]）／
+注入兩面 miss 幽靈建帳吃新形／ph2Of 拋錯 fail-closed 外拋（不回落舊形）／未注入＋現值 miss
+ladder 守衛動線零變／拷貝樹毒化：ph2Of 雙讀接線摘除→新形 hit 案翻建幽靈（designated 真翻）
+＋POISON_GATE_INNER 遞迴防線＋還原 byte-exact 樹出生即棄）。帳 542→550。
+
 ## [0.3.6] — 2026-10-19
 
 **Added** — 高階 API `createShareEnvelope(cfg, argon, plaintext, aad, sharePass, idp)`（`src/client/argon2.ts`，
