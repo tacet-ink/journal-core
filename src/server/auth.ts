@@ -28,7 +28,7 @@
 
 import { corsResponse } from './cors.ts';
 import { sha256Hex, generateSessionToken } from './hash.ts';
-import { checkRate, type RateWindow } from './ratelimit.ts';
+import { checkRate, checkRateLadder, type RateWindow } from './ratelimit.ts';
 import type { Env } from './env.ts';
 
 // ── 格式驗證（自 noteCrypt.ts 抽出；前綴由 config 注入） ─────────────────────
@@ -185,6 +185,14 @@ export interface AuthRow {
 
 export const AUTH_RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 10 };
 
+/**
+ * 粗桶第二層帽（0.4.1 J7）：/64 細窗（AUTH_RATE 10/min）擋不住「同 /48 輪換 50 個 /64」的
+ * 分散攻擊（PoC F：500/500 放行）——粗桶表以 normalizeRateIpCoarse 粗鍵（IPv6→/48、
+ * IPv4→/24）各計，60/min（報告建議值、卡面裁定）。表名由呼叫端建表＋GC 承載（同
+ * login_rate 母型）；本常數只是「第二窗 config」，呼叫端**可選**接線——未接＝單窗零變。
+ */
+export const AUTH_RATE_COARSE: RateWindow = { table: 'coarse_login_rate', windowMs: 60_000, max: 60 };
+
 export function errResponse(code: string, status: number): Response {
   return corsResponse(new Response(code, { status }));
 }
@@ -221,8 +229,15 @@ async function ladderGuard(
   return store.getByUserKey(ladderAcc);
 }
 
-export async function loginRouteCore(env: Env & Record<string, unknown>, store: AuthStore, ip: string, ph1In: unknown): Promise<Response> {
-  if (!(await checkRate(env, AUTH_RATE, ip))) return errResponse('ERR_RATE_LIMITED', 429);
+export async function loginRouteCore(env: Env & Record<string, unknown>, store: AuthStore, ip: string, ph1In: unknown, coarseRate?: RateWindow): Promise<Response> {
+  // 0.4.1 J7 粗桶第二層（可選）：coarseRate 在場＝雙窗 ladder（細窗 AUTH_RATE 10/min 照舊
+  // ＋粗窗粗鍵各計）；未傳＝原單窗零行為變（additive 參數——兄弟 fork／pin 0.3.x 零影響鐵律）。
+  // fallbackInMemory：auth 面 opt-in——限流表 D1 故障/異形退 per-isolate 記憶體計數
+  //（非全站 429 亦非完全放行；2026-09-06 fail-open 裁定的 auth 收口面）。
+  const rateOk = coarseRate
+    ? await checkRateLadder(env, AUTH_RATE, coarseRate, ip, { fallbackInMemory: true })
+    : await checkRate(env, AUTH_RATE, ip, { fallbackInMemory: true });
+  if (!rateOk) return errResponse('ERR_RATE_LIMITED', 429);
   const ph1 = validHash64(ph1In);
   if (!ph1) return errResponse('ERR_BAD_REQUEST', 400);
   // 0.4.0 J2b pepper 收口（t_41d5bb18）：ph2Of 注入點。ph2＝現行 sha256(PH1) 舊形

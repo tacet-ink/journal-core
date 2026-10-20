@@ -91,7 +91,7 @@ import {
   AUTH_RATE,
   type CipherFormats,
 } from '../src/server/auth.ts';
-import { checkRate, isRateAllowed, normalizeRateIp, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
+import { checkRate, isRateAllowed, normalizeRateIp, normalizeRateIpCoarse, checkRateLadder, bumpRate, globalLoginBump, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
 import { generateSessionToken, timingSafeEq } from '../src/server/hash.ts';
 import { CORS_HEADERS, corsResponse } from '../src/server/cors.ts';
 import {
@@ -170,7 +170,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -952,9 +952,12 @@ await A('index barrel 匯出 normalizeRateIp（＝ratelimit 子路徑同一函�
   (await import('../src/index.ts')).normalizeRateIp === normalizeRateIp);
 {
   const src = await srcOf('../src/server/ratelimit.ts');
-  const needle = 'bumpRate(env, w, normalizeRateIp(ip))';
+  // 0.4.1 J7：checkRate 接線加 opts 透傳（fallbackInMemory 面）——wiring 靜態錨同步新形。
+  // return 整行形＝checkRate 函式體單點（checkRateLadder 的細窗呼叫是 `const okFine = await`
+  // 形、非同字面）——恰 1 契約照舊（摘 normalize 直通形翻紅面）。
+  const needle = 'return bumpRate(env, w, normalizeRateIp(ip), opts);';
   const n = src.split(needle).length - 1;
-  await A('checkRate 入口接線（單呼叫點）：bumpRate 收 normalizeRateIp 產物（wiring 靜態錨恰 1——摘 normalize 直通形翻紅面）', n === 1, 'n=' + n);
+  await A('checkRate 入口接線（單呼叫點）：bumpRate 收 normalizeRateIp 產物＋opts 透傳（wiring 靜態錨恰 1——摘 normalize 直通形翻紅面）', n === 1, 'n=' + n);
 }
 // 毒化（拷貝樹 in-gate，[23] 母型）：IPv6 聚合分支入口 `if (!g) return ip;` → `return ip;`（IPv6 一律原樣成鍵）
 // → v6 面謂詞逐案真翻紅（false 非 crash）、非 v6 面照綠（毒面恰此面翻）。毒化跑在 /tmp 拷貝＝本 repo 樹零接觸、樹出生即棄。
@@ -3826,6 +3829,271 @@ secOpen(29, '[29] loginRouteCore ph2Of 注入（J2b pepper：未注入零變＋�
 }
 }
 
+secOpen(30, '[30] 限流粗桶第二層＋全站登入計數＋fail-open 記憶體退避（J7：coarse 純函式／ladder 雙窗／in-memory 退避／global 計數／index 匯出／拷貝樹毒化）'); if (secEnter(30)) {
+{
+  const getBuiltin30 = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const { AUTH_RATE_COARSE } = await import('../src/server/auth.ts');
+  const { loginRouteCore: loginRouteCore30 } = await import('../src/server/auth.ts');
+  const sha256Sync30 = (s: string): string => {
+    const nc30 = (getBuiltin30('node:crypto') as { createHash?: (a: string) => { update: (s: string) => { digest: (e: string) => string } } } | undefined) ?? { createHash: () => { throw new Error('ERR_CRYPTO_UNAVAILABLE'); } };
+    return nc30.createHash!('sha256').update(s).digest('hex');
+  };
+  // normalizeRateIpCoarse 純函式面（零 I/O；真模組直載）
+  await A('[30] coarse 純函式：IPv6 →/48 前綴（RFC5952 小寫＋前導零摘＋零串壓縮；前 3 組 hextet）',
+    normalizeRateIpCoarse('2001:db8:1234:5678::1') === '2001:db8:1234::/48'
+    && normalizeRateIpCoarse('2001:0DB8:0001:0000:0000:0000:0000:0001') === '2001:db8:1::/48'
+    && normalizeRateIpCoarse('::1') === '::/48' && normalizeRateIpCoarse('::') === '::/48');
+  await A('[30] coarse 純函式：IPv4 →/24 前三組 octet（第 4 組歸零）',
+    normalizeRateIpCoarse('192.0.2.33') === '192.0.2.0/24' && normalizeRateIpCoarse('10.0.0.1') === '10.0.0.0/24'
+    && normalizeRateIpCoarse('255.255.255.255') === '255.255.255.0/24');
+  await A('[30] coarse 純函式：無法解析／nonstring 原樣且零 throw（IPv4 五段／octet 越界／雙 ::／非 hex／IPv6 單段；nonstring 四型 Object.is）',
+    ['1.2.3.4.5', '192.0.256.1', '1::2::3', '2001:db8::g', '2001'].every((ip) => normalizeRateIpCoarse(ip) === ip)
+    && [undefined, null, NaN, { ip: 1 }].every((v) => Object.is(normalizeRateIpCoarse(v as unknown as string), v)));
+  await A('[30] coarse 純函式：zone id 剝除＋IPv4-mapped 回 IPv4 /24（禁併 ::/48 全域桶——/64 層 §2.5.5.2 裁定同律）',
+    normalizeRateIpCoarse('2001:db8:1234:5678::1%eth0') === '2001:db8:1234::/48'
+    && normalizeRateIpCoarse('::ffff:192.0.2.1') === '192.0.2.0/24' && normalizeRateIpCoarse('::ffff:10.1.2.3') === '10.1.2.0/24');
+  // 真模組直驅（D1-shim 包 node:sqlite；[12] 母型）
+  const FINE30: RateWindow = { table: 't30_fine', windowMs: 60_000, max: 10 };
+  const COARSE30: RateWindow = { table: 't30_coarse', windowMs: 60_000, max: 60 };
+  let ladderDb30: { prepare: (s: string) => { all: (...p: unknown[]) => unknown[] } } | null = null;
+  const dbAll30 = (sql: string, p: unknown[]): unknown[] =>
+    ladderDb30 ? ladderDb30.prepare(sql).all(...p) : [];
+  const mkLadder30 = (): { fineRow: (k: string) => number | undefined; coarseRows: () => Array<{ ip: string; count: number }>; env: Parameters<typeof checkRateLadder>[0] } => {
+    const { DatabaseSync } = (getBuiltin30('node:sqlite') as { DatabaseSync?: unknown } | undefined) ?? {};
+    if (!DatabaseSync) throw new Error('ERR_SQLITE_UNAVAILABLE');
+    const db = new (DatabaseSync as new (p: string) => { exec: (s: string) => void; prepare: (s: string) => { all: (...p: unknown[]) => Array<Record<string, unknown>> } })(':memory:');
+    db.exec('CREATE TABLE t30_fine (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+    db.exec('CREATE TABLE t30_coarse (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+    ladderDb30 = db;
+    return {
+      fineRow: (k) => (db.prepare('SELECT count AS c FROM t30_fine WHERE ip = ?').all(k) as Array<Record<string, unknown>>)[0]?.c as number | undefined,
+      coarseRows: () => db.prepare('SELECT ip, count FROM t30_coarse ORDER BY ip').all() as unknown as Array<{ ip: string; count: number }>,
+      env: {
+        DB: {
+          prepare: (sql: string) => ({
+            bind: (...params: unknown[]) => ({ run: async () => ({ results: db.prepare(sql).all(...params), meta: {} }) }),
+          }),
+        },
+      } as unknown as Parameters<typeof checkRateLadder>[0],
+    };
+  };
+  await A('[30] ladder 雙窗：同 IP 兩窗各計（細窗 /64 鍵、粗窗 /48 鍵各入各表——第二層非取代；同鍵不同層）', await (async () => {
+    const l = mkLadder30();
+    const ip = '2001:db8:1234:5678::9';
+    return (await checkRateLadder(l.env, FINE30, COARSE30, ip)) === true
+      && l.fineRow('2001:db8:1234:5678::/64') === 1 && l.coarseRows().length === 1
+      && l.coarseRows()[0].ip === '2001:db8:1234::/48' && l.coarseRows()[0].count === 1;
+  })());
+  // loginRouteCore 接線面（[29] store 母型；真 node:sqlite＋D1-shim）
+  const mkDb30 = (): { db: { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number }; get: (...p: unknown[]) => unknown; all: (...p: unknown[]) => unknown[] } }; env30: unknown } => {
+    const { DatabaseSync } = (getBuiltin30('node:sqlite') as { DatabaseSync?: unknown } | undefined) ?? {};
+    if (!DatabaseSync) throw new Error('ERR_SQLITE_UNAVAILABLE');
+    const db = new (DatabaseSync as new (p: string) => { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number }; get: (...p: unknown[]) => unknown; all: (...p: unknown[]) => unknown[] } })(':memory:');
+    db.exec('CREATE TABLE login_rate (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+    db.exec('CREATE TABLE coarse_login_rate (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+    return {
+      db,
+      env30: {
+        DB: {
+          prepare: (sql: string) => ({
+            bind: (...params: unknown[]) => ({
+              run: async () => {
+                let results: unknown[] = [];
+                try { results = db.prepare(sql).all(...params) as unknown[]; }
+                catch { try { db.prepare(sql).run(...params); } catch {} }
+                return { results, meta: {} };
+              },
+            }),
+          }),
+        },
+      } as unknown as never,
+    };
+  };
+  const mkStore30 = () => ({
+    findByIdentityQuery: async () => null,
+    createUser: async () => 'acct-ghost-30',
+    getByUserKey: async () => null,
+    getByRecHash: async () => null,
+    setWrapped: async () => {},
+    revokeAllSessions: async () => {},
+    insertSession: async () => {},
+  });
+  await A('[30] loginRouteCore 未接粗窗＝單窗零行為變（additive 參數——未傳＝0.3.x 動線；身份面照走 createUser；粗窗表零觸）', await (async () => {
+    const t = mkDb30();
+    const res = await loginRouteCore30(t.env30 as never, mkStore30() as never, 'ip-30-1', sha256Sync30('ph1-30'));
+    const j = JSON.parse(await res.text()) as { userKey: string; status: string };
+    const coarseRows = t.db.prepare('SELECT count(*) AS c FROM coarse_login_rate').all() as Array<Record<string, unknown>>;
+    return res.status === 200 && j.userKey === 'acct-ghost-30' && (coarseRows[0]?.c ?? 0) === 0;
+  })());
+  await A('[30] ladder 細窗帽：同 /64 第 11 發＝429（/64 帽 10/min 照舊——PoC F 單 IP 面；createUser 零動斷言：429 於身份面之前早退）', await (async () => {
+    const t = mkDb30();
+    let last = 0;
+    for (let i = 0; i < 11; i++) last = (await loginRouteCore30(t.env30 as never, mkStore30() as never, '198.51.100.7', sha256Sync30('ph1-30'))).status;
+    return last === 429 && (await (await loginRouteCore30(t.env30 as never, mkStore30() as never, '198.51.100.7', sha256Sync30('ph1-30'))).text()) === 'ERR_RATE_LIMITED';
+  })());
+  await A('[30] ladder 粗窗帽：同 /48 輪換 60 個不同 /64 → 第 61 發 429（PoC F 分散攻擊收斂面——細窗各 /64 各 1 發不觸細帽、粗鍵合一 60/min 先咬；500/500 放行翻 60 放行/拒）', await (async () => {
+    const t = mkDb30();
+    const coarseW = { table: 'coarse_login_rate', windowMs: 60_000, max: 60 };
+    let last = 0;
+    for (let i = 0; i < 61; i++) last = (await loginRouteCore30(t.env30 as never, mkStore30() as never, '2001:db8:aa:' + i + '::1', sha256Sync30('ph1-30'), coarseW)).status;
+    const coarse = t.db.prepare('SELECT * FROM coarse_login_rate').all() as Array<Record<string, unknown>>;
+    const fineRows = t.db.prepare('SELECT count(*) AS c, count(DISTINCT count) AS d FROM login_rate').all() as Array<Record<string, unknown>>;
+    return last === 429 && coarse.length === 1 && coarse[0].ip === '2001:db8:aa::/48' && coarse[0].count === 61
+      && fineRows[0].c === 61 && fineRows[0].d === 1;
+  })());
+  await A('[30] 兩窗互不干擾（同 IP 兩窗各自獨立累計——細窗計數不借粗窗帽、粗窗計數不借細窗帽；同 /48 雙 IP 粗鍵合一、細鍵分離）', await (async () => {
+    const l = mkLadder30();
+    const a = '192.0.2.10', b = '192.0.2.11';
+    for (let i = 0; i < 15; i++) await checkRateLadder(l.env, FINE30, COARSE30, a);
+    for (let i = 0; i < 15; i++) await checkRateLadder(l.env, FINE30, COARSE30, b);
+    const coarse = l.coarseRows();
+    return l.fineRow('192.0.2.10') === 15 && l.fineRow('192.0.2.11') === 15
+      && coarse.length === 1 && coarse[0].ip === '192.0.2.0/24' && coarse[0].count === 30;
+  })());
+  await A('[30] AUTH_RATE_COARSE 契約（60s 窗 max 60——報告建議值、卡面裁定）',
+    AUTH_RATE_COARSE.table === 'coarse_login_rate' && AUTH_RATE_COARSE.windowMs === 60_000 && AUTH_RATE_COARSE.max === 60);
+  await A('[30] index barrel 匯出 J7 面（coarse/ladder/fallback/global＋AUTH_RATE_COARSE＝ratelimit 子路徑同一函式——單一真相）',
+    (async () => {
+      const idx = await import('../src/index.ts');
+      const sub = await import('../src/server/ratelimit.ts');
+      const { AUTH_RATE_COARSE: arcIdx } = await import('../src/server/auth.ts');
+      return idx.normalizeRateIpCoarse === sub.normalizeRateIpCoarse && idx.checkRateLadder === sub.checkRateLadder
+        && idx.globalLoginBump === sub.globalLoginBump && idx.bumpRate === sub.bumpRate && idx.AUTH_RATE_COARSE === arcIdx
+        && idx.checkRate === sub.checkRate;
+    })());
+  await A('[30] wiring 靜態錨：checkRateLadder 粗窗 bump 收 normalizeRateIpCoarse 產物（恰 1——摘 coarse 正規化直通形翻紅面）',
+    (async () => ((await srcOf('../src/server/ratelimit.ts')).split('await bumpRate(env, w2, normalizeRateIpCoarse(ip), opts)').length - 1) === 1)());
+  await A('[30] wiring 靜態錨：loginRouteCore coarseRate 分流接線在場（ladder 分支恰 1＋fallbackInMemory auth 面 opt-in 雙窗在場）',
+    (async () => {
+      const s = await srcOf('../src/server/auth.ts');
+      return s.split('await checkRateLadder(env, AUTH_RATE, coarseRate, ip, { fallbackInMemory: true })').length - 1 === 1
+        && s.split('await checkRate(env, AUTH_RATE, ip, { fallbackInMemory: true })').length - 1 === 1;
+    })());
+  // fail-open → in-memory 退避面（D1 mock 故障→計數仍有效；isolate 邊界＝module-scope Map，跨 isolate 失效＝攻擊者換 isolate 也重置的誠實面）
+  const memWin: RateWindow = { table: 't30_mem', windowMs: 60_000, max: 5 };
+  const downEnv30 = {
+    DB: { prepare: () => ({ bind: () => ({ run: async () => { throw new Error('ERR_D1_DOWN_30'); } }) }) },
+  } as unknown as Parameters<typeof checkRate>[0];
+  await A('[30] 無 opts＝原 fail-open 完全放行（其他端點零行為變鐵律——D1 故障照放行；fallbackInMemory 缺席面）',
+    (async () => (await checkRate(downEnv30, memWin, '99.1.1.1')) === true)());
+  await A('[30] fallbackInMemory：D1 故障退 per-isolate 記憶體計數（非全站 429 亦非全放行——6 發起擋、計數跨故障發真累計）',
+    (async () => {
+      const seq: boolean[] = [];
+      for (let i = 0; i < 7; i++) seq.push(await checkRate(downEnv30, memWin, '99.1.1.1', { fallbackInMemory: true }));
+      return seq[0] === true && seq[4] === true && seq[5] === false && seq[6] === false;
+    })());
+  await A('[30] fallbackInMemory：RETURNING 異形回應同退記憶體計數（異形＝本窗判準不可信——同故障向；非異形不反向 deny）',
+    (async () => {
+      const weird: Parameters<typeof checkRate>[0] = {
+        DB: { prepare: () => ({ bind: () => ({ run: async () => ({ results: [{ m: 1 }] }) }) }) },
+      } as never;
+      const seq: boolean[] = [];
+      for (let i = 0; i < 6; i++) seq.push(await checkRate(weird, { table: 't30_mem2', windowMs: 60_000, max: 5 }, '99.1.1.2', { fallbackInMemory: true }));
+      return seq[0] === true && seq[5] === false;
+    })());
+  await A('[30] ladder 單窗故障：故障窗退記憶體、健康窗真 DB 照計（D1 故障僅打細窗——總判準 false 僅因細窗 mem 超額；粗窗真值照累計＝非整 ladder 429 亦非整 ladder 放行）', await (async () => {
+    const l = mkLadder30();
+    const ip = '77.7.7.7';
+    // 健康面先跑 5 發（兩窗真 DB 照計）
+    for (let i = 0; i < 5; i++) await checkRateLadder(l.env, FINE30, COARSE30, ip);
+    const fineDown: Parameters<typeof checkRateLadder>[0] = {
+      DB: { prepare: (sql: string) => ({
+        bind: (...p: unknown[]) => ({ run: async () => {
+          if (sql.includes('t30_coarse')) return { results: dbAll30(sql, p) };
+          throw new Error('ERR_D1_DOWN_FINE');
+        } }),
+      }) },
+    } as never;
+    // 細窗 D1 故障 → 細窗退記憶體（max 10，已有 5 發在 DB 但 mem 從 0 起算）：mem 1..10 pass、11 fail
+    //（fallbackInMemory 必傳——無 opts＝fail-open 全放行，細窗永不擋＝毒化盲區母型）
+    const seq2: boolean[] = [];
+    for (let i = 0; i < 11; i++) seq2.push(await checkRateLadder(fineDown, FINE30, COARSE30, ip, { fallbackInMemory: true }));
+    // 粗窗（健康真 DB）已累計 5+11＝16
+    const coarseRow = (l.coarseRows()[0]);
+    return seq2[9] === true && seq2[10] === false && l.fineRow('77.7.7.7') === 5 && coarseRow?.count === 16;
+  })());
+  // 全站登入計數（觀測面）
+  const gWin: RateWindow = { table: 't30_global', windowMs: 300_000, max: 1_000 };
+  await A('[30] globalLoginBump：固定鍵 global 單列＋每呼叫 +1 回窗內真值（計數不封頂——超 max 照實累計＝審計面；呼叫端 IP 不進計數鍵）', await (async () => {
+    const { DatabaseSync } = (getBuiltin30('node:sqlite') as { DatabaseSync?: unknown } | undefined) ?? {};
+    const db = new (DatabaseSync as new (p: string) => { exec: (s: string) => void; prepare: (s: string) => { all: (...p: unknown[]) => Array<Record<string, unknown>> } })(':memory:');
+    db.exec('CREATE TABLE t30_global (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+    const envG = {
+      DB: { prepare: (sql: string) => ({ bind: (...p: unknown[]) => ({ run: async () => ({ results: db.prepare(sql).all(...p), meta: {} }) }) }) },
+    } as unknown as Parameters<typeof globalLoginBump>[0];
+    const r1 = await globalLoginBump(envG, gWin);
+    const r2 = await globalLoginBump(envG, gWin);
+    const rows = db.prepare('SELECT * FROM t30_global').all() as Array<Record<string, unknown>>;
+    return r1 === 1 && r2 === 2 && rows.length === 1 && rows[0].ip === 'global' && rows[0].count === 2;
+  })());
+  await A('[30] globalLoginBump 故障 fail-open 回 null（計數面故障不反噬登入主功能——呼叫端跳過告警判斷；表名注入同 throw 不觸 DB）',
+    (async () => {
+      const n = await globalLoginBump(downEnv30, gWin);
+      let threw = false;
+      try { await globalLoginBump(downEnv30, { table: 'x; DROP TABLE users--', windowMs: 1000, max: 5 }); } catch { threw = true; }
+      return n === null && threw;
+    })());
+  // 毒化（拷貝樹 in-gate，[23]/[29] 母型）：粗窗正規化摘除 → /48 分散攻擊翻 500 放行（PoC F 缺陷形復現）
+  {
+    const inner30 = (getBuiltin30('node:process') as { env?: Record<string, string | undefined> } | undefined)?.env?.POISON_GATE_INNER === '1';
+    if (inner30) {
+      await A('[30] 毒化證據：內層跑份自我跳過（POISON_GATE_INNER sentinel——遞迴防線母型）', true, 'POISON_GATE_INNER=1');
+    } else {
+      const fs30 = (getBuiltin30('node:fs') as {
+        mkdtempSync?: (p: string) => string;
+        mkdirSync?: (p: string, o?: unknown) => void;
+        copyFileSync?: (a: string | URL, b: string) => void;
+        readdirSync?: (p: string | URL) => string[];
+        readFileSync?: (p: string | URL, e: string) => string;
+        writeFileSync?: (p: string, s: string, e: string) => void;
+        rmSync?: (p: string, o?: unknown) => void;
+      } | undefined) ?? undefined;
+      const path30 = (getBuiltin30('node:path') as { join?: (...p: string[]) => string } | undefined) ?? undefined;
+      const os30 = (getBuiltin30('node:os') as { tmpdir?: () => string } | undefined) ?? undefined;
+      const url30 = (getBuiltin30('node:url') as { pathToFileURL?: (p: string) => { href: string } } | undefined) ?? undefined;
+      if (!fs30?.mkdtempSync || !path30?.join || !os30?.tmpdir || !url30?.pathToFileURL) {
+        await A('[30] 毒化面（原語缺席環境）＝顯性 SKIP 行，毒化證據缺席顯形非 silent true', false, 'node fs/path/os/url 原語缺席——毒化面 skip');
+      } else {
+        const pkgRoot30 = new URL('../', import.meta.url);
+        const srcDir30 = new URL('src/server/', pkgRoot30);
+        const tree30 = fs30.mkdtempSync!(path30.join(os30.tmpdir(), 't30-coarse-'));
+        fs30.mkdirSync!(path30.join(tree30, 'src/server'), { recursive: true });
+        for (const f of fs30.readdirSync!(srcDir30).filter((f) => f.endsWith('.ts'))) fs30.copyFileSync!(new URL('src/server/' + f, pkgRoot30), path30.join(tree30, 'src/server', f));
+        // 毒化錨（唯一）：checkRateLadder 粗窗正規化摘除 → 完整地址成粗鍵
+        //（removal-form：同 /48 輪換 50 個 /64 各成獨立粗鍵 → 粗窗 60/min 帽失效＝PoC F 缺陷形復現；
+        //  單 IP 細窗帽案照綠＝行為面恰粗層面翻）。
+        const needle30 = 'await bumpRate(env, w2, normalizeRateIpCoarse(ip), opts)';
+        const srcRl30 = fs30.readFileSync!(new URL('src/server/ratelimit.ts', pkgRoot30), 'utf8');
+        const cnt30 = srcRl30.split(needle30).length - 1;
+        if (cnt30 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_30: ' + cnt30);
+        fs30.writeFileSync!(path30.join(tree30, 'src/server/ratelimit.ts'), srcRl30.split(needle30).join('await bumpRate(env, w2, ip, opts)'), 'utf8');
+        try {
+          const modP = (await import(url30.pathToFileURL(path30.join(tree30, 'src/server/ratelimit.ts')).href + '?poison30=1')) as unknown as { checkRateLadder: typeof checkRateLadder };
+          const envP: Parameters<typeof checkRateLadder>[0] = {
+            DB: { prepare: () => ({ bind: () => ({ run: async () => { throw new Error('ERR_D1_DOWN_POISON_30'); } }) }) },
+          } as never;
+          // 全 D1-down＝兩窗皆走記憶體面（key 各異）——毒化後粗鍵＝完整地址（50 個 /64 各獨立 mem 鍵）
+          // ＝500 發放行（PoC F 缺陷形）；正碼粗鍵＝同 /48 合一 → 第 61 發擋。
+          let passP = 0;
+          for (let i = 0; i < 50; i++) for (let j = 0; j < 10; j++) {
+            if (await modP.checkRateLadder(envP, FINE30, COARSE30, '2001:db8:aa:' + i + '::' + (j + 1), { fallbackInMemory: true })) passP++;
+          }
+          await A('[30] 毒化（粗窗正規化摘除）→ /48 分散 50×10 發全放行（PoC F 缺陷形復現＝designated 真翻；正碼此面 60 放行/440 拒）',
+            passP === 500, 'pass=' + passP);
+        } catch (e) {
+          await A('[30] 毒化重演（行為面真翻）', false, 'crash: ' + String((e as Error).message).slice(0, 160));
+        }
+        fs30.writeFileSync!(path30.join(tree30, 'src/server/ratelimit.ts'), srcRl30, 'utf8');
+        const restored30 = fs30.readFileSync!(path30.join(tree30, 'src/server/ratelimit.ts'), 'utf8') === srcRl30;
+        fs30.rmSync!(tree30, { recursive: true, force: true });
+        await A('[30] 毒化還原 byte-exact＋樹出生即棄（本 repo 樹零接觸——零殘毒面）', restored30);
+      }
+    }
+  }
+}
+}
+
 secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級帳面顯形）'); if (secEnter(24)) {
   await A('[24] --only 解析契約（全跑態）：spec 缺席＝onlySet 空集＝secEnter 恆真（CI 形契約不變——npm run verify 全帳；--only 態本面恆真跳過＝帳面由次面承載）',
     !onlyMode() ? (onlySpecRaw === null && parseOnly('').err === 'ERR_ONLY_SPEC_EMPTY' && secEnter(1) && secEnter(23)) : true);
@@ -3858,7 +4126,7 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30];
 const secTotal = secOrder.reduce((a, n) => a + (secCases[n] ?? 0), 0);
 const ranSecs = secOrder.filter((n) => (secRan.get(n) ?? 0) > 0);
 const selTotal = secOrder.filter((n) => !onlyMode() || onlySet.has(n) || n === 24 || n === 25).reduce((a, n) => a + (secCases[n] ?? 0), 0);

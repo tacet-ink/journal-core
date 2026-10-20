@@ -5,6 +5,42 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.4.1] — 2026-10-21
+
+**Added** — 限流第二層粗桶（coarse bucket）＋全站登入計數＋fail-open 記憶體退避（`src/server/ratelimit.ts`，
+0.4.1，J7 外審收口）：細層 `/64` 帽 10/min 擋不住同 `/48` 輪換 50 個 `/64` 的分散攻擊（PoC F 實證
+500/500 放行）；第二層非取代細層，同鍵不同表各入各窗。
+
+- `normalizeRateIpCoarse(ip)`：IPv6 → RFC 5952 正規形取前 3 組 hextet 成 `/48` 前綴（zone id 剝除、
+  前導零摘除、零串壓縮）；IPv4-mapped（`::ffff:a.b.c.d`）回 IPv4 `/24` 前三組 octet（禁併 `::/48`
+  全域桶——`/64` 層 §2.5.5.2 裁定同律）；IPv4 → `a.b.c.0/24`；無法解析/nonstring 原樣返回零 throw。
+- `bumpRate(env, w, ip, opts?: { fallbackInMemory?: boolean })`：additive opts——D1 故障或
+  `RETURNING` 異形（`n` 非有限數字）時，`fallbackInMemory` 在場退 per-isolate 記憶體計數
+  （`Map<"${table}:${key}", {start, count}>`，健康路徑零成本）；**未傳 opts＝原 fail-open 完全
+  放行**（其他端點零行為變鐵律）。誠實面：isolate 本地態，換 isolate 即重置（攻擊者換 isolate
+  亦重置）＝退避非封鎖。
+- `checkRateLadder(env, fine, coarse, ip, opts?)`：雙窗原子計數（細窗 `normalizeRateIp`＋粗窗
+  `normalizeRateIpCoarse` 各入各表），任一窗超額即 false（計數不封頂語意兩窗照舊，超額發兩窗
+  皆照實累計＝審計可見）；單窗 D1 故障僅該窗退記憶體，健康窗真 DB 照計（非整 ladder 429 亦非
+  整 ladder 放行）。兩窗須為不同表（同表＝雙 UPSERT 同鍵翻倍——契約由呼叫端常數承載）。
+- `globalLoginBump(env, w) → Promise<number | null>`：固定鍵 `'global'` 單列 UPSERT，每呼叫 +1 回
+  窗內實際 count（計數不封頂、超額照實累計＝審計面；呼叫端 IP 不進計數鍵）；故障 fail-open 回
+  null（呼叫端跳過告警判斷，計數面故障不反噬登入主功能）。
+
+**Added** — `AUTH_RATE_COARSE`（`src/server/auth.ts`）＋`loginRouteCore` 選配 `coarseRate` 參數
+（第 5 參、additive）：`{ table: 'coarse_login_rate', windowMs: 60_000, max: 60 }`（60/min＝報告
+建議值、卡面裁定）。傳入＝`checkRateLadder(env, AUTH_RATE, coarseRate, ip, { fallbackInMemory:
+true })` 雙窗；**未傳＝單窗零行為變**（0.3.x pin／兄弟 fork 零影響）。auth 面 opt-in
+`fallbackInMemory`——限流層唯一接線的 fail-open 退避點。
+
+**Added** — `verify-core-crypto` 新段 [30]（coarse 純函式四案／ladder 雙窗各計／未接粗窗零變／細窗
+帽 11 發 429／粗窗帽 61 發 429（同 /48 輪換 60 個不同 /64＝PoC F 收斂面）／兩窗互不干擾／
+AUTH_RATE_COARSE 契約／index barrel 匯出同一函式／wiring 靜態錨恰 1×2／無 opts 原 fail-open／
+D1 故障退記憶體計數／RETURNING 異形同退／單窗故障健康窗照計／globalLoginBump 固定鍵＋fail-open／
+拷貝樹毒化：粗窗正規化摘除→/48 分散 50×10 發全放行（PoC F 缺陷形復現＝designated 真翻）＋
+POISON_GATE_INNER 遞迴防線＋還原 byte-exact 樹出生即棄）。`[12]` wiring 錨隨 opts 透傳翻新。
+帳 554→575。
+
 ## [0.4.0] — 2026-10-20
 
 **Added** — `AuthStore.ph2Of?(ph1Hex) → Promise<string>` optional 注入點（`src/server/auth.ts`，
