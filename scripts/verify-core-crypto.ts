@@ -170,7 +170,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -3648,6 +3648,184 @@ await A('[28] index 公開匯出面：createShareEnvelope 在 barrel argon2 組�
   })());
 }
 
+secOpen(29, '[29] loginRouteCore ph2Of 注入（J2b pepper：未注入零變＋注入雙讀＋新形建帳＋ph2Of 拋錯 fail-closed＋拷貝樹毒化）'); if (secEnter(29)) {
+{
+  const getBuiltin29 = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const { DatabaseSync } = (getBuiltin29('node:sqlite') as { DatabaseSync?: unknown } | undefined) ?? {};
+  if (!DatabaseSync) throw new Error('ERR_SQLITE_UNAVAILABLE');
+  const { loginRouteCore } = await import('../src/server/auth.ts');
+  const sha256Sync29 = (s: string): string => {
+    const nc29 = (getBuiltin29('node:crypto') as { createHash?: (a: string) => { update: (s: string) => { digest: (e: string) => string } } } | undefined) ?? { createHash: () => { throw new Error('ERR_CRYPTO_UNAVAILABLE'); } };
+    return nc29.createHash!('sha256').update(s).digest('hex');
+  };
+  // 落庫形測試 pepper（非真 HMAC——行為面只吃「異形確定純函數」語意；pepper 真值面歸 tacet 側）。
+  const PEPPER29 = 't29-test-pepper';
+  const ph2OfPeppered29 = async (ph1: string): Promise<string> => 'hmac-' + sha256Sync29(PEPPER29 + ph1);
+  const mkDb29 = (): { db: { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number }; get: (...p: unknown[]) => unknown; all: (...p: unknown[]) => unknown[] } }; env29: unknown } => {
+    const db = new (DatabaseSync as new (p: string) => { exec: (s: string) => void; prepare: (s: string) => { run: (...p: unknown[]) => { changes: number }; get: (...p: unknown[]) => unknown; all: (...p: unknown[]) => unknown[] } })(':memory:');
+    db.exec('CREATE TABLE login_rate (ip TEXT PRIMARY KEY, window_start INTEGER, count INTEGER)');
+    db.exec('CREATE TABLE users (account_id TEXT PRIMARY KEY, ph2 TEXT UNIQUE, salt TEXT, wrapped_key TEXT, wrapped_rec TEXT, rec_hash TEXT)');
+    return {
+      db,
+      env29: {
+        DB: {
+          prepare: (sql: string) => ({
+            bind: (...params: unknown[]) => ({
+              run: async () => {
+                let results: unknown[] = [];
+                try { results = db.prepare(sql).all(...params) as unknown[]; }
+                catch { try { db.prepare(sql).run(...params); } catch {} }
+                return { results, meta: {} };
+              },
+            }),
+          }),
+        },
+      } as unknown as never,
+    };
+  };
+  const USER_COLS29 = 'account_id AS userKey, ph2, salt, wrapped_key AS wrapped, wrapped_rec AS wrappedRec, rec_hash AS recHash';
+  // 計數 store 母型（查詢鍵序列斷言——雙讀面單一真相承載）
+  const mkStore29 = (t: ReturnType<typeof mkDb29>, ph2Of?: (p: string) => Promise<string>) => {
+    const calls29 = { q: [] as string[], create: null as string | null, ladder: 0 };
+    const store29 = {
+      findByIdentityQuery: async (ph2: string) => { calls29.q.push(ph2); return (t.db.prepare(`SELECT ${USER_COLS29} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null; },
+      createUser: async (ph2: string) => { calls29.create = ph2; return 'acct-ghost-29'; },
+      getByUserKey: async () => null,
+      revokeAllSessions: async () => {},
+      insertSession: async () => {},
+      ...(ph2Of ? { ph2Of } : {}),
+    };
+    return { store29, calls29 };
+  };
+  const ph1a29 = sha256Sync29('jr29-current-ph1');
+  const rawA29 = sha256Sync29(ph1a29);
+  const newA29 = await ph2OfPeppered29(ph1a29);
+
+  // ① 未注入零變：舊形列命中、單查一次、query 序恰 [raw]（0.3.x byte-identical 承載）
+  {
+    const t = mkDb29();
+    const { store29, calls29 } = mkStore29(t);
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-29a', ?, 's29', 'wr29')").run(rawA29);
+    const res = await loginRouteCore(t.env29 as never, store29 as never, 'ip-29-1', ph1a29);
+    const j = JSON.parse(await res.text()) as { userKey: string; status: string };
+    await A('[29] 未注入＝現行單查零變（舊形 hit 回 ready；query 序恰 [raw] 單查——兄弟 fork 鐵律）',
+      res.status === 200 && j.userKey === 'acct-29a' && j.status === 'ready' && JSON.stringify(calls29.q) === JSON.stringify([rawA29]) && calls29.ladder === 0 && calls29.create === null);
+  }
+
+  // ② 注入新形 hit：新形列命中、查表面恰一查 [new]（舊形面短路零觸）
+  {
+    const t = mkDb29();
+    const { store29, calls29 } = mkStore29(t, ph2OfPeppered29);
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-29b', ?, 's29', 'wr29')").run(newA29);
+    const res = await loginRouteCore(t.env29 as never, store29 as never, 'ip-29-2', ph1a29);
+    const j = JSON.parse(await res.text()) as { userKey: string; status: string };
+    await A('[29] 注入新形 hit：新形列命中回 ready、查表面恰一查 [new]（舊形面短路零觸——雙讀序面）',
+      res.status === 200 && j.userKey === 'acct-29b' && j.status === 'ready' && JSON.stringify(calls29.q) === JSON.stringify([newA29]));
+  }
+
+  // ③ 注入舊形 hit（遷移過渡）：新形 miss → 舊形 hit（查表面恰 [new, raw]）
+  {
+    const t = mkDb29();
+    const { store29, calls29 } = mkStore29(t, ph2OfPeppered29);
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-29c', ?, 's29', 'wr29')").run(rawA29);
+    const res = await loginRouteCore(t.env29 as never, store29 as never, 'ip-29-3', ph1a29);
+    const j = JSON.parse(await res.text()) as { userKey: string; status: string };
+    await A('[29] 注入舊形 hit（雙讀過渡）：新形 miss → 舊形 hit 回 ready（查表面恰 [new, raw]）',
+      res.status === 200 && j.userKey === 'acct-29c' && JSON.stringify(calls29.q) === JSON.stringify([newA29, rawA29]));
+  }
+
+  // ④ 注入兩面 miss：幽靈建帳吃**新形**（pepper 收口——新帳戶落庫即過 HMAC 面）
+  {
+    const t = mkDb29();
+    const { store29, calls29 } = mkStore29(t, ph2OfPeppered29);
+    const res = await loginRouteCore(t.env29 as never, store29 as never, 'ip-29-4', ph1a29);
+    const j = JSON.parse(await res.text()) as { userKey: string; status: string };
+    await A('[29] 注入兩面 miss：幽靈建帳吃新形（createUser(ph2Of(PH1))——pepper 收口載體）',
+      res.status === 200 && j.userKey === 'acct-ghost-29' && j.status === 'require_binding' && calls29.create === newA29);
+  }
+
+  // ⑤ ph2Of 拋錯＝fail-closed 外拋（不 fail-open 回落舊形——靜默退回無 pepper 形＝整線降級面）
+  {
+    const t = mkDb29();
+    const { store29 } = mkStore29(t, async () => { throw new Error('ERR_PEPPER_MISSING'); });
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-29e', ?, 's29', 'wr29')").run(rawA29);
+    let threw29: unknown = null;
+    try { await loginRouteCore(t.env29 as never, store29 as never, 'ip-29-5', ph1a29); } catch (e) { threw29 = e; }
+    await A('[29] ph2Of 拋錯＝外拋 fail-closed（不回落舊形單查——fail-open 即攻擊者降級面）',
+      threw29 instanceof Error && threw29.message.includes('ERR_PEPPER_MISSING'));
+  }
+
+  // ⑥ 未注入＋舊形 miss＝ladder 守衛照舊（現行動線零變——ladderGuard 面不經 ph2Of）
+  {
+    const t = mkDb29();
+    const { store29, calls29 } = mkStore29(t);
+    const storeLad = { ...store29, ladderLookup: async () => { calls29.ladder++; return 'acct-29old'; }, getByUserKey: async (key: string) => (t.db.prepare(`SELECT ${USER_COLS29} FROM users WHERE account_id = ?`).get(key) as unknown) || null };
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-29old', 'ph29-rot', 's29', 'wr29')").run();
+    const res = await loginRouteCore(t.env29 as never, storeLad as never, 'ip-29-6', ph1a29);
+    const j = JSON.parse(await res.text()) as { userKey: string; status: string };
+    await A('[29] 未注入＋現值 miss → ladder hit 回舊帳（ladder 守衛動線零變）',
+      res.status === 200 && j.userKey === 'acct-29old' && j.status === 'ready' && calls29.ladder === 1 && calls29.create === null);
+  }
+
+  // ⑦⑧ 毒化（拷貝樹 in-gate，[23] 母型）：ph2Of 雙讀接線摘除 → 新形 hit 案翻建幽靈。
+  // 毒化跑在 /tmp 拷貝樹＝本 repo 樹 byte 不動；還原 byte-exact＋樹出生即棄。
+  {
+    const inner29 = (getBuiltin29('node:process') as { env?: Record<string, string | undefined> } | undefined)?.env?.POISON_GATE_INNER === '1';
+    if (inner29) {
+      await A('[29] 毒化證據：內層跑份自我跳過（POISON_GATE_INNER sentinel——遞迴防線母型）', true, 'POISON_GATE_INNER=1');
+      await A('[29] 毒化證據（內層跑份）：拷貝樹面跳過計帳（遞迴防線零殘面）', true, 'inner skip');
+    } else {
+      const fs29 = (getBuiltin29('node:fs') as {
+        mkdtempSync?: (p: string) => string;
+        mkdirSync?: (p: string, o?: unknown) => void;
+        copyFileSync?: (a: string | URL, b: string) => void;
+        readdirSync?: (p: string | URL) => string[];
+        readFileSync?: (p: string | URL, e: string) => string;
+        writeFileSync?: (p: string, s: string, e: string) => void;
+        rmSync?: (p: string, o?: unknown) => void;
+      } | undefined) ?? undefined;
+      const path29 = (getBuiltin29('node:path') as { join?: (...p: string[]) => string } | undefined) ?? undefined;
+      const os29 = (getBuiltin29('node:os') as { tmpdir?: () => string } | undefined) ?? undefined;
+      const url29 = (getBuiltin29('node:url') as { pathToFileURL?: (p: string) => { href: string } } | undefined) ?? undefined;
+      if (!fs29?.mkdtempSync || !path29?.join || !os29?.tmpdir || !url29?.pathToFileURL) {
+        await A('[29] 毒化面（原語缺席環境）＝顯性 SKIP 行，毒化證據缺席顯形非 silent true', false, 'node fs/path/os/url 原語缺席——毒化面 skip');
+        await A('[29] 毒化面（原語缺席環境）：還原面同跳（skip 計帳雙案面）', false, 'skip twin');
+      } else {
+        const pkgRootUrl29 = new URL('../', import.meta.url);
+        const srcDirUrl29 = new URL('src/server/', pkgRootUrl29);
+        const tree29 = fs29.mkdtempSync!(path29.join(os29.tmpdir(), 't29-ph2of-'));
+        fs29.mkdirSync!(path29.join(tree29, 'src/server'), { recursive: true });
+        for (const f of fs29.readdirSync!(srcDirUrl29).filter((f) => f.endsWith('.ts'))) fs29.copyFileSync!(new URL('src/server/' + f, pkgRootUrl29), path29.join(tree29, 'src/server', f));
+        // 毒化錨（唯一）：注入雙讀三元鏈摘除 → 單查舊形直路（removal-form：
+        // 新形 hit 案翻建幽靈＝ph2Of 接線面零承載的行為翻面；未注入案照綠＝行為面恰此面翻）。
+        const needle29 = 'user = (await store.findByIdentityQuery(ph2New))\n      ?? (await store.findByIdentityQuery(ph2))\n      ?? (await ladderGuard(store, ph2));';
+        const srcAuth29 = fs29.readFileSync!(new URL('src/server/auth.ts', pkgRootUrl29), 'utf8');
+        const cnt29 = srcAuth29.split(needle29).length - 1;
+        if (cnt29 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT: ' + cnt29);
+        fs29.writeFileSync!(path29.join(tree29, 'src/server/auth.ts'), srcAuth29.split(needle29).join('user = await store.findByIdentityQuery(ph2);'), 'utf8');
+        try {
+          const modP = (await import(url29.pathToFileURL(path29.join(tree29, 'src/server/auth.ts')).href + '?poison29=1')) as unknown as { loginRouteCore: typeof loginRouteCore };
+          const tP = mkDb29();
+          const { store29: storeP, calls29: callsP } = mkStore29(tP, ph2OfPeppered29);
+          tP.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-29b', ?, 's29', 'wr29')").run(newA29);
+          const resP = await modP.loginRouteCore(tP.env29 as never, storeP as never, 'ip-29-P', ph1a29);
+          const jP = JSON.parse(await resP.text()) as { userKey: string; status: string };
+          await A('[29] 毒化（ph2Of 雙讀接線摘除）→ 新形 hit 案翻建幽靈（pepper 收口面零承載＝designated 真翻）',
+            jP.userKey === 'acct-ghost-29' && callsP.create === newA29, 'userKey=' + jP.userKey + ' create=' + String(callsP.create).slice(0, 12));
+        } catch (e) {
+          await A('[29] 毒化重演（行為面真翻）', false, 'crash: ' + String((e as Error).message).slice(0, 160));
+        }
+        fs29.writeFileSync!(path29.join(tree29, 'src/server/auth.ts'), srcAuth29, 'utf8');
+        const restored29 = fs29.readFileSync!(path29.join(tree29, 'src/server/auth.ts'), 'utf8') === srcAuth29;
+        fs29.rmSync!(tree29, { recursive: true, force: true });
+        await A('[29] 毒化還原 byte-exact＋樹出生即棄（本 repo 樹零接觸——零殘毒面）', restored29);
+      }
+    }
+  }
+}
+}
+
 secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級帳面顯形）'); if (secEnter(24)) {
   await A('[24] --only 解析契約（全跑態）：spec 缺席＝onlySet 空集＝secEnter 恆真（CI 形契約不變——npm run verify 全帳；--only 態本面恆真跳過＝帳面由次面承載）',
     !onlyMode() ? (onlySpecRaw === null && parseOnly('').err === 'ERR_ONLY_SPEC_EMPTY' && secEnter(1) && secEnter(23)) : true);
@@ -3680,7 +3858,7 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29];
 const secTotal = secOrder.reduce((a, n) => a + (secCases[n] ?? 0), 0);
 const ranSecs = secOrder.filter((n) => (secRan.get(n) ?? 0) > 0);
 const selTotal = secOrder.filter((n) => !onlyMode() || onlySet.has(n) || n === 24 || n === 25).reduce((a, n) => a + (secCases[n] ?? 0), 0);

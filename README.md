@@ -101,7 +101,7 @@ npm run verify   # 542 assertions, all green, run against the real modules (no m
 | `src/client/pinlock.ts` | 本機 PIN 鎖定包裹（jr1p.，開啟時鎖定） |
 | `src/client/bip39.ts` | 復原套件 24 詞 ⇄ hex64 轉寫層（BIP39，零依賴自製） |
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
-| `src/server/auth.ts` | 零知識 auth 核心：PH1→PH2 login 動線、入庫格式驗證、包裹欄組成對（pair 檢查 pickKeyPackage）；PH2 UNIQUE 衝突與 session 撤銷＝呼叫端職責 |
+| `src/server/auth.ts` | 零知識 auth 核心：PH1→PH2 login 動線、入庫格式驗證、包裹欄組成對（pair 檢查 pickKeyPackage）；PH2 UNIQUE 衝突與 session 撤銷＝呼叫端職責；PH2 落庫形派生 `AuthStore.ph2Of?`（optional，0.4.0）＝pepper 收口注入點（未注入＝`sha256Hex(PH1)` 單查零變） |
 | `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）＋幽靈守衛查表接線已內建 loginRouteCore——fork 只需配 `ladderLookup` store＋0011 migration（未配置＝單查行為零變） |
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效；IPv6 鍵經 `normalizeRateIp` 聚合至 /64；IPv4-mapped 位址回點分 IPv4 鍵（＝原生同 /32 鍵）） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
@@ -429,6 +429,18 @@ single-lookup behavior of ≤0.2.3. Forks adopt the guard by configuring `ladder
 on their store (the tacet reference: `d1AuthStore`) and applying `migrations/0011-ph2-ladder.sql`
 — the lookup itself never writes (inserts stay on the `rekeyWithLadder` migration path,
 deletes on the fork's delete-account flow).
+
+**PH2 pepper injection (0.4.0, J2b).** The PH2 stored-value derivation is now injectable via
+the optional `AuthStore.ph2Of?(ph1Hex) → Promise<string>`: when a fork injects a peppered
+form (tacet: `HMAC-SHA256(PH2_PEPPER, sha256Hex(PH1))`) `loginRouteCore` runs a dual-read
+migration window — current value `ph2Of(PH1)` first (pepper-closed), then the legacy
+`sha256(PH1)` form + ladder guard on a miss; ghost account creation always takes the
+new form `createUser(ph2Of(PH1))` so fresh accounts are pepper-closed at rest. **Uninjected
+(`undefined`) is byte-identical to the 0.3.x single `sha256Hex(PH1)` lookup** (sibling-fork
+zero-impact iron rule; the optional field means a fork pinned to 0.3.5 builds unchanged).
+The opportunistic rewrite of a legacy-form hit to the new form is fork-owned (this layer is
+write-free); `ph2Of` throwing is surfaced (fail-closed, not fail-open — a missing/failed
+pepper read is a loud 5xx, never a silent downgrade to the un-peppered form).
 
 **Opt-in primitives.** Optional contracts (`cipherGuest` / `wrapDual` / `wrapShare` / `pinLock` /
 `cipherAttach` / `cipherLocal` / `wrap4` / `wrapDual4` / `wrapLocal` / `wrapRec` (paired with
