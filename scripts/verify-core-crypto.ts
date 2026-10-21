@@ -23,6 +23,7 @@ import {
   storeLocalWrap,
   clearLocalWrap,
   buildBindPayload,
+  buildBindPayload4,
   openNoteKey,
   unwrapNoteKey,
   unwrapNoteKeyWithRecToken,
@@ -170,7 +171,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21 };
+const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21, 31: 7 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -4094,6 +4095,98 @@ secOpen(30, '[30] 限流粗桶第二層＋全站登入計數＋fail-open 記憶�
 }
 }
 
+// ── 31. buildBindPayload4（jr4w. Argon 世代綁定四件套：J8 外審收口） ─────────
+//
+// 動機（J8）：舊形 buildBindPayload 的 wrapped 走 jr1w.（PBKDF2-SHA256 600k——
+// 對 GPU 離線 oracle 友善）；綁定/匯出建檔面升 Argon2id＝每猜成本升一至兩個
+// 數量級。rec 腿契約零動（recToken 256-bit 實體因子——套件強度本無意義）。
+// 雙配置面：pass 段吃 Argon3Config（wrap4 守衛）、rec 段吃 NoteCryptoConfig。
+
+secOpen(31, '[31] buildBindPayload4（jr4w. Argon 世代綁定四件套：J8——前綴/roundtrip/毒化/家族面）'); if (secEnter(31)) {
+const TACET4_31: Argon3Config = { wrap4: 'jr4w.' };
+const bind4 = await buildBindPayload4(TACET, TACET4_31, noteKey, pass, recToken, identityA);
+// ① 四件套形面＋pass 段 Argon 前綴（jr4w. 只 carrying Argon 派生——PBKDF2 面零接觸）
+await A('[31] bind4 四件套形面：wrapped 前綴 jr4w.＋salt hex32（pass 段隨機鹽）＋recTokenHash=sha256(recToken) 恆等',
+  bind4.wrapped.startsWith('jr4w.')
+  && /^[0-9a-f]{32}$/.test(bind4.salt)
+  && bind4.wrappedRec.length > 0
+  && bind4.recTokenHash === (await recTokenHash(recToken)));
+// ② pass 段 roundtrip：unwrapNoteKey4 救回 origRaw（Argon KDF 行為面——PBKDF2 解同 blob 恆 null）
+await A('[31] bind4 pass 段 roundtrip：unwrapNoteKey4(jr4w. blob, pass, salt) = 原始 noteKey',
+  (async () => {
+    const k = await unwrapNoteKey4(TACET4_31, bind4.wrapped, pass, bind4.salt);
+    if (k === null) return false;
+    return hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) === origRaw;
+  })());
+// ③ rec 段 roundtrip：rec 腿契約零動——unwrapNoteKeyWithRecToken 救回 origRaw
+await A('[31] bind4 rec 段 roundtrip：unwrapNoteKeyWithRecToken(wrappedRec, recToken, identity) = 原始 noteKey（rec 腿零動承載）',
+  (async () => {
+    const k = await unwrapNoteKeyWithRecToken(TACET, bind4.wrappedRec, recToken, identityA);
+    if (k === null) return false;
+    return hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) === origRaw;
+  })());
+// ④ 兩段 salt 同源帳：回傳 salt＝pass 段（wrapNoteKey4）隨機鹽 hex 形（rec 腿 salt 定值不回傳）
+await A('[31] bind4 salt 面＝pass 段隨機鹽（hex32；rec 腿定值鹽不回傳）',
+  /^[0-9a-f]{32}$/.test(bind4.salt) && bind4.salt.length === 32);
+// ⑤ 拷貝樹毒化：pass 段 KDF 對調 swap（wrapNoteKey4→wrapNoteKey 直呼＝PBKDF2 回歸）
+// ——designated 真翻＝roundtrip（jr1w. blob 經 unwrapNoteKey4 前綴守衛 null）＋前綴形面；
+// 還原回綠＝出生即棄樹上 byte-exact 還原（零殘毒）。
+{
+  const getBuiltin31 = (id: string): unknown =>
+    (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+  const cp31 = getBuiltin31('node:child_process') as { execFileSync?: (cmd: string, args: string[], opts: { cwd: string; encoding: string; stdio: unknown[]; env?: Record<string, string>; timeout?: number }) => string } | undefined;
+  const os31 = getBuiltin31('node:os') as { tmpdir?: () => string } | undefined;
+  const fs31 = getBuiltin31('node:fs') as {
+    rmSync?: (p: string, o?: { recursive: boolean; force: boolean }) => void;
+    cpSync?: (a: string, b: string, o?: { recursive: boolean; filter?: (src: string) => boolean }) => void;
+    readFileSync?: (p: string, e?: string) => string; writeFileSync?: (p: string, c: string, e?: string) => void;
+    mkdtempSync?: (p: string) => string;
+  } | undefined;
+  const inner31 = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.POISON_GATE_INNER === '1';
+  if (!cp31?.execFileSync || !fs31?.mkdtempSync || !fs31.cpSync || !os31?.tmpdir || inner31) {
+    await A('[31] 毒化矩陣載體就緒（node 內建模組在場；內層遞迴由 sentinel 跳過＝正常；缺席＝顯性 FAIL）', inner31, 'env unavailable AND not inner');
+  } else {
+    // 路徑 helper 與 [16] 同形（resolve＝literal 正規化：'scripts/..' 由 OS 解析——
+    // cpSync 對目錄源＋新目錄 dest 合併內容入 dest 根；禁自造 resolve 語意）。
+    const path31 = {
+      join: (...parts: string[]): string => parts.join('/').replace(/\/{2,}/g, '/'),
+      resolve: (...parts: string[]): string => parts.join('/').replace(/\/\.(?=\/|$)/g, '').replace(/\/{2,}/g, '/'),
+    };
+    const repoRoot31 = path31.resolve(new URL('.', import.meta.url).pathname, '..'); // repo root 錨定（禁 cwd 依賴）
+    const coreNM31 = path31.resolve(new URL('.', import.meta.url).pathname, '../node_modules');
+    const gitNMSkip31 = (src: string): boolean => src === '.git' || src.endsWith('/.git') || src.includes('/.git/') || src === 'node_modules' || src.endsWith('/node_modules') || src.includes('/node_modules/');
+    const tree31 = fs31.mkdtempSync!(path31.join(os31.tmpdir!(), 'core-poison31-'));
+    fs31.cpSync!(repoRoot31, tree31, { recursive: true, filter: (src: string) => !gitNMSkip31(src) });
+    fs31.rmSync!(path31.join(tree31, 'node_modules'), { recursive: true, force: true });
+    cp31.execFileSync('ln', ['-s', coreNM31, path31.join(tree31, 'node_modules')], { cwd: tree31, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const runGate31 = (): { rc: number; out: string } => {
+      // 內層 --only 31＝本段快跑；POISON_GATE_INNER sentinel＝[16]/[18]/[31] 遞迴防線
+      try { return { rc: 0, out: cp31.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts', '--only', '31'], { cwd: tree31, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(process as unknown as { env: Record<string, string> }).env, POISON_GATE_INNER: '1' }, timeout: 240000 }) }; }
+      catch (e: unknown) { const err = e as { stdout?: string; stderr?: string; status?: number }; return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') }; }
+    };
+    const p31 = path31.join(tree31, 'src/client/note-crypto.ts');
+    const src31 = fs31.readFileSync!(p31, 'utf8');
+    const needle31 = "  const [w4, wrappedRec] = await Promise.all([\n    wrapNoteKey4(cfg4, noteKey, passphrase),\n    wrapNoteKeyWithRecToken(cfg, noteKey, recToken, identity),\n  ]);";
+    const mut31 = src31.split(needle31).length - 1;
+    fs31.writeFileSync!(p31, src31.split(needle31).join("  const [w4, wrappedRec] = await Promise.all([\n    wrapNoteKey(cfg, noteKey, passphrase),\n    wrapNoteKeyWithRecToken(cfg, noteKey, recToken, identity),\n  ]);"), 'utf8');
+    const g31 = runGate31();
+    const red31 = mut31 === 1 && g31.rc === 1
+      && g31.out.split('\n').some((l: string) => l.includes('[31] bind4 pass 段 roundtrip') && l.trimStart().startsWith('✗'))
+      && g31.out.split('\n').some((l: string) => l.includes('[31] bind4 四件套形面') && l.trimStart().startsWith('✗'));
+    await A('[31] 毒化（pass 段 KDF swap→PBKDF2）→ 前綴形面＋roundtrip 真翻（designated；正碼此面全綠）', red31, 'mut=' + mut31 + ' rc=' + g31.rc);
+    fs31.writeFileSync!(p31, src31, 'utf8');
+    const g32 = runGate31();
+    fs31.rmSync!(tree31, { recursive: true, force: true });
+    await A('[31] 毒化還原回綠＋樹出生即棄（byte-exact 還原；本 repo 樹零接觸）', g32.rc === 0, 'rc=' + g32.rc);
+  }
+}
+// ⑥ 家族表／barrel 面：buildBindPayload4 公開匯出（barrel＝子路徑同一函式——單一真相）
+await A('[31] index barrel 匯出 buildBindPayload4（＝note-crypto 子路徑同一函式；舊形 buildBindPayload 照留＝舊檔案兼容面）', await (async () => {
+  const src = (await import('../src/index.ts')) as unknown as { buildBindPayload4?: unknown; buildBindPayload?: unknown };
+  return typeof src.buildBindPayload4 === 'function' && typeof src.buildBindPayload === 'function' && src.buildBindPayload4 === buildBindPayload4;
+})());
+}
+
 secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級帳面顯形）'); if (secEnter(24)) {
   await A('[24] --only 解析契約（全跑態）：spec 缺席＝onlySet 空集＝secEnter 恆真（CI 形契約不變——npm run verify 全帳；--only 態本面恆真跳過＝帳面由次面承載）',
     !onlyMode() ? (onlySpecRaw === null && parseOnly('').err === 'ERR_ONLY_SPEC_EMPTY' && secEnter(1) && secEnter(23)) : true);
@@ -4126,7 +4219,7 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const secTotal = secOrder.reduce((a, n) => a + (secCases[n] ?? 0), 0);
 const ranSecs = secOrder.filter((n) => (secRan.get(n) ?? 0) > 0);
 const selTotal = secOrder.filter((n) => !onlyMode() || onlySet.has(n) || n === 24 || n === 25).reduce((a, n) => a + (secCases[n] ?? 0), 0);

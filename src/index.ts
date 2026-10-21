@@ -21,6 +21,7 @@ export {
   storeLocalWrap,
   clearLocalWrap,
   buildBindPayload,
+  buildBindPayload4,
   ph1Of,
   normalizePin,
   normalizePassphrase,

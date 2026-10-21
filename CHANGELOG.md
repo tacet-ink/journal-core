@@ -5,6 +5,34 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.4.2] — 2026-10-22
+
+**Added** — `buildBindPayload4`（`src/client/note-crypto.ts`，0.4.2，J8 外審收口）：綁定/匯出
+建檔面的金鑰包裹四件套升 Argon2id 世代——pass 段 KDF 由 `jr1w.`（PBKDF2-SHA256 600k）改走
+`wrapNoteKey4`（`jr4w.` Argon2id m=64MiB t=3 p=1；NFKC 正規化入口在 argon2 派生層）。rec 腿
+（recovery 套件）契約零動（`wrapNoteKeyWithRecToken` 照例：recToken 256-bit 實體因子，世代照
+cfg 兩欄）——「一個前綴一份契約」，`jr4w.` 只承載 Argon 派生。
+
+- `buildBindPayload4(cfg, cfg4, noteKey, passphrase, recToken, identity)`：雙配置面
+  （`NoteCryptoConfig`＋`Argon3Config`）；pass 段吃 `wrap4` 在場守衛（未配置
+  `ERR_JR4W_NOT_CONFIGURED` fail-closed）、rec 段吃 `NoteCryptoConfig`；兩段 `Promise.all`
+  並行（串行形＝效能形契約違規，[14]/[31] 雙段錨面）；回傳形與舊形同構
+  `{ wrapped, salt, wrappedRec, recTokenHash }`（salt＝pass 段隨機鹽 hex32；recTokenHash＝
+  `sha256(recToken)` 恆等）。
+- 動機（J8）：舊形 `buildBindPayload` 的 wrapped 走 `jr1w.` PBKDF2，對 GPU 離線 oracle 友善；
+  綁定/匯出建檔面升 Argon2id 後每猜成本升一至兩個數量級。`jr4w.` 前綴本身 0.4.0 已上（
+  `wrapNoteKey4` 既有），本卡收口的是**綁定組裝面**換 KDF 世代。
+- 舊形 `buildBindPayload` 標 `@deprecated J8（2026-10-21）`：舊檔案兼容面留置（讀舊寫新契約
+  面永不變），新建綁定/匯出檔面請改用 `buildBindPayload4`。
+- `src/index.ts` barrel 增匯出 `buildBindPayload4`。
+- 閘 [31] 新增（`scripts/verify-core-crypto.ts`）：`buildBindPayload4` 前綴/roundtrip/毒化/
+  家族面 7 斷言——四件套形面（`jr4w.` 前綴＋salt hex32＋recTokenHash 恆等）、pass 段
+  roundtrip（`unwrapNoteKey4` 回收原始 noteKey）、rec 段 roundtrip（`wrapNoteKeyWithRecToken`
+  零動承載）、salt 面＝pass 段隨機鹽、毒化矩陣（pass 段 KDF swap→PBKDF2 於隔離樹
+  →前綴形面＋roundtrip 真翻＋byte-exact 還原回綠）、index barrel 同一函式。毒化矩陣載體
+  與 [16]/[18] 同形（`POISON_GATE_INNER` sentinel 遞迴防線＋`cpSync` 隔離樹＋symlink
+  node_modules）。帳 575→582。
+
 ## [0.4.1] — 2026-10-21
 
 **Added** — 限流第二層粗桶（coarse bucket）＋全站登入計數＋fail-open 記憶體退避（`src/server/ratelimit.ts`，

@@ -28,6 +28,11 @@
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
 import type { KeyStore } from './keys.js';
+// buildBindPayload4 的 pass 段（jr4w. Argon 世代）：static import 與 argon2.ts→本檔
+// 成 ESM 循環，但本檔只在呼叫期（兩模塊皆已初始化）消費 wrapNoteKey4／Argon3Config
+// ——呼叫前頂層零觸發＝循環安全（與 argon2.ts 本檔 import 的 sealNoteKey 等同態；
+// 閘 [31] 行為面真模組直載即載體，禁鏡像）。
+import { wrapNoteKey4, type Argon3Config } from './argon2.ts';
 
 export interface NoteCryptoConfig {
   /** guest 時代 KDF 前綴，如 'journal-note-u1'。 */
@@ -572,6 +577,10 @@ async function deriveRecLegacyKek(cfg: NoteCryptoConfig, recToken: string, ident
  * AES-GCM derive 佔 600k 迴圈 99%，兩段 wrapped 各自隨機 iv（pass 段另隨機鹽 16B；rec 腿
  * KEK 鹽定值、回傳 salt 來自 pass 腿 w1）——逐位等值帳由
  * 「兩段各自與 wrapNoteKey 直呼相等」承載。
+ *
+ * @deprecated J8（2026-10-21）：新建綁定/匯出檔面請改用 buildBindPayload4
+ *（pass 段 KDF 升 Argon2id——jr1w. PBKDF2 對 GPU 離線 oracle 友善；舊形留置＝
+ * 舊檔案兼容面，契約面永不變）。
  */
 export async function buildBindPayload(
   cfg: NoteCryptoConfig,
@@ -587,6 +596,43 @@ export async function buildBindPayload(
   return {
     wrapped: w1.wrapped,
     salt: w1.salt,
+    wrappedRec,
+    recTokenHash: await recTokenHash(recToken),
+  };
+}
+
+/**
+ * 綁定請求的金鑰包裹四件套——Argon 世代（jr4w.；J8 外審收口，2026-10-21）。
+ *
+ * 與 buildBindPayload 同構，只換 pass 段 KDF：wrapped 改走 wrapNoteKey4
+ * （Argon2id m=64MiB t=3 p=1，NFKC 正規化入口在 argon2 派生層——raw 密語進、
+ * 呼叫端零正規化）；rec 腿契約零動（wrapNoteKeyWithRecToken 照例：recToken
+ * 256-bit 實體因子、世代照 cfg 兩欄——jr1r.×HKDF 或未配置世代借 jr1w. 形
+ * ＋PBKDF2）。雙配置面（cfg＋cfg4）：pass 段吃 Argon3Config（wrap4 在場
+ * 守衛，未配置 ERR_JR4W_NOT_CONFIGURED fail-closed）、rec 段吃 NoteCryptoConfig
+ * ——兩段各自獨立（pass 鹽隨機 16B、rec 鹽照 cfg 契約），Promise.all 並行
+ *（串行形＝效能形契約違規，[14]/[31] 雙段錨面）。
+ *
+ * 動機（J8）：舊形 buildBindPayload 的 wrapped 走 jr1w.（PBKDF2-SHA256 600k）
+ * ——對 GPU 離線 oracle 友善；綁定/匯出建檔面升 Argon2id 後每猜成本升一至兩
+ * 個數量級。rec 面（recovery 套件）強度本無意義（recToken 是 256-bit 實體
+ * 因子）＝零動；「一個前綴一份契約」：jr4w. 只 carrying Argon 派生。
+ */
+export async function buildBindPayload4(
+  cfg: NoteCryptoConfig,
+  cfg4: Argon3Config,
+  noteKey: CryptoKey,
+  passphrase: string,
+  recToken: string,
+  identity: string,
+): Promise<{ wrapped: string; salt: string; wrappedRec: string; recTokenHash: string }> {
+  const [w4, wrappedRec] = await Promise.all([
+    wrapNoteKey4(cfg4, noteKey, passphrase),
+    wrapNoteKeyWithRecToken(cfg, noteKey, recToken, identity),
+  ]);
+  return {
+    wrapped: w4.wrapped,
+    salt: w4.salt,
     wrappedRec,
     recTokenHash: await recTokenHash(recToken),
   };
