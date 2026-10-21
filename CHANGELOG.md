@@ -23,9 +23,10 @@
   攻擊者換 isolate 同向重置、語意一致；清後計數從 0 重起＝D1 故障期短暫退避失效窗，故障期
   本就非封鎖面）。
 - **單窗路徑退避披露（review r1 MINOR-1，安全向收口）**：`loginRouteCore` **單窗**路徑
-  （未接 `coarseRate`）的 D1 故障面＝`0.3.x` 完全放行 → `0.4.1` per-isolate 記憶體帽
-  （`{ fallbackInMemory: true }` 兩路徑皆傳）——coarseRate 在場（雙窗）路徑行為不變。
-  0.3.x pin 呼叫端不受影響（pin 不隨 0.4.1 升級＝原行為）；跟隨升級的 `loginRouteCore`
+  （未接 `coarseRate`）的 D1 故障面＝`≤0.4.0` 完全放行 → `0.4.1` per-isolate 記憶體帽
+  （`{ fallbackInMemory: true }` 兩路徑皆傳）——雙窗（`fine+coarse` 皆傳）的計數行為不受本披露影響
+  （該形＝0.4.1 新載入面）。
+  ≤0.4.0 pin 呼叫端不受影響（pin 不隨 0.4.1 升級＝原行為）；跟隨升級的 `loginRouteCore`
   呼叫端＝限流表故障時從全放行收口為記憶體帽（非全站 429，與 2026-09-06 fail-open 裁定的
   auth 收口面向一致）。
 - `checkRateLadder(env, fine, coarse, ip, opts?)`：雙窗原子計數（細窗 `normalizeRateIp`＋粗窗
