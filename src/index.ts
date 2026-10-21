@@ -82,12 +82,21 @@ export {
   loginRouteCore,
   errResponse,
   AUTH_RATE,
+  AUTH_RATE_COARSE,
   type AuthRow,
   type AuthStore,
   type CipherFormats,
   type KeyPackage,
 } from './server/auth.ts';
-export { checkRate, normalizeRateIp, type RateWindow } from './server/ratelimit.ts';
+export {
+  checkRate,
+  checkRateLadder,
+  bumpRate,
+  normalizeRateIp,
+  normalizeRateIpCoarse,
+  globalLoginBump,
+  type RateWindow,
+} from './server/ratelimit.ts';
 export { corsResponse, CORS_HEADERS } from './server/cors.ts';
 export {
   sha256Hex,
