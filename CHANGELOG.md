@@ -18,7 +18,16 @@
   `RETURNING` 異形（`n` 非有限數字）時，`fallbackInMemory` 在場退 per-isolate 記憶體計數
   （`Map<"${table}:${key}", {start, count}>`，健康路徑零成本）；**未傳 opts＝原 fail-open 完全
   放行**（其他端點零行為變鐵律）。誠實面：isolate 本地態，換 isolate 即重置（攻擊者換 isolate
-  亦重置）＝退避非封鎖。
+  亦重置）＝退避非封鎖。review r1 MINOR-2 收口：記憶體計數器 size 過 `65536` 鍵整 Map 清
+  （D1 長故障期大 IPv6 段攻擊者造大量 distinct 粗/細鍵推 isolate 記憶體的無界面——整清＝
+  攻擊者換 isolate 同向重置、語意一致；清後計數從 0 重起＝D1 故障期短暫退避失效窗，故障期
+  本就非封鎖面）。
+- **單窗路徑退避披露（review r1 MINOR-1，安全向收口）**：`loginRouteCore` **單窗**路徑
+  （未接 `coarseRate`）的 D1 故障面＝`0.3.x` 完全放行 → `0.4.1` per-isolate 記憶體帽
+  （`{ fallbackInMemory: true }` 兩路徑皆傳）——coarseRate 在場（雙窗）路徑行為不變。
+  0.3.x pin 呼叫端不受影響（pin 不隨 0.4.1 升級＝原行為）；跟隨升級的 `loginRouteCore`
+  呼叫端＝限流表故障時從全放行收口為記憶體帽（非全站 429，與 2026-09-06 fail-open 裁定的
+  auth 收口面向一致）。
 - `checkRateLadder(env, fine, coarse, ip, opts?)`：雙窗原子計數（細窗 `normalizeRateIp`＋粗窗
   `normalizeRateIpCoarse` 各入各表），任一窗超額即 false（計數不封頂語意兩窗照舊，超額發兩窗
   皆照實累計＝審計可見）；單窗 D1 故障僅該窗退記憶體，健康窗真 DB 照計（非整 ladder 429 亦非

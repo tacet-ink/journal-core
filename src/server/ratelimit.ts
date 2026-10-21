@@ -71,7 +71,11 @@ export function isRateAllowed(count: number, max: number): boolean {
 
 /** @internal（0.4.1 J7）。per-isolate 記憶體退避計數器（module-scope；isolate 生命週期恆有效、
  * 跨 isolate 失效＝攻擊者換 isolate 也重置的誠實面）。key＝`${table}:${rateKey}`。
- * 只在 fallbackInMemory 且 D1 故障/異形時觸碰——健康路徑零成本、零寫入面。 */
+ * 只在 fallbackInMemory 且 D1 故障/異形時觸碰——健康路徑零成本、零寫入面。
+ * 無上限/無掃尾收口（r1 MINOR-2）：D1 長故障期大 IPv6 段攻擊者可造大量 distinct 粗/細鍵推
+ * isolate 記憶體——size 過 MEM_FALLBACK_MAX（65536）整 Map 清（＝攻擊者換 isolate 同向重置，
+ * 語意一致；誠實面：清後計數從 0 重起＝D1 故障期短暫退避失效窗，故障期本就非封鎖面）。 */
+const MEM_FALLBACK_MAX = 65536;
 const memFallback = new Map<string, { start: number; count: number }>();
 
 function memBump(key: string, windowMs: number, max: number, now: number): boolean {
@@ -79,6 +83,7 @@ function memBump(key: string, windowMs: number, max: number, now: number): boole
   const start = e && now - e.start < windowMs ? e.start : now;
   const count = e && now - e.start < windowMs ? e.count + 1 : 1;
   memFallback.set(key, { start, count });
+  if (memFallback.size > MEM_FALLBACK_MAX) memFallback.clear();
   return isRateAllowed(count, max);
 }
 

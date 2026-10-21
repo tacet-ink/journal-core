@@ -69,7 +69,7 @@ run: `npm install @tacet-ink/journal-core && node example.mts`（0.3.4 起；Nod
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 542 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
+npm run verify   # 575 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
 ```
 
 上例為高階 Vault API；錯誤碼見[例外契約](#例外契約錯誤碼語意)（`VaultError` 表）。低階原語範例（note-crypto 兩時代加解密、前綴自配）與完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
@@ -103,7 +103,7 @@ npm run verify   # 542 assertions, all green, run against the real modules (no m
 | `src/client/keys.ts` | 品牌前綴 localStorage 命名空間 |
 | `src/server/auth.ts` | 零知識 auth 核心：PH1→PH2 login 動線、入庫格式驗證、包裹欄組成對（pair 檢查 pickKeyPackage）；PH2 UNIQUE 衝突與 session 撤銷＝呼叫端職責；PH2 落庫形派生 `AuthStore.ph2Of?`（optional，0.4.0）＝pepper 收口注入點（未注入＝`sha256Hex(PH1)` 單查零變） |
 | `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）＋幽靈守衛查表接線已內建 loginRouteCore——fork 只需配 `ladderLookup` store＋0011 migration（未配置＝單查行為零變） |
-| `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效；IPv6 鍵經 `normalizeRateIp` 聚合至 /64；IPv4-mapped 位址回點分 IPv4 鍵（＝原生同 /32 鍵）） |
+| `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效；IPv6 鍵經 `normalizeRateIp` 聚合至 /64；IPv4-mapped 位址回點分 IPv4 鍵（＝原生同 /32 鍵）；0.4.1 第二層粗桶 `normalizeRateIpCoarse`（/48|/24）＋`checkRateLadder` 雙窗＋`bumpRate` opts.fallbackInMemory 記憶體退避＋`globalLoginBump` 全站計數——粗桶/全站計數表由呼叫端自建表＋GC 承載（tacet maintenance 母型），core 不代建） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
 
 發行形（0.3.0 起）：`dist/`＝tsc 原生 emit 的 ESM `.js`＋`.d.ts`，`exports` 全部子路徑指向 dist。
@@ -153,7 +153,7 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 
 ```sh
 npm ci --ignore-scripts
-npm run verify   # 542 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 575 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -165,7 +165,7 @@ npm run verify   # 542 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   542 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
+                 #   575 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
                  # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
                  # ＋高階 Vault API [27]（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）
@@ -473,7 +473,7 @@ prefix family (`families.json`), known-answer vectors (RFC 9106 Argon2id, the ga
 `scripts/generate-vectors.ts` against the real primitives and committed as frozen evidence; the
 verify gate checks their presence and shape (section [26]) and does not regenerate them.
 
-**Verification.** `npm run verify` runs 542 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
+**Verification.** `npm run verify` runs 575 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
 login ladder-guard behavior suite (external audit #8), and presence/shape checks for the format
