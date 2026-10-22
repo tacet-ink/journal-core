@@ -23,7 +23,8 @@ import {
 import {
   wrapNoteKey3, unwrapNoteKey3, wrapNoteKey4, unwrapNoteKey4, wrapNoteKeyShare3, unwrapNoteKeyShare3,
   wrapNoteKeyDual3, unwrapNoteKeyDual3, wrapNoteKeyDual4, unwrapNoteKeyDual4,
-  verifyArgonKat, derivePh1Argon, derivePh1ArgonV3, ARGON_RFC9106_EXPECTED, ARGON_RFC9106_PARAMS,
+  verifyArgonKat, verifyArgonKatProd, derivePh1Argon, derivePh1ArgonV3, ARGON_RFC9106_EXPECTED, ARGON_RFC9106_PARAMS,
+  ARGON_PROD_PARAMS, ARGON_PROD_EXPECTED,
   ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM, ARGON_TAG_LEN, PH1_V2_SALT, PH1_V3_SALT,
   type Argon3Config,
 } from '../src/client/argon2.ts';
@@ -272,6 +273,7 @@ async function rawOfGuest(): Promise<string> {
 
 // ── KAT ──────────────────────────────────────────────────────────────────────
 if (!(await verifyArgonKat())) fail('RFC 9106 KAT 不符（載體不正確）');
+if (!(await verifyArgonKatProd())) fail('正式參數 KAT 不符（prod 參數 m=64MiB t=3 p=1 載體不正確；kat.json argon_prod 凍結向量漂移）');
 const frozen: Record<string, unknown>[] = [];
 async function frozenBlob(source: string, prefix: string, wire: string, inputs: Record<string, unknown>, expected: string, open: () => Promise<CryptoKey | null>): Promise<void> {
   if ((await rawOf(await open())) !== expected) fail(`凍結 blob ${prefix}（${source}）解包不符`);
@@ -347,6 +349,12 @@ write('kat.json', {
     password_hex: ARGON_RFC9106_PARAMS.passwordByte.toString(16).padStart(2, '0').repeat(ARGON_RFC9106_PARAMS.passwordLen),
     salt_hex: '00'.repeat(ARGON_RFC9106_PARAMS.saltLen), secret: null, associated_data: null,
     expected_tag_hex: ARGON_RFC9106_EXPECTED,
+  },
+  argon_prod: { // J14a：正式參數 KAT（prod m=64MiB t=3 p=1）——確定性輸入（非生產密語/鹽），僅 node 閘面跑
+    algorithm: 'Argon2id', version: '0x13', memory_kib: ARGON_PROD_PARAMS.memoryKib, iterations: ARGON_PROD_PARAMS.iterations,
+    parallelism: ARGON_PROD_PARAMS.parallelism, tag_len: ARGON_PROD_PARAMS.tagLen,
+    password: ARGON_PROD_PARAMS.password, salt_hex: '00'.repeat(ARGON_PROD_PARAMS.saltLen),
+    expected_tag_hex: ARGON_PROD_EXPECTED,
   },
   frozen_blobs: frozen,
   credentials,

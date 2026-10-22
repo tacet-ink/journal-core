@@ -361,6 +361,7 @@ content 家族以 `inputs.plaintext`／`inputs.aad` 解密須得回原文。
 | 欄位 | 意義 |
 | --- | --- |
 | `rfc9106` | Argon2id RFC 9106 §5.3 參數：`rfc9106.algorithm`、`rfc9106.version`、`rfc9106.memory_kib`、`rfc9106.iterations`、`rfc9106.parallelism`、`rfc9106.tag_len`、`rfc9106.password_hex`、`rfc9106.salt_hex`、`rfc9106.secret`／`rfc9106.associated_data`（恆 null），與 `rfc9106.expected_tag_hex` |
+| `argon_prod` | 正式參數 KAT（J14a：prod 參數 m=64MiB t=3 p=1，僅 node 閘面跑——載入延遲契約下瀏覽器 KAT 維持 `rfc9106` 小參數）：`argon_prod.algorithm`、`argon_prod.version`、`argon_prod.memory_kib`、`argon_prod.iterations`、`argon_prod.parallelism`、`argon_prod.tag_len`、`argon_prod.password`（確定性測試輸入，非生產密語）、`argon_prod.salt_hex`（恆 16B 0x00）、與 `argon_prod.expected_tag_hex` |
 | `frozen_blobs` | 驗證閘凍結 blob（[14] `jr2w.`、[17] `jr3w.`／`jr3d.`／`jr4w.`／`jr4d.`、[20] `jr1r.`／`jr1w.` 復原舊契約）：`frozen_blobs[].prefix`、`frozen_blobs[].wire`、`frozen_blobs[].payload_len`、`frozen_blobs[].inputs`（解包輸入）、`frozen_blobs[].expected_note_key_hex`、`frozen_blobs[].source`（閘段號） |
 | `credentials` | §5 憑證派生樣本：`credentials[].kind`、`credentials[].input`、`credentials[].input_nfkc`（僅 `ph1_v3`：`input` 經 `normalizePassphrase` 後的值）、`credentials[].salt`、`credentials[].expected_hex` |
 

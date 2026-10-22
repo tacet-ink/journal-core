@@ -5,6 +5,42 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.4.3] — 2026-10-22
+
+**Changed** — 安全文件「不可驗證字樣」改實測公開基準（J14 外審 D1：誠實面收口）：
+`src/client/pinlock.ts`「離線爆破 6 位數字 ≈ 單 GPU 數天」→ RTX 4090 公開基準
+（PBKDF2-SHA256 ≈8.8e9 iter/s）：6 位純數字 ≈68 秒、8 位數字 ≈1.9 小時、6 碼小寫英數
+≈41 小時（PoC C 實證底：4 位 16 核 CPU 28.7s 命中）＝**門檻不是牆**（設計裁定不變：
+鎖定閘取即時性、非登入 oracle 戰場）。`src/client/argon2.ts`「上升一至兩個數量級」→
+對 PBKDF2-SHA256 600k 的 GPU 實測/估計倍數 ≈10-20 倍（記憶體頻寬受限；PoC B CPU 面
+SHA-256d vs Argon2id ≈5×10⁴）＋覆蓋界線（僅 Argon 派生的密語指紋面；wire 層
+`SHA-256(pass)`（J2 legacy）不受它保護）。README「界限（誠實面）」增四行：PIN 類保護
+實測值、分享面金鑰範圍（v0.3.6 起一次性 `shareKey`）、Argon2id 成本倍數＋legacy PH1
+wire 指紋面（tacet S3 已 v3-first；core `loginRouteCore` 相容面照留）。
+
+**Added** — 正式參數 KAT（J14a：prod 參數 m=64MiB t=3 p=1）：`kat.json` 增
+`argon_prod` 組（確定性輸入 pwd/salt、非生產密語/鹽）＋`src/client/argon2.ts` 新 export
+`verifyArgonKatProd`＋`ARGON_PROD_PARAMS`／`ARGON_PROD_EXPECTED` 凍結向量（node:crypto
+真原語產生，與 `scripts/generate-vectors.ts` 同源——gate 載體 node 端走 node:crypto
+原生＝同一路徑）。瀏覽器載體 KAT 維持 RFC 小參數（載入延遲契約：wasm ~180ms 一次，
+雙份 KAT＝載入面翻倍）——正式 64MiB 路「零向量」面收口（kat.json rfc9106 memory_kib=32
+小參數限定 vs 新組 65536）。gate [7] 增正式參數 KAT 1 案、[26] kat 對帳段增
+`argon_prod` 對帳行（欄位名＋參數逐位對 `ARGON_PROD_PARAMS`／`ARGON_PROD_EXPECTED`）。
+
+**Changed** — `secCases` 帳面修正＋「超額也 RED」補齒（J14b：段帳=執行帳契約完整形）：
+`[16]` 15→17、`[2]` 7→9、`[7]` 27→28（J14a 新增）、`[12]` 66→69（J15 新增）；尾段
+段帳顯形 `ranN > 帳` 也 RED（原先只咬執行<帳——帳面過額無齒面收口）。帳 582→586。
+
+**Added** — `recHashStoredOf` 上 core 介面（J15：rec_hash 落庫形單一真相）：
+`src/server/auth.ts` 匯出 `recHashStoredOf(sent)`（=`'v2:'`＋sha256(wire 值)；參照
+tacet queries.ts 同形）＋`REC_HASH_MARK`；`AuthStore.getByRecHash` JSDoc 加「server 必須
+以 `recHashStoredOf(client 值)` 落庫／bind——禁原樣存 wire 值（DB 外洩＝復原證明外洩）」。
+tacet 改 import core 版（雙源收口）歸 S8。gate [12] 增落庫形 3 案（形＝標記＋sha256Hex
+同源＋定值凍結＋不同 wire 值恆異）。
+
+**Changed** — `SECURITY.md` 支援版本表：0.2.x→0.4.x 支援中＋0.3.x EOL（0.4.0 起，
+2026-10-20）——誠實歷史面（表格式兩行）。版本 0.4.2→0.4.3（bump 歸本卡；發布窗歸主 session）。
+
 ## [0.4.2] — 2026-10-22
 
 **Added** — `buildBindPayload4`（`src/client/note-crypto.ts`，0.4.2，J8 外審收口）：綁定/匯出
