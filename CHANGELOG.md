@@ -28,7 +28,7 @@ wire 指紋面（tacet S3 已 v3-first；core `loginRouteCore` 相容面照留�
 `argon_prod` 對帳行（欄位名＋參數逐位對 `ARGON_PROD_PARAMS`／`ARGON_PROD_EXPECTED`）。
 
 **Changed** — `secCases` 帳面修正＋「超額也 RED」補齒（J14b：段帳=執行帳契約完整形）：
-`[16]` 15→19（含 r1 U1 teeth 2 案）、`[2]` 7→9（0.3.5 起既有帳面漂移——本卡同步修正）、`[7]` 27→28（J14a 新增）、`[12]` 66→69（J15 新增）；尾段段帳顯形雙向也 RED（超額 ranN＞帳＋欠額 ranN＜帳；r1 MAJOR-1：0.4.3 首版只補超額齒＝半交付，卡前提「原先只咬執行＜帳」經 reviewer 一手毒化證實為錯——雙向皆 display-only；欠額齒抓「斷言被刪／循環吃空／段未進入」＝靜默驗證流失面；條件態豁免＝`--only` skip 段＋`POISON_GATE_INNER` 內層跑份毒化節自我跳過兩 guard）。帳 582→588。
+`[16]` 15→21（含 r1 U1 超額 teeth＋r2 U2 欠額 teeth 共 4 案）、`[2]` 7→9（0.3.5 起既有帳面漂移——本卡同步修正）、`[7]` 27→28（J14a 新增）、`[12]` 66→69（J15 新增）、`[25]` 4→5（r2 NIT-2：book 鍵雙向等值 teeth——缺鍵段兩 tooth 皆 `?? 0` 不咬面收口）；尾段段帳顯形雙向也 RED（超額 ranN＞帳＋欠額 ranN＜帳；r1 MAJOR-1：0.4.3 首版只補超額齒＝半交付，卡前提「原先只咬執行＜帳」經 reviewer 一手毒化證實為錯——雙向皆 display-only；欠額齒抓「斷言被刪／循環吃空／段未進入」＝靜默驗證流失面；條件態豁免 r2 MINOR-1 逐段收窄：`--only` 態僅 skip 段豁免（選中段欠向照咬——r1 整輪 `!onlyMode()` 過寬面已收）、`POISON_GATE_INNER` 內層跑份僅 sentinel 自我跳過段 [16]/[18]/[20]/[23]/[28]/[29]/[30]/[31] 豁免（內層 1 案 vs 外層 N 案＝設計中的條件態；內層非 sentinel 段欠向照咬＝U2 teeth 內層咬通面記錄承載））。帳基線勘誤（r2 MINOR-3）：main 真執行 580（book 578＋[16] 17/15、[2] 9/7 雙超額各 2——README@main 印 582＝舊帳顯形面）→ 0.4.3 帳面修正＋新案 itemized（[2]+2／[7]+1／[12]+3／[16]+6／[25]+1＝+13）＝**591**。
 
 **Added** — `recHashStoredOf` 上 core 介面（J15：rec_hash 落庫形單一真相）：
 `src/server/auth.ts` 匯出 `recHashStoredOf(sent)`（=`'v2:'`＋sha256(wire 值)；參照
