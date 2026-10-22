@@ -130,7 +130,7 @@ export const ARGON_TAG_LEN = 32; // 256-bit AES key
  *  由 scripts/generate-vectors.ts 呼叫真原語產生（kat.json `argon_prod`）；verifyArgonKatProd 同源。
  *  tagLen＝ARGON_TAG_LEN（派生本體固定輸出長）。 */
 export const ARGON_PROD_PARAMS = Object.freeze({
-  memoryKib: 65536, iterations: 3, parallelism: 1, tagLen: 32,
+  memoryKib: ARGON_MEMORY_KIB, iterations: ARGON_ITERATIONS, parallelism: ARGON_PARALLELISM, tagLen: ARGON_TAG_LEN,
   password: 'tacet-ph1-prod', saltLen: 16, // salt＝saltLen 位元組 0x00（與 RFC 小參數同慣例）
 } as const);
 

@@ -28,8 +28,7 @@ wire 指紋面（tacet S3 已 v3-first；core `loginRouteCore` 相容面照留�
 `argon_prod` 對帳行（欄位名＋參數逐位對 `ARGON_PROD_PARAMS`／`ARGON_PROD_EXPECTED`）。
 
 **Changed** — `secCases` 帳面修正＋「超額也 RED」補齒（J14b：段帳=執行帳契約完整形）：
-`[16]` 15→17、`[2]` 7→9、`[7]` 27→28（J14a 新增）、`[12]` 66→69（J15 新增）；尾段
-段帳顯形 `ranN > 帳` 也 RED（原先只咬執行<帳——帳面過額無齒面收口）。帳 582→586。
+`[16]` 15→19（含 r1 U1 teeth 2 案）、`[2]` 7→9（0.3.5 起既有帳面漂移——本卡同步修正）、`[7]` 27→28（J14a 新增）、`[12]` 66→69（J15 新增）；尾段段帳顯形雙向也 RED（超額 ranN＞帳＋欠額 ranN＜帳；r1 MAJOR-1：0.4.3 首版只補超額齒＝半交付，卡前提「原先只咬執行＜帳」經 reviewer 一手毒化證實為錯——雙向皆 display-only；欠額齒抓「斷言被刪／循環吃空／段未進入」＝靜默驗證流失面；條件態豁免＝`--only` skip 段＋`POISON_GATE_INNER` 內層跑份毒化節自我跳過兩 guard）。帳 582→588。
 
 **Added** — `recHashStoredOf` 上 core 介面（J15：rec_hash 落庫形單一真相）：
 `src/server/auth.ts` 匯出 `recHashStoredOf(sent)`（=`'v2:'`＋sha256(wire 值)；參照

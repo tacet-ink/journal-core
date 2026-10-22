@@ -168,18 +168,19 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
 // 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-12 實測 522 起逐版累加——0.4.2 落 582；
-// 0.4.3 增 [7] 正式參數 KAT 1 案＋[12] recHashStoredOf 落庫形 3 案＝586；超額也 RED（J14b）＝
-// 帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」）。
-// 帳面語意契約（逐段「案 X/帳」
-// 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
-// [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
-// 在本機樹由 [8]（登入憑證 Argon2id 派生）內登入 lane 的訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
+// 0.4.3 增 [7] 正式參數 KAT 1 案＋[12] recHashStoredOf 落庫形 3 案＋[16] U1 teeth 2 案＝588；
+// 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」）。
+// 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
+// 條件態未行使＝guard 豁免面（非 skip 態、非帳面虛報）：--only 態 skip 段 ranN=0 合法（onlyMode guard）；
+// POISON_GATE_INNER 內層跑份的 [16]/[18]/[20]/[28] 毒化節 sentinel 自我跳過（遞迴防線＝設計中的條件態）。
+// （MAJOR-1，J14b 完整形，2026-10-22 r1：0.4.3 首版只補超額齒＝半交付；卡前提「原先只咬執行<帳」錯
+// ——雙向皆 display-only；斷言被刪/循環吃空/段未進入＝靜默驗證流失，欠額齒即段帳存在的全部意圖。）
 // secEnter 跑行為脫鉤 secCases；secCases 鍵只承載段存在／帳面／--only 判準的登記義務
 //（secOpen(22,…) 無段標記行＝慣例 skip 段）。缺帳防線（teeth）：secRan 實跑段必已登記——
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 17, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21, 31: 7 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 19, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21, 31: 7 };
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -1917,6 +1918,22 @@ secOpen(16, '[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒�
         const g2 = runGate16();
         fs16!.rmSync!(tree16, { recursive: true, force: true });
         await A('[16] P6 還原回綠（出生即棄樹上還原）', g2.rc === 0, String(g2.rc));
+      }
+      // U1 超額補齒 teeth（MINOR-1，J14b 完整形——齒自身失效即咬）：gate 副本 [2] 帳面 9→8（−1）→
+      // 內層（POISON_GATE_INNER 跑份）[2] 照跑 9 案＞帳 8＝尾段超額 RED＋designated 訊息；欠額齒在內層
+      // 由 sentinel guard 豁免（[16]/[18]/[20]/[28] 毒化節自我跳過＝設計中的條件態，非 skip 態非帳面虛報）。
+      // byte-exact 還原（poison16 母型——reviewer poison 自證同形）。
+      {
+        mkTree();
+        const mutU1 = poison16('scripts/verify-core-crypto.ts', 'const secCases: Record<number, number> = { 1: 3, 2: 9,', 'const secCases: Record<number, number> = { 1: 3, 2: 8,');
+        const gU1 = runGate16();
+        const u1Designated = gU1.out.split('\n').some((l: string) => l.includes('[2] 案數超額 ranN=9 > 帳面 8') && l.includes('超額也 RED，J14b'));
+        await A('[16] U1 超額補齒 teeth：帳面 9→8（−1）→ 內層 [2] 9/8 超額 RED＋designated（齒摘除＝本面翻）',
+          mutU1.applied && gU1.rc === 1 && u1Designated, 'applied=' + mutU1.applied + ' rc=' + gU1.rc + ' designated=' + u1Designated);
+        mutU1.restore();
+        const gU1r = runGate16();
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+        await A('[16] U1 還原回綠（byte-exact 還原；本 repo 樹零接觸）', gU1r.rc === 0, 'rc=' + gU1r.rc);
       }
       // 收尾：毒化樹清理自證（封閉集——只核對本 run 喚出的 tree16 路徑；跨執行/
       // 並行/host 殘留零耦合——其他 core-poison-* 不入本判準）；每棵出生即棄 rmSync 強制在場。
@@ -4261,6 +4278,12 @@ for (const nSec of secOrder) {
     : 'skip（--only 態未選段——本輪未跑非通過）';
   console.log('[' + nSec + '] 案 ' + ranN + '/' + (secCases[nSec] ?? 0) + ' · ' + rowLabel);
   if (ranN > (secCases[nSec] ?? 0)) failures.push('[' + nSec + '] 案數超額 ranN=' + ranN + ' > 帳面 ' + (secCases[nSec] ?? 0) + '（段帳=執行帳契約——超額也 RED，J14b）');
+  // 欠額也 RED（MAJOR-1，J14b 完整形，2026-10-22 r1）：斷言被刪/循環吃空/段未進入＝靜默驗證流失，
+  // 照舊全綠——段帳存在的全部意圖即抓這類流失。條件態豁免（非 skip 態、非帳面虛報）：
+  // --only 態 skip 段 ranN=0 合法（onlyMode guard）；POISON_GATE_INNER 內層跑份的 [16]/[18]/[20]/[28]
+  // 毒化節 sentinel 自我跳過（遞迴防線＝設計中的條件態）＝guard 必要（無 guard 內層必 RED）。
+  const poisonInner = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.POISON_GATE_INNER === '1';
+  if (!onlyMode() && !poisonInner && ranN < (secCases[nSec] ?? 0)) failures.push('[' + nSec + '] 案數欠額 ranN=' + ranN + ' < 帳面 ' + (secCases[nSec] ?? 0) + '（段帳=執行帳契約——欠額也 RED，J14b）');
 }
 
 console.log(`\n${passed} 斷言全綠` + (failures.length ? `；${failures.length} 失敗` : ''));
