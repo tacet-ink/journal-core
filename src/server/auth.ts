@@ -133,6 +133,9 @@ export interface AuthStore {
   /** 建立（identity 生成由各 fork 自決——見檔頭「呼叫端職責」；PH2 UNIQUE 衝突亦是 store 責任）。 */
   createUser(ph2: string): Promise<string>;
   getByUserKey(key: string): Promise<AuthRow | null>;
+  /** 復原證明查表：rec_hash 欄＝**落庫形**（server 必須以 `recHashStoredOf(client 送出值)` 換算
+   *  後 bind／落庫——**禁原樣存 wire 值**：DB 外洩＝復原證明外洩）。本介面只定語意，落庫形
+   *  換算（recHashStoredOf）由本層匯出的參考實作成單一真相（J15；tacet store 同形）。 */
   getByRecHash(recHash: string): Promise<AuthRow | null>;
   setWrapped(userKey: string, ph2: string, pkg: KeyPackage, recPkg: string | null, recHash: string | null): Promise<void>;
   /** v3 重鑰：舊值入 ladder 表＋ph2/wrapped/salt/wrappedRec/rec_hash
@@ -181,6 +184,21 @@ export interface AuthRow {
   recHash: string | null;
   /** 訂閱方案（tacet：users.plan，'free'/'paid'）；兄弟 fork 無訂閱面時預設 'free'。 */
   plan?: string;
+}
+
+/** 復原證明落庫形標記（單一真相）：rec_hash 欄存「形標記 + 再雜湊」而非 wire 值。 */
+export const REC_HASH_MARK = 'v2:';
+
+/**
+ * rec_hash 落庫形派生單一真相（J15，參考實作；tacet queries.ts recHashStoredOf 同形收口）：
+ * 參數＝**送出值（wire 形）**；server 必須以本函式換算後落庫／bind——**禁原樣存 wire 值**
+ *（DB 外洩＝復原證明外洩：rec_hash 欄被讀到即可直接對復原面再試，落庫形＝標記＋sha256 二次
+ * 雜湊把 wire 值鎖在雜湊後）。標記接在「前」：sha256 輸出恆 64 hex，64-hex 與
+ * 「v2:+64-hex」兩形零重疊（標記後綴形會讓 64-hex 假說與標記形尾 64 字元同窗難辨）。
+ * async＝sha256Hex（crypto.subtle）同源面；null 保序由呼叫端判準承載（非 null → 非 null）。
+ */
+export async function recHashStoredOf(sent: string): Promise<string> {
+  return REC_HASH_MARK + await sha256Hex(sent);
 }
 
 export const AUTH_RATE: RateWindow = { table: 'login_rate', windowMs: 60_000, max: 10 };

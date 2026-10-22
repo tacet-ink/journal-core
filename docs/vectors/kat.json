@@ -17,6 +17,17 @@
     "associated_data": null,
     "expected_tag_hex": "72d2a36fd5c266bcc96121b24937bc253338cdfcbd273713655748c54b4dd503"
   },
+  "argon_prod": {
+    "algorithm": "Argon2id",
+    "version": "0x13",
+    "memory_kib": 65536,
+    "iterations": 3,
+    "parallelism": 1,
+    "tag_len": 32,
+    "password": "tacet-ph1-prod",
+    "salt_hex": "00000000000000000000000000000000",
+    "expected_tag_hex": "d1b7810d06134e154f3c5cca963174ec9946aeb0e470fab17cb566bb1acec6a7"
+  },
   "frozen_blobs": [
     {
       "source": "verify [14] KAT14",

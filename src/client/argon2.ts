@@ -3,7 +3,9 @@
  *
  * 動機（安全路線定案）：離線 oracle 的戰利品是 wrapped（/auth/login 回應帶 wrapped+salt，
  * 拿到一次回應即可永久離線猜）。PBKDF2-SHA256 600k 對 GPU 友善；Argon2id 的記憶體困難
- * 讓每猜成本上升一至兩個數量級，oracle 實際價值大幅中和。OPAQUE 降級為後續精益求精。
+ * 使對 PBKDF2-SHA256 600k 的 GPU 實測/估計成本倍數 ≈10-20 倍（記憶體頻寬受限；PoC B CPU 面
+ * SHA-256d vs Argon2id ≈5×10⁴），oracle 實際價值大幅中和。覆蓋界線：僅 Argon 派生的密語
+ * 指紋面——wire 上的 SHA-256(pass)（J2 legacy）不受它保護。OPAQUE 降級為後續精益求精。
  *
  * 帶內版本化契約（不變量 5）：升級 KDF = 換新前綴，禁原地改語意。
  *   jr3w. 單因子：結構與 jr1w. 同構（salt 獨立存 users.salt；wrapped = prefix + b64(iv[12] ‖ ct)，
@@ -123,6 +125,19 @@ export const ARGON_ITERATIONS = 3; // t
 export const ARGON_PARALLELISM = 1; // p（瀏覽器 wasm 無平行收益，定 1 兩端一致）
 export const ARGON_TAG_LEN = 32; // 256-bit AES key
 
+/** 正式參數 KAT（prod 參數 m=64MiB t=3 p=1，J14a：瀏覽器載體 KAT 維持 RFC 小參數——載入延遲契約；
+ *  僅 node 閘面跑。pwd/salt 為確定性測試輸入（非生產密語、非生產鹽——零憑證意圖），凍結向量
+ *  由 scripts/generate-vectors.ts 呼叫真原語產生（kat.json `argon_prod`）；verifyArgonKatProd 同源。
+ *  tagLen＝ARGON_TAG_LEN（派生本體固定輸出長）。 */
+export const ARGON_PROD_PARAMS = Object.freeze({
+  memoryKib: ARGON_MEMORY_KIB, iterations: ARGON_ITERATIONS, parallelism: ARGON_PARALLELISM, tagLen: ARGON_TAG_LEN,
+  password: 'tacet-ph1-prod', saltLen: 16, // salt＝saltLen 位元組 0x00（與 RFC 小參數同慣例）
+} as const);
+
+/** 正式參數 KAT 凍結值（kat.json argon_prod.expected_tag_hex 同源；2026-10-22 node 26.8.1 真原語產生）。 */
+export const ARGON_PROD_EXPECTED =
+  'd1b7810d06134e154f3c5cca963174ec9946aeb0e470fab17cb566bb1acec6a7';
+
 /** 雙因子 pin 段 Argon2id 參數（PIN 弱 → 記憶體補償；與 pass 段同級）。 */
 export const ARGON_PIN_MEMORY_KIB = 65536;
 export const ARGON_PIN_ITERATIONS = 3;
@@ -240,6 +255,16 @@ export async function verifyArgonKat(): Promise<boolean> {
   const k = ARGON_RFC9106_PARAMS;
   const raw = await deriveArgon2id(new Uint8Array(k.passwordLen).fill(k.passwordByte), new Uint8Array(k.saltLen), k.memoryKib, k.iterations, k.parallelism);
   return toHex(raw) === ARGON_RFC9106_EXPECTED;
+}
+
+/** 正式參數 KAT（J14a）：prod 參數（m=64MiB t=3 p=1）的 Argon2id 載體正確性——驗證「正式 64MiB
+ *  路」有凍結向量（RFC 小參數 KAT 只覆蓋 m=32 小參數路）。僅 node 閘面跑（wasm ~180ms 一次；
+ *  瀏覽器載體 KAT 維持 RFC 小參數＝載入延遲契約）；載體缺席（ERR_ARGON2_*）回 false 不拋（
+ *  與 verifyArgonKat 同形——node:crypto.argon2 與 hash-wasm 兩載體皆可）。 */
+export async function verifyArgonKatProd(): Promise<boolean> {
+  const k = ARGON_PROD_PARAMS;
+  const raw = await deriveArgon2id(k.password, new Uint8Array(k.saltLen), k.memoryKib, k.iterations, k.parallelism);
+  return toHex(raw) === ARGON_PROD_EXPECTED;
 }
 
 // ── jr3w. 單因子包裹 ──────────────────────────────────────────────────────────

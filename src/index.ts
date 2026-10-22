@@ -55,6 +55,9 @@ export {
   ARGON_ITERATIONS,
   ARGON_PARALLELISM,
   ARGON_TAG_LEN,
+  verifyArgonKatProd,
+  ARGON_PROD_PARAMS,
+  ARGON_PROD_EXPECTED,
   type Argon3Config,
 } from './client/argon2.ts';
 export {
@@ -84,6 +87,8 @@ export {
   errResponse,
   AUTH_RATE,
   AUTH_RATE_COARSE,
+  recHashStoredOf,
+  REC_HASH_MARK,
   type AuthRow,
   type AuthStore,
   type CipherFormats,

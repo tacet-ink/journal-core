@@ -72,6 +72,9 @@ import {
   PH1_V2_SALT,
   PH1_V3_SALT,
   ARGON_RFC9106_EXPECTED,
+  verifyArgonKatProd,
+  ARGON_PROD_PARAMS,
+  ARGON_PROD_EXPECTED,
   setArgonLoader,
   type Argon3Config,
 } from '../src/client/argon2.ts';
@@ -90,10 +93,12 @@ import {
   validSalt,
   pickKeyPackage,
   AUTH_RATE,
+  recHashStoredOf,
+  REC_HASH_MARK,
   type CipherFormats,
 } from '../src/server/auth.ts';
 import { checkRate, isRateAllowed, normalizeRateIp, normalizeRateIpCoarse, checkRateLadder, bumpRate, globalLoginBump, SQL_RATE_BUMP, type RateWindow } from '../src/server/ratelimit.ts';
-import { generateSessionToken, timingSafeEq } from '../src/server/hash.ts';
+import { generateSessionToken, timingSafeEq, sha256Hex } from '../src/server/hash.ts';
 import { CORS_HEADERS, corsResponse } from '../src/server/cors.ts';
 import {
   PH2_LADDER_TABLE,
@@ -162,16 +167,29 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-12 實測 522——[12] 限流鍵 /64 正規化 +14＋IPv4-mapped 面 +1＋NIT-b 接線錨 +1（NIT-a nonstring 五型 Object.is＝既有案就地強化 +0））；帳面語意契約（逐段「案 X/帳」
-// 對 secRan 執行值顯形）：執行 < 帳 的段＝本環境條件態未行使（非 skip 態），--only 期望算術對齊本帳。
-// [23] 執行 18 帳 21＝[23]④ lookup 未配置（0.2.3 單查恆等）／[23]⑤ fail-open（表缺席）兩情境
-// 在本機樹由 [8]（登入憑證 Argon2id 派生）內登入 lane 的訊號面真行使（try/catch 異常面）——車道分流非帳面虛報。
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-12 實測 522 起逐版累加——
+// main book 578／真執行 582（book 578＋[16] 17/15、[2] 9/7 雙超額各 2；README@main 印 582 屬實
+// ＝book 側才是舊帳；r3 MINOR-1 勘誤 r2 基線敘事——578+2+2 算術修正為 582）→
+// 0.4.3 book 578→591（itemized [2]+2／[7]+1／[12]+3／[16]+6／[25]+1＝+13，其中 [2]+2 與 [16] 補帳
+// 2 案＝補帳 4 案追平 main 已跑超額、其餘 9 案＝本卡新增斷言）；真執行 582→591（run-delta +9
+// ≠ book-delta +13——分寫，把 +13 加到真執行會誤得 595；新增斷言 9 案，全段 ranN==帳無超額）；
+// 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」）。
+// 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
+// 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
+// --only 態僅 skip 段 ranN=0 合法（選中段欠向照咬）；POISON_GATE_INNER 內層跑份僅 sentinel
+// 自我跳過段 [16]/[18]/[20]/[23]/[28]/[29]/[30]/[31] 豁免（遞迴防線＝設計中的條件態；內層實跑
+// 案數＜外層全帳——r2 實測欠面 16:1/19、18:32/39、20:37/47、23:15/18、30:20/21、31:6/7）；
+// 內層非 sentinel 段欠向照咬（U2 teeth 記錄承載）。
+// （MAJOR-1，J14b 完整形，2026-10-22 r1：0.4.3 首版只補超額齒＝半交付；卡前提「原先只咬執行<帳」錯
+// ——雙向皆 display-only；斷言被刪/循環吃空/段未進入＝靜默驗證流失，欠額齒即段帳存在的全部意圖。）
 // secEnter 跑行為脫鉤 secCases；secCases 鍵只承載段存在／帳面／--only 判準的登記義務
 //（secOpen(22,…) 無段標記行＝慣例 skip 段）。缺帳防線（teeth）：secRan 實跑段必已登記——
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 7, 3: 9, 4: 4, 5: 3, 6: 20, 7: 27, 8: 8, 9: 22, 10: 5, 11: 41, 12: 66, 13: 39, 14: 18, 15: 59, 16: 15, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 4, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21, 31: 7 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21, 31: 7 };
+// secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -435,6 +453,8 @@ await A('未配置 wrapDual 拒絕 dual 包裹', (await unwrapNoteKeyDual(TACET,
 };
 secOpen(7, '[7] Argon2id 包裹（jr3w./jr3d.）'); if (secEnter(7)) {
 await A('RFC 9106 無 secret/ad 標準向量（當前載體正確性）', await verifyArgonKat());
+await A('正式參數 KAT（prod m=64MiB t=3 p=1，J14a：正式路載體正確性＋凍結向量對帳——僅 node 閘面）',
+  await verifyArgonKatProd());
 await A('Argon 參數契約 m=64MiB t=3 p=1 tag=32',
   ARGON_MEMORY_KIB === 65536 && ARGON_ITERATIONS === 3 && ARGON_PARALLELISM === 1 && ARGON_TAG_LEN === 32);
 
@@ -1017,6 +1037,17 @@ await A('timingSafeEq 異值 false', timingSafeEq(sessA, sessB) === false);
 await A('timingSafeEq 長度異 false', timingSafeEq(sessA, sessA.slice(0, 32)) === false);
 await A('timingSafeEq 空串等值', timingSafeEq('', ''));
 await A('timingSafeEq 空串異值 false', !timingSafeEq('', 'x'));
+// recHashStoredOf 落庫形單一真相（J15）：rec_hash 欄＝標記＋sha256(wire 值)，server 禁原樣存。
+// 對帳＝本層 sha256Hex 同源（非鏡像）；定值錨凍結（同 KAT 母型——漂移即 RED）。
+await A('recHashStoredOf 形＝「v2:」+sha256Hex（64 hex，定值凍結——單一真相非鏡像）',
+  REC_HASH_MARK === 'v2:' && (await recHashStoredOf('rec-proof-wire-42')) ===
+    'v2:' + (await sha256Hex('rec-proof-wire-42')));
+await A('recHashStoredOf 定值凍結（與本層 sha256Hex 逐位同——同源面）',
+  (await recHashStoredOf('62ff0221e30b56740ec210cd36df2e9667841585c6d0fcd5200826b965aa36a5')) ===
+    'v2:f700df2e385610d8295db7f69a6ac3481c456e6f88ec2dee8e44f8e8161f59bd');
+await A('recHashStoredOf 不同 wire 值恆異（標記形 64-hex 與「v2:+64-hex」零重疊面）',
+  (await recHashStoredOf('a')) !== (await recHashStoredOf('b')) &&
+  /^[0-9a-f]{64}$/.test((await recHashStoredOf('x')).slice(REC_HASH_MARK.length)));
 
 const formats: CipherFormats = { cipherPrefixes: ['jr1u.', 'jr1b.'], wrapPrefix: 'jr1w.', cipherMax: 5000 };
 const inbound = makeInboundCipher(formats);
@@ -1897,14 +1928,49 @@ secOpen(16, '[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒�
         fs16!.rmSync!(tree16, { recursive: true, force: true });
         await A('[16] P6 還原回綠（出生即棄樹上還原）', g2.rc === 0, String(g2.rc));
       }
+      // U1 超額補齒 teeth（MINOR-1，J14b 完整形——齒自身失效即咬）：gate 副本 [2] 帳面 9→8（−1）→
+      // 內層（POISON_GATE_INNER 跑份）[2] 照跑 9 案＞帳 8＝尾段超額 RED＋designated 訊息；欠額齒在內層
+      // 由 sentinel guard 豁免（[16]/[18]/[20]/[28] 毒化節自我跳過＝設計中的條件態，非 skip 態非帳面虛報）。
+      // byte-exact 還原（poison16 母型——reviewer poison 自證同形）。
+      {
+        mkTree();
+        const mutU1 = poison16('scripts/verify-core-crypto.ts', 'const secCases: Record<number, number> = { 1: 3, 2: 9,', 'const secCases: Record<number, number> = { 1: 3, 2: 8,');
+        const gU1 = runGate16();
+        const u1Designated = gU1.out.split('\n').some((l: string) => l.includes('[2] 案數超額 ranN=9 > 帳面 8') && l.includes('超額也 RED，J14b'));
+        await A('[16] U1 超額補齒 teeth：帳面 9→8（−1）→ 內層 [2] 9/8 超額 RED＋designated（齒摘除＝本面翻）',
+          mutU1.applied && gU1.rc === 1 && u1Designated, 'applied=' + mutU1.applied + ' rc=' + gU1.rc + ' designated=' + u1Designated);
+        mutU1.restore();
+        const gU1r = runGate16();
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+        await A('[16] U1 還原回綠（byte-exact 還原；本 repo 樹零接觸）', gU1r.rc === 0, 'rc=' + gU1r.rc);
+      }
+      // U2 欠額補齒 teeth（MINOR-2，J14b 完整形——欠向齒自身失效即咬；與 U1 同母型反向針）：
+      // gate 副本 [2] 帳面 9→10（+1）→ 內層（POISON_GATE_INNER 跑份）[2] 照跑 9 案＜帳 10＝尾段
+      // 欠額 RED＋designated 訊息——內層 [2] 非 sentinel 段，exemptUnder 不收＝欠向照咬（r2 MINOR-1
+      // 逐段豁免面下的真記錄承載；r1 整輪 !poisonInner guard 下此面不可記＝齒摘除照綠）。
+      // byte-exact 還原（poison16 母型）；還原後內層 rc=0＝還原面自證（欠向齒非恆咬假齒）。
+      {
+        mkTree();
+        const mutU2 = poison16('scripts/verify-core-crypto.ts', 'const secCases: Record<number, number> = { 1: 3, 2: 9,', 'const secCases: Record<number, number> = { 1: 3, 2: 10,');
+        const gU2 = runGate16();
+        const u2Designated = gU2.out.split('\n').some((l: string) => l.includes('[2] 案數欠額 ranN=9 < 帳面 10') && l.includes('欠額也 RED，J14b'));
+        await A('[16] U2 欠額補齒 teeth：帳面 9→10（+1）→ 內層 [2] 9/10 欠額 RED＋designated（欠向齒摘除＝本面翻）',
+          mutU2.applied && gU2.rc === 1 && u2Designated, 'applied=' + mutU2.applied + ' rc=' + gU2.rc + ' designated=' + u2Designated);
+        mutU2.restore();
+        const gU2r = runGate16();
+        fs16!.rmSync!(tree16, { recursive: true, force: true });
+        await A('[16] U2 還原回綠（byte-exact 還原；本 repo 樹零接觸）', gU2r.rc === 0, 'rc=' + gU2r.rc);
+      }
       // 收尾：毒化樹清理自證（封閉集——只核對本 run 喚出的 tree16 路徑；跨執行/
       // 並行/host 殘留零耦合——其他 core-poison-* 不入本判準）；每棵出生即棄 rmSync 強制在場。
       {
         const exists16 = fs16!.existsSync!;
         let residual = 0;
         for (const t of treePaths16) if (exists16(t)) residual++;
+        // trees>=13＝r2 一手實測帳：基準 1＋P1/P2/P3/P4/P5/O3/O2/O1/O4 八案 8＋P6＋U1＋U2＝13 棵
+        //（每案恰 1 棵出生樹——P1/P6/U1/U2 的還原回綠重跑走同一棵樹，不另喚樹）。
         await A('[16] 毒化樹零殘留（本 run 喚出 ' + treePaths16.length + ' 棵全清——封閉集判準）',
-          treePaths16.length >= 10 && residual === 0, 'trees=' + treePaths16.length + ' residual=' + residual);
+          treePaths16.length >= 13 && residual === 0, 'trees=' + treePaths16.length + ' residual=' + residual);
       }
     }
   }
@@ -3020,28 +3086,36 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
   const fieldKeys26 = keysOf26(vecs26.flatMap((v) => (Array.isArray(v.fields) ? v.fields : [])));
   const rfcKeys26 = Object.keys((kat26?.rfc9106 ?? {}) as object);
   const frozenKeys26 = keysOf26(kat26?.frozen_blobs), credKeys26 = keysOf26(kat26?.credentials), sampleKeys26 = keysOf26(bip26?.samples);
+  const prodKeys26 = Object.keys((kat26?.argon_prod ?? {}) as object); // J14a：正式參數 KAT 向量
   // 反空轉下限：實際鍵集須涵蓋閘面讀取的欄（鍵集取自資料＝資料缺欄時下限擋住空集合真值）
   const floor26 = (ks: string[], need: string[]): boolean => need.every((k) => ks.includes(k));
-  await A('[26] 欄位名對規格（限定形）：頂層欄＝§7 頭表／§7.1 vectors 表／§7.2 kat 表逐列；巢狀欄逐一以 `fields[].欄`／`rfc9106.欄`／`frozen_blobs[].欄`／`credentials[].欄`／`samples[].欄` 出現在對應節（欄名集取自向量檔實鍵＋閘讀欄下限）',
+  await A('[26] 欄位名對規格（限定形）：頂層欄＝§7 頭表／§7.1 vectors 表／§7.2 kat 表逐列；巢狀欄逐一以 `fields[].欄`／`rfc9106.欄`／`argon_prod.欄`／`frozen_blobs[].欄`／`credentials[].欄`／`samples[].欄` 出現在對應節（欄名集取自向量檔實鍵＋閘讀欄下限）',
     spec26.length > 0 && !!kat26 && !!bip26
     && HEAD26.every((k) => row26(s7h26, k)) && keysOf26(vecs26).every((k) => row26(s71_26, k)) && VKEYS26.every((k) => row26(s71_26, k))
-    && ['rfc9106', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
+    && ['rfc9106', 'argon_prod', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
     && floor26(fieldKeys26, ['name', 'offset', 'len', 'hex']) && fieldKeys26.every((k) => s71_26.includes('`fields[].' + k + '`'))
     && floor26(rfcKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password_hex', 'salt_hex', 'expected_tag_hex']) && rfcKeys26.every((k) => s72_26.includes('`rfc9106.' + k + '`'))
+    && floor26(prodKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password', 'salt_hex', 'expected_tag_hex']) && prodKeys26.every((k) => s72_26.includes('`argon_prod.' + k + '`'))
     && floor26(frozenKeys26, ['prefix', 'wire', 'payload_len', 'expected_note_key_hex', 'source']) && frozenKeys26.every((k) => s72_26.includes('`frozen_blobs[].' + k + '`'))
     && floor26(credKeys26, ['kind', 'expected_hex']) && credKeys26.every((k) => s72_26.includes('`credentials[].' + k + '`'))
     && floor26(sampleKeys26, ['entropy_hex', 'checksum_hex', 'words', 'source']) && sampleKeys26.every((k) => s73_26.includes('`samples[].' + k + '`')));
   const gate26 = await srcOf('./verify-core-crypto.ts');
   const frozen26 = (Array.isArray(kat26?.frozen_blobs) ? kat26!.frozen_blobs : []) as { prefix: string; wire: string; payload_len: number; expected_note_key_hex: string; source: string }[];
   const rfc26 = (kat26?.rfc9106 ?? {}) as Record<string, unknown>;
+  const prod26 = (kat26?.argon_prod ?? {}) as Record<string, unknown>;
   const creds26 = (Array.isArray(kat26?.credentials) ? kat26!.credentials : []) as { kind: string; expected_hex: string }[];
   const argon26 = await import('../src/client/argon2.ts');
   const kp26 = argon26.ARGON_RFC9106_PARAMS;
-  await A('[26] kat 對帳：RFC 9106 expected_tag_hex＝ARGON_RFC9106_EXPECTED、參數 m/t/p/tag/pwd/salt＝ARGON_RFC9106_PARAMS（argon2.ts 常數——verifyArgonKat／產生器同源）；凍結 blob 7 筆逐字＝本閘 KAT 字面（[14]/[17]/[20]）且 payload_len＝解碼真長；憑證樣本 5 筆 hex64',
+  const kpProd26 = argon26.ARGON_PROD_PARAMS;
+  await A('[26] kat 對帳：RFC 9106 expected_tag_hex＝ARGON_RFC9106_EXPECTED、參數 m/t/p/tag/pwd/salt＝ARGON_RFC9106_PARAMS（argon2.ts 常數——verifyArgonKat／產生器同源）；正式參數 argon_prod expected_tag_hex＝ARGON_PROD_EXPECTED、m/t/p/tag/pwd/salt＝ARGON_PROD_PARAMS（verifyArgonKatProd／產生器同源）；凍結 blob 7 筆逐字＝本閘 KAT 字面（[14]/[17]/[20]）且 payload_len＝解碼真長；憑證樣本 5 筆 hex64',
     argon26.ARGON_RFC9106_EXPECTED === rfc26.expected_tag_hex
     && rfc26.memory_kib === kp26.memoryKib && rfc26.iterations === kp26.iterations && rfc26.parallelism === kp26.parallelism
     && rfc26.tag_len === kp26.tagLen && kp26.tagLen === argon26.ARGON_TAG_LEN
     && rfc26.password_hex === kp26.passwordByte.toString(16).padStart(2, '0').repeat(kp26.passwordLen) && rfc26.salt_hex === '00'.repeat(kp26.saltLen)
+    && argon26.ARGON_PROD_EXPECTED === prod26.expected_tag_hex
+    && prod26.memory_kib === kpProd26.memoryKib && prod26.iterations === kpProd26.iterations && prod26.parallelism === kpProd26.parallelism
+    && prod26.tag_len === kpProd26.tagLen && prod26.tag_len === argon26.ARGON_TAG_LEN
+    && prod26.password === kpProd26.password && prod26.salt_hex === '00'.repeat(kpProd26.saltLen)
     && frozen26.length === 7 && frozen26.every((b) => gate26.includes("'" + b.wire + "'") && b.wire.startsWith(b.prefix)
       && unb64Mod(b.wire.slice(b.prefix.length)).length === b.payload_len && /^[0-9a-f]{64}$/.test(b.expected_note_key_hex))
     && creds26.length === 5 && creds26.every((c) => /^[0-9a-f]{64}$/.test(c.expected_hex)));
@@ -4214,12 +4288,13 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
       : (onlySpecDisp() === '' && onlyTag() === ''));
   await A('[25] secCases 段帳登記義務（負向斷言——teeth）：secRan 實跑段（本機樹 [23]⑤ fail-open 表缺席異常面照行）必已登記；secCases 缺鍵且非 22 段＝RED（secCases 全摘禁令的行為面承載）',
     (() => { for (const [k25] of secRan) if (!secCases[k25] && k25 !== 22) return false; return true; })());
-  await A('[25] self-account：secCases[25] = 4 恰此四案（段帳面 self-proving——帳漂移即本面 RED；secCases 載體面：[24]/[25] 自證段＋--only 段存在面＋teeth 三載體）',
-    secCases[25] === 4 && (secRan.get(25) ?? 0) === 3);
+  await A('[25] book 鍵雙向等值 teeth（r2 NIT-2：缺 book 鍵面收口）——secOrder 段號集合＝secCases 鍵集合（正反向雙面）。缺鍵段欠額/超額兩 tooth 皆 ?? 0 不咬＝靜默流失面；本面即「缺鍵必紅」的記錄承載（本面被刪＝本段 ranN=4 < 帳 5 自咬）',
+    JSON.stringify(Object.keys(secCases).map(Number).sort((a, b) => a - b)) === JSON.stringify(secOrder));
+  await A('[25] self-account：secCases[25] = 5 恰此五案（段帳面 self-proving——帳漂移即本面 RED；r2 第 4 案＝book 鍵雙向等值 teeth；本案恆居末＝ranN 斷言對本段執行值 self-proving；secCases 載體面：[24]/[25] 自證段＋--only 段存在面＋teeth 三載體）',
+    secCases[25] === 5 && (secRan.get(25) ?? 0) === 4);
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const secTotal = secOrder.reduce((a, n) => a + (secCases[n] ?? 0), 0);
 const ranSecs = secOrder.filter((n) => (secRan.get(n) ?? 0) > 0);
 const selTotal = secOrder.filter((n) => !onlyMode() || onlySet.has(n) || n === 24 || n === 25).reduce((a, n) => a + (secCases[n] ?? 0), 0);
@@ -4231,6 +4306,18 @@ for (const nSec of secOrder) {
     ? (failures.length === 0 ? 'ok' : '見 ✗（失敗 ' + failures.length + '——詳上）')
     : 'skip（--only 態未選段——本輪未跑非通過）';
   console.log('[' + nSec + '] 案 ' + ranN + '/' + (secCases[nSec] ?? 0) + ' · ' + rowLabel);
+  if (ranN > (secCases[nSec] ?? 0)) failures.push('[' + nSec + '] 案數超額 ranN=' + ranN + ' > 帳面 ' + (secCases[nSec] ?? 0) + '（段帳=執行帳契約——超額也 RED，J14b）');
+  // 欠額也 RED（MAJOR-1，J14b 完整形，2026-10-22 r1；r2 MINOR-1：豁免面逐段收窄）：斷言被刪／
+  // 循環吃空／段未進入＝靜默驗證流失，照舊全綠——段帳存在的全部意圖即抓這類流失。條件態豁免
+  // （非 skip 態、非帳面虛報；逐段限定，非整輪）：--only 態僅 skip 段 ranN=0 合法（選中段照咬——
+  // r1 整輪 `!onlyMode()` 過寬面已收）；POISON_GATE_INNER 內層跑份僅 sentinel 自我跳過段
+  // [16]/[18]/[20]/[23]/[28]/[29]/[30]/[31] 豁免（內層實跑案數＜外層全帳＝設計中的條件態）；
+  // 內層非 sentinel 段欠向照咬（U2 teeth 記錄承載；無此區分內層必 RED＝guard 必要）。
+  // （sentinel 段實測面＝r2 一手實測：內層全跑 548 案，欠面＝16:1/19、18:32/39、20:37/47、
+  // 23:15/18、30:20/21、31:6/7——毒化節內層跳過；28/29 內層不欠＝exemptUnder 收緊面。）
+  const poisonInner = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.POISON_GATE_INNER === '1';
+  const exemptUnder = (onlyMode() && !onlySet.has(nSec)) || (poisonInner && (nSec === 16 || nSec === 18 || nSec === 20 || nSec === 23 || nSec === 28 || nSec === 29 || nSec === 30 || nSec === 31));
+  if (!exemptUnder && ranN < (secCases[nSec] ?? 0)) failures.push('[' + nSec + '] 案數欠額 ranN=' + ranN + ' < 帳面 ' + (secCases[nSec] ?? 0) + '（段帳=執行帳契約——欠額也 RED，J14b）');
 }
 
 console.log(`\n${passed} 斷言全綠` + (failures.length ? `；${failures.length} 失敗` : ''));

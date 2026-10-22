@@ -19,8 +19,8 @@ tacet.ink 產品面（部署實例）的漏洞屬產品 fork 的職責範圍—�
 
 | 版本 | 支援狀態 |
 | --- | --- |
-| 0.2.x | 支援中 |
-| 0.1.x | 盡力而為 |
+| 0.4.x | 支援中 |
+| 0.3.x | EOL（0.4.0 起，2026-10-20）；≤ 0.3.x 舊版皆不支援 |
 
 ## 誠實界線
 
@@ -46,8 +46,8 @@ This policy covers the cryptographic core primitives of this repository
 (`@tacet-ink/journal-core`); vulnerabilities in the tacet.ink product instance belong to the
 product fork — report via the security contact published on tacet.ink. Reports go to
 [security@tacet.ink](mailto:security@tacet.ink) with a subject prefixed `[security]`;
-we acknowledge within 72 hours and agree on fix timelines case-by-case. Supported: 0.2.x
-(0.1.x best-effort). Honest limits: no third-party audit yet; a lost passphrase is
+we acknowledge within 72 hours and agree on fix timelines case-by-case. Supported: 0.4.x
+(0.3.x EOL since 0.4.0, 2026-10-20). Honest limits: no third-party audit yet; a lost passphrase is
 unrecoverable by design — the offline recovery package (24-word transcription layer) is the
 only recovery path, keep it safe; guest-era encryption is obfuscation-grade, not E2E;
 end-to-end encryption holds from the bound era (random noteKey). No bug-bounty program and no PGP
