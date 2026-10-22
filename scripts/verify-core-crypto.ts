@@ -167,10 +167,12 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面契約：--only 態總帳顯形「本輪 X/選段帳 N（N 案非本輪載）」＋OK 標記帶 (--ONLY …) 尾碼；skip 段帳面恆列「未跑非通過」；[24]/[25] runner 自證段隨每輪在場。
 // 段標記 helper（secOpen）：全跑態輸出位元組恆等原 console.log('\n[N] …')；--only 態僅選中段輸出段頭。
 // 毒化矩陣內層 rerun（execFileSync＋POISON_GATE_INNER=1）不傳遞 --only＝內層恆全帳（POISON_GATE_INNER 語意不變）。
-// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-12 實測 522 起逐版累加——0.4.2 真執行 580
-// （book 578＋[16] 17/15、[2] 9/7 雙超額各 2——README 印 582＝舊帳顯形面）；
-// 0.4.3 帳面修正 2:7→9／7:27→28／12:66→69／16:15→19＋[7] 正式參數 KAT 1 案＋[12] recHashStoredOf 落庫形
-// 3 案＋[16] U1 teeth 2 案＋U2 teeth 2 案＝591；
+// 段帳＝執行帳（healthy-repo 全跑 runtime 真值，2026-10-12 實測 522 起逐版累加——
+// main book 578／真執行 582（book 578＋[16] 17/15、[2] 9/7 雙超額各 2；README@main 印 582 屬實
+// ＝book 側才是舊帳；r3 MINOR-1 勘誤 r2 基線敘事——578+2+2 算術修正為 582）→
+// 0.4.3 book 578→591（itemized [2]+2／[7]+1／[12]+3／[16]+6／[25]+1＝+13，其中 [2]+2 與 [16] 補帳
+// 2 案＝補帳 4 案追平 main 已跑超額、其餘 9 案＝本卡新增斷言）；真執行 582→591（run-delta +9
+// ≠ book-delta +13——分寫，把 +13 加到真執行會誤得 595；新增斷言 9 案，全段 ranN==帳無超額）；
 // 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」）。
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
