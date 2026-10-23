@@ -124,7 +124,7 @@ Tacet 部署實例（config 傳入）：
 | `jr1b.` | 綁定時代密文 | 隨機 256-bit noteKey | AES-GCM，AAD 綁 noteId |
 | `jr1c.` | 附件密文（image attachments；選配） | 同筆記金鑰（noteKey／guest key 由呼叫端決定） | AES-GCM，AAD `jr1a:<noteId>:<attachId>` |
 | `jr1d.` | 本機 IDB stored 密文（notes store；選配） | 同筆記金鑰（呼叫端注入） | AES-GCM，AAD 綁 note_id，payload 自帶 `v` 欄 |
-| `jr1l.` | 本機包裹（PWA session 期免重打密語；選配） | deriveGuestKey＝K_u 同 guest 面（identity 派生、passphrase-free） | 同 jr1w. 形，AAD `notekey-local` |
+| `jr1l.` | 本機包裹（PWA session 期免重打密語；選配；**deprecated**——混淆級，用途由「開啟時鎖定」`jr1p.`／設計面 `jr2p.` 取代，讀面照走、新整合不配置 `wrapLocal`） | deriveGuestKey＝K_u 同 guest 面（identity 派生、passphrase-free） | 同 jr1w. 形，AAD `notekey-local` |
 | `jr1r.` | 復原套件包裹（wrappedRec 專用；v0.2.0 世代，選配，與 recKekHkdf 兩欄一體） | HKDF-SHA256(ikm=recToken, salt=recKekSalt？, info=`journal-kek-rec-v1:`+recKekHkdf)——兩欄齊備才寫 jr1r. 面 | 同 jr1w. 形，AAD `notekey-rec`（部分配置拒寫；舊契約面 jr1w.＋PBKDF2＋AAD `notekey` 永不變——新世代讀舊寫新雙試） |
 | `jr1w.` | passphrase 包裹＋復原套件包裹（未配置世代） | PBKDF2-SHA256 600k（復原套件 KEK＝PBKDF2(recToken, recSaltPrefix‖identity)） | b64(iv[12] ‖ GCM(hex(noteKey)))，AAD `notekey`（復原套件與 passphrase 同 AAD 慣例＝未配置世代借形） |
 | `jr2w.` | PIN 第二因子合鑰（PBKDF2 版） | PBKDF2 600k(pass)＋2M(pin) → HKDF-SHA256 | pinSalt[16] ‖ iv[12] ‖ GCM，108B，AAD `notekey2` |
@@ -374,6 +374,8 @@ Node ≥ 24.7 走內建 `node:crypto` 免注入。
 - guest 時代是混淆級不是 e2e（K_u 由 identity 可派生）；e2e 承諾從綁定（隨機 noteKey）起。
 - PIN 類保護（本機鎖定／雙因子 PIN 腿）是 PBKDF2-SHA256 600k：6 位純數字在 RTX 4090 公開基準（≈8.8e9 iter/s）≈68 秒、8 位數字 ≈1.9 小時、6 碼小寫英數 ≈41 小時（PoC C 實證底：4 位 16 核 CPU 28.7s 命中）＝**門檻不是牆**——鎖定閘取即時性、非登入 oracle 戰場，強度取捨見設計。
 - 分享面金鑰範圍：v0.3.6 起 `createShareEnvelope` 用**一次性** `shareKey`（單篇分享建檔、不可傳入帳戶主鑰）；此前分享面＝帳戶歷史主鑰（J1 收口前的舊形，舊 blob 照解）。
+- `jr1l.` 本機包裹（`storeLocalWrap`／`loadLocalWrap`，`wrapLocal` 選配）是混淆級非 e2e（KEK 由 identity 派生、passphrase-free——與 guest 同級）：已 deprecated，用途由「開啟時鎖定」（`jr1p.`／設計面 `jr2p.`）取代；讀面照走（舊 blob 可解承諾不破），新整合不配置 `wrapLocal`（寫面自然退場）。
+- 主鑰輪替（`rotateNoteKey`）設計面在 [docs/rotation-design.md](./docs/rotation-design.md)（2026-10 階段 1 doc-only，待裁定；階段 2 實作另開卡）：現行 `changePassphrase`／`upgrade` 是同一 noteKey 重包（資料零換鑰），主鑰外流無輪替補救＝輪替收口前的誠實界線；輪替是**前止**（輪替後新寫對舊金鑰副本失效），不回收已外流的密文副本。
 - Argon2id（m=64MiB t=3 p=1）對 PBKDF2-SHA256 600k 的 GPU 離線成本倍數 ≈10-20 倍（記憶體頻寬受限；PoC B CPU 面 SHA-256d vs Argon2id ≈5×10⁴）——**僅覆蓋 Argon 派生的密語指紋面**；legacy PH1 的 wire 層 `SHA-256(pass)`（`ph1Of`，已 `@deprecated`、帶內版本化不可原地摘除）不受它保護。tacet 產品層 login 已轉 v3-first（S3 t_510bbac3 收案：Argon2id 派生 PH1 首發＋legacy 命中計數＋ladder 舊列 DELETE），core 層 `loginRouteCore` 對 legacy PH1 hex64 的相容面照留（兄弟 fork／舊平台帶內版本化）。
 - PH1 派生方式由各產品自定義（快雜湊或 Argon2id 派生皆可），本層只驗 hex64 形。
 - 本 repo 不含產品層：路由/配額/訂閱/GC/webhook 在各產品 fork。
