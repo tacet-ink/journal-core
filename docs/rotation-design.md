@@ -1,8 +1,8 @@
 # rotateNoteKey 主鑰輪替設計（階段 1，doc-only）
 
-> **狀態**：階段 1 設計定稿，待用戶裁定；裁定後開階段 2 實作卡（server＋client 實作、tacet 接線、進度 UI、部署窗，均**不在本文件範圍**）。r1 審查（2026-10-23）6 MAJOR／6 MINOR／3 NIT 全修：M1 強度帳改「外推標記＋t 值折算」重算；M2/M3/M5 收斂判據全文統一＝「ring active 鑰解得」（R8 定案面）；M4 復原套件管道新增 R9 裁定點；M6 R6 補明文欄 kid/stage；裁定點重編＝R1-R9＋R2a/R2b。r2 審查（2026-10-23）1 MAJOR／3 NIT 全修：M1 §7.1 補回「讀舊寫新」條（`unwrapNoteKeyPinLock2` jr2p. 先試＋jr1p. 回落；同 PIN 重包觸發動線；§11 core 半同步補原語）；n1 強度帳折算表述改「頻寬×t 正規化」；n2 §2 表 §7.3→§7.2；n3 §5.4 成本句補附件面。r3 審查（2026-10-23）4 MAJOR／8 MINOR／6 NIT 全修：M-A §5.1 client 過渡期雙包裹動線（同 PIN 雙包；禁反向捷徑）；M-B §4.2 recToken 來源三案明定（建議＝輪替時出示套件，防呆句）；M-C §5.4 判據①擴三面對＋第三狀態；M-D §7.3 jr2p. 只存本機 LS；MINOR-1 兩口徑分標；MINOR-2 判據①第三狀態；MINOR-3 rotating 期禁 rekey；MINOR-4 §11 分批聲明（rotate 卡與 jr2p. 卡分開開）；MINOR-5 保留原 deleted 值；MINOR-6 拒收面泛化；MINOR-7 rewrap 觸發限定過渡期；MINOR-8 附件解密本機句；NIT-1～6 照裁定順手。
+> **狀態**：階段 1 設計定稿；**用戶 2026-10-24 裁定 §9 全採建議案（§9＝定案）**，階段 2 實作卡（server＋client 實作、tacet 接線、進度 UI、部署窗，均**不在本文件範圍**）依 §11 分批開卡、前置已滿。r1 審查（2026-10-23）6 MAJOR／6 MINOR／3 NIT 全修：M1 強度帳改「外推標記＋t 值折算」重算；M2/M3/M5 收斂判據全文統一＝「ring active 鑰解得」（R8 定案面）；M4 復原套件管道新增 R9 裁定點；M6 R6 補明文欄 kid/stage；裁定點重編＝R1-R9＋R2a/R2b。r2 審查（2026-10-23）1 MAJOR／3 NIT 全修：M1 §7.1 補回「讀舊寫新」條（`unwrapNoteKeyPinLock2` jr2p. 先試＋jr1p. 回落；同 PIN 重包觸發動線；§11 core 半同步補原語）；n1 強度帳折算表述改「頻寬×t 正規化」；n2 §2 表 §7.3→§7.2；n3 §5.4 成本句補附件面。r3 審查（2026-10-23）4 MAJOR／8 MINOR／6 NIT 全修：M-A §5.1 client 過渡期雙包裹動線（同 PIN 雙包；禁反向捷徑）；M-B §4.2 recToken 來源三案明定（建議＝輪替時出示套件，防呆句）；M-C §5.4 判據①擴三面對＋第三狀態；M-D §7.3 jr2p. 只存本機 LS；MINOR-1 兩口徑分標；MINOR-2 判據①第三狀態；MINOR-3 rotating 期禁 rekey；MINOR-4 §11 分批聲明（rotate 卡與 jr2p. 卡分開開）；MINOR-5 保留原 deleted 值；MINOR-6 拒收面泛化；MINOR-7 rewrap 觸發限定過渡期；MINOR-8 附件解密本機句；NIT-1～6 照裁定順手。r4 審查（2026-10-24）follow-up 修面（t_c9ad9196）3 MINOR／2 NIT 全修：MINOR-B §7.1 rewrap 觸發解綁 ring 過渡期（命中 `jr1p.`→同 PIN 重包一次即止；卡序邊界消融＝J3 存量 PIN 自動救援路徑達標）；MINOR-C §7.1 強度帳模型值勘誤（m·t 正規化模型≈1.33×＝(256×1)/(64×3)；原 6-7.5× 算術不自洽；實測 2-2.5× 高於模型＝真機頻寬腿非線性；下游數字以實測速率為準）；MINOR-A §5.4 finish 門面域精確化（server 兩面＋執行裝置本機 IDB；他裝置 IDB 照 pull-overwrite 自愈＋補讀實句）；NIT-A §5.1 ① 定規格契約／② 降否決案備註（補 finish 時撈本機 LS 交叉包句）；NIT-B §5.1 rotating 期 PIN blob 寫入雙包拒寫不變量（UI 禁用＝軟守衛）。**用戶裁定（2026-10-24）：§9 R1-R9 全採建議案＝定案，階段 2 實施準據；階段 2 開卡前置已滿。**
 > **來源**：外部審查 `journal-core-review-2026-10-18.md` 第 J4 項（主鑰無輪替）、J3 項（本機 PIN 鎖實測強度）、J9 項（jr1l. deprecated）、D1 項（文件數字校正）；J1 既有分享的真正止血前提（報告 J4：「只撤銷舊分享沒有用，要靠 J4 的主鑰輪替才能真正收回」）。
-> **裁定點總表**見 §9；本文對所有高裁量面給**建議案**而非定案，階段 2 以裁定結果為準。
+> **裁定點總表**見 §9；**用戶 2026-10-24 裁定：§9 全採建議案＝定案**（R1-R9＋R2a/R2b），階段 2 以 §9 表為準。
 > **對齊基準**（2026-10-23）：core main `0c87718`（J14/15 已上 main；registry latest 當時一手＝0.4.2，0.4.3 載具面隨本批尾發布窗）；tacet main `4886274`（J8 CP2 已上；login v3-first、PH2 pepper、粗桶限流皆已收案）。
 > **鐵律承襲**（全文適用，不逐段重述）：帶內版本化＝KDF/契約升級＝換新前綴，舊前綴照解永不移語意；unwrap/decrypt 任何不符回 `null` 不拋；extractable 鐵律（noteKey 輸出恆 extractable=true、KEK nonextractable）；cfg 選配律（未配置＝API 拒絕，兄弟 fork 零影響）；server 零知識（不碰金鑰本體／密文，只搬運包裹與密文；**kid/stage 明文欄例外**，§3.3／§9 R6）。
 
@@ -158,13 +158,13 @@ RotationProgress = {
 
 - 存 `tacet_rotation:<acc>`（LS）；**server 不存進度**（零知識；server 側輪替面只有 ring 欄兩階段狀態＋kid/stage 明文欄，§4.2）。
 - 中斷恢復＝讀 progress→`lister(cursor.nextSeq)` 續拉（`/notes?cursor=` 現行 face）→從 nextSeq 續跑。progress 遺失（清 LS）＝重開全量掃描（§5.4 掃描本身 idempotent）＝**可重入**。
-- **過渡期 held＝雙鑰**：decrypt 路由需 active＋legacy 兩鑰（§3.2），而現行 held 是單一 CryptoKey（core `note-crypto.ts` `makeHeldKey`）——階段 2＝held 容器升級為 kid 對址 map（ring 兩 entry 各解一次包裹）。**裝置重續跑動線（M-A 收口）**：ring 兩 entry 的**本機包裹來源明定**——passphrase 裝置＝ring 快照兩 entry 各持 `wrapped`/`salt` 形（存 `users.keyring`＋LS 鏡像，重啟重解兩包＝現行 held 載入動線延長）；**PIN 鎖裝置（lock-store 本卡目標面：bound 帳戶鎖定恆在、reload 恆回 LockScreen、unlock 只解單一 108B blob）＝過渡期持雙包裹、一次 PIN 解兩包**，兩形擇一（本文建議①，階段 2 定）：
-  - **①同 PIN 雙包（建議）**：本機 LS 兩把 PIN 包裹——legacy 形 `tacet_lock:<acc>`（jr1p.，現行在場）＋新形（jr2p.，rotate_start 時以**同一 PIN** 封新鑰落地，新 LS key 命名階段 2 定）；重啟＝讀兩包裹→PIN 一次 unwrap 兩包→held map 兩 entry＝§1.2 目標 2「輪替中斷可續跑」的裝置面閉環。
-  - **②交叉包形**：本機 LS 單一 PIN 包裹（jr1p. legacy 形，現行零變）＋**新鑰以 legacy 鑰封的交叉包**（GCM(legacyKey, hex(newKey))，新 LS key）；重啟＝PIN 解 legacy→legacy 解交叉包得新鑰；**交叉包只存本機 LS、永不進 `users.keyring`**（遠端持舊鑰者不得由 server 面取得新鑰）。
+- **過渡期 held＝雙鑰**：decrypt 路由需 active＋legacy 兩鑰（§3.2），而現行 held 是單一 CryptoKey（core `note-crypto.ts` `makeHeldKey`）——階段 2＝held 容器升級為 kid 對址 map（ring 兩 entry 各解一次包裹）。**裝置重續跑動線（M-A 收口）**：ring 兩 entry 的**本機包裹來源明定**——passphrase 裝置＝ring 快照兩 entry 各持 `wrapped`/`salt` 形（存 `users.keyring`＋LS 鏡像，重啟重解兩包＝現行 held 載入動線延長）；**PIN 鎖裝置（lock-store 本卡目標面：bound 帳戶鎖定恆在、reload 恆回 LockScreen、unlock 只解單一 108B blob）＝過渡期持雙包裹、一次 PIN 解兩包**，① **定為規格契約**、② 降否決案/備註（r4 NIT-A：未錨 R 點收口）：
+  - **①同 PIN 雙包（規格契約，r4 定案）**：本機 LS 兩把 PIN 包裹——legacy 形 `tacet_lock:<acc>`（jr1p.，現行在場）＋新形（jr2p.，rotate_start 時以**同一 PIN** 封新鑰落地，新 LS key 命名階段 2 定）；重啟＝讀兩包裹→PIN 一次 unwrap 兩包→held map 兩 entry＝§1.2 目標 2「輪替中斷可續跑」的裝置面閉環。
+  - **②交叉包形（r4：未採用，留備註）**：本機 LS 單一 PIN 包裹（jr1p. legacy 形，現行零變）＋**新鑰以 legacy 鑰封的交叉包**（GCM(legacyKey, hex(newKey))，新 LS key）；重啟＝PIN 解 legacy→legacy 解交叉包得新鑰；**交叉包只存本機 LS、永不進 `users.keyring`**（遠端持舊鑰者不得由 server 面取得新鑰）；**finish 時若本機 LS 尚存交叉包（② 形態殘留），rotate_finish 動線須先撈回（解 legacy→解交叉包→重包為 ① 新形 jr2p. 同 PIN 落地）或明確清除，使 finish 後本機恆落 ① 規格契約態**（r4 NIT-A 補句）。
   - **明文禁反向捷徑**：新鑰**不得**以「legacy 包存 server ring」取得（持舊鑰者對 server blob 加包即得新鑰＝J1/J4 止血失效）——ring entry 的包裹面恆為新鑰自包（階段 A 全套新包裹），legacy 鑰的新鑰側第二包裹**只存本機 LS、永不進 `users.keyring`**。
   - **已解鎖未發起輪替的裝置**無新鑰取得路徑（ring 未同步前本機只有 legacy 形包裹）＝§5.2 不變量適用邊界（「已同步 ring 的裝置」）的對偶面：輪替完成前該裝置只能讀 legacy 可解面（R1 裁決範圍）。
 - **ring 快照存放面**：兩 entry 的 passphrase 形包裹存 `users.keyring` server 欄＋client LS 鏡像，**不在 PIN blob 內**（jr1p./jr2p. blob 恆為 108B 單鑰嚴格形、PIN 面零動——R3 凍結面提示）；**PIN 形包裹不入 ring 結構**（server blob 與 LS 鏡像皆無 PIN 形欄——§3.3 KeyEntry 僅 passphrase 形；jr2p. 只以獨立本機 LS key 存在，§7.1／§7.3 M-D）。
-- **過渡期 rekey 禁則（MINOR-3）**：`stage='rotating'` 期間**禁 rekey**（changePassphrase／change-pin／upgrade／復原重設）——ring 雙 entry 各持 passphrase 包裹，只重包 active 會留 legacy entry 舊密語＝換密語後重啟未輪替篇不可解（現行 `rekeyPinLockSync` 只 rewrap 單包裹，lock-store 碼核在場＝缺口屬實）；解禁條件＝輪替完成（finish，ring 收斂為單 entry）或輪替中止回退（ring 恢復單 entry）。UI 面＝rotating 期間 SecurityPanel 改密語/PIN 入口禁用＋提示「輪替中暫不可改」。
+- **過渡期 rekey 禁則（MINOR-3）**：`stage='rotating'` 期間**禁 rekey**（changePassphrase／change-pin／upgrade／復原重設）——ring 雙 entry 各持 passphrase 包裹，只重包 active 會留 legacy entry 舊密語＝換密語後重啟未輪替篇不可解（現行 `rekeyPinLockSync` 只 rewrap 單包裹，lock-store 碼核在場＝缺口屬實）；解禁條件＝輪替完成（finish，ring 收斂為單 entry）或輪替中止回退（ring 恢復單 entry）。UI 面＝rotating 期間 SecurityPanel 改密語/PIN 入口禁用＋提示「輪替中暫不可改」（**軟守衛**）；**硬守衛（r4 NIT-B）**＝rotating 期任何 PIN blob 寫入路徑（含 rekey 重包）皆須產出雙包形（jr1p. legacy 形＋jr2p. 新形同值雙落地），**非雙包形＝拒寫**（寫入端守衛，防 MINOR-3 單包裹缺口經 rekey 面靜默復活）。
 - **計數與終點**：total/done 只計「本輪實際輪替重加密的篇」——排除：(a) 輪替自身寫入（輪替寫推高的 change_seq 會被 pull 重複計數）；(b) 過渡期新寫篇（終點＝**開輪快照 head seq**，seq 超終點＝新寫：jr2b. 新寫本即 active 鑰篇，新寫 jr1b.（舊 App，§4.2）由 §5.4 判據①處理，不進輪替驅動）。`/notes?cursor=` 的 null skip 重拉遇 jr2b. 篇＝正常 skip（不重加密），不計 done。
 
 ### 5.2 斷點安全矩陣
@@ -187,11 +187,11 @@ RotationProgress = {
 
 ### 5.4 收斂驗證（finish 前置）
 
-**唯一判據＝三面對皆全量 ring active 鑰解得**（三面對稱承 §3.2 前綴族：篇 `jr2b.`／附件 `jr2c.`／本機 IDB `jr2d.`——漏輪的 legacy 附件若只進輔助計數，finish 後附件永久不可解＝「唯一損失點」（§5.2）之外的資料損失，M-C 收口；全文對齊：§3.2／§4.2／§5.2／§9 R8 皆以此為準；前綴面只是輔助——過渡期舊裝置可合法寫 jr1b.-newKey，「jr1b. 歸零」≠「收斂」，也「jr1b. 存在」≠「未收斂」）。
+**唯一判據＝三面對皆全量 ring active 鑰解得**（三面對稱承 §3.2 前綴族：篇 `jr2b.`／附件 `jr2c.`／本機 IDB `jr2d.`——**門面域（r4 MINOR-A 精確化）＝server 兩面（篇＋附件）＋執行裝置本機 IDB（執行收斂掃描的裝置）；他裝置 IDB 不進門（無遠端可見面）**：他裝置本機 IDB 隨該裝置下次 pull 以新密文覆寫自愈（pull-overwrite 現行動線，§4.3 IDB 本地重寫）；補讀實句＝輪替完成後任一裝置本地 IDB 讀到 active 鑰解不開且 legacy 鑰解得之 `jr1d.` 篇（＝該裝置 pull 前殘值）＝**該裝置本地重跑 IDB 重寫**（decryptLocal legacy→encryptLocal2 active，§4.3 動線）；他裝置 pull 覆寫前本機快取暫不可讀、server 面資料不丟（資料損失界線照 §5.2）——漏輪的 legacy 附件若只進輔助計數，finish 後附件永久不可解＝「唯一損失點」（§5.2）之外的資料損失，M-C 收口；全文對齊：§3.2／§4.2／§5.2／§9 R8 皆以此為準；前綴面只是輔助——過渡期舊裝置可合法寫 jr1b.-newKey，「jr1b. 歸零」≠「收斂」，也「jr1b. 存在」≠「未收斂」）。
 
 雙重全量掃描（防增量面漏「server 列失蹤」類缺口，sync cursor 同族教訓）：
 
-1. **active 鑰面（門，三面對）**：對每篇（篇＋附件）以 **active 鑰**試解——jr2b./jr2c. 篇＝直查 active kid；jr1b./jr1c. 篇＝active 鑰試解：解得＝過（含 §4.2 舊 App 以新鑰寫的 jr1b.-newKey 篇）；解不開＝**第三狀態（MINOR-2）**：再以 legacy 鑰試解——legacy 也解不開＝既有損毀／guest 舊明文相容層（§3.2 路由末位）／墓碑殘值，**標記排除（progress 記 excluded 清單）＋UI 告知「N 篇/件兩鑰皆解不開（非本次輪替造成）」**，不阻塞收斂（驅動器永遠解不開→finish 永遠到不了＝活性缺口）；legacy 解得＝未輪替（legacy 鑰加密）→**不收斂**，回 rotating 重跑該篇（修復動線：驅動器先 active、後 legacy 解出明文，再以 active 鑰重加密——過渡期雙鑰 held，§5.1）。本機 IDB（jr1d./jr2d.）同判據本地掃（無 version、本地重寫，§4.3）。**注意：不以「legacy 鑰解得」為過**——只被 legacy 鑰解得開的 jr1b./jr1c. 篇若過門，finish 後 legacy 退場即不可解＝本設計自稱的「唯一損失點」（舊版「active 或 legacy 任一解得即過」條款廢除）。
+1. **active 鑰面（門，三面對）**：對每篇（篇＋附件）以 **active 鑰**試解——jr2b./jr2c. 篇＝直查 active kid；jr1b./jr1c. 篇＝active 鑰試解：解得＝過（含 §4.2 舊 App 以新鑰寫的 jr1b.-newKey 篇）；解不開＝**第三狀態（MINOR-2）**：再以 legacy 鑰試解——legacy 也解不開＝既有損毀／guest 舊明文相容層（§3.2 路由末位）／墓碑殘值，**標記排除（progress 記 excluded 清單）＋UI 告知「N 篇/件兩鑰皆解不開（非本次輪替造成）」**，不阻塞收斂（驅動器永遠解不開→finish 永遠到不了＝活性缺口）；legacy 解得＝未輪替（legacy 鑰加密）→**不收斂**，回 rotating 重跑該篇（修復動線：驅動器先 active、後 legacy 解出明文，再以 active 鑰重加密——過渡期雙鑰 held，§5.1）。本機 IDB（jr1d./jr2d.）同判據**本地**掃（無 version、本地重寫，§4.3）——**門面域＝執行裝置本機 IDB**（他裝置 IDB 不進門，pull-overwrite 自愈＋補讀實句，見上「門面域」句）。**注意：不以「legacy 鑰解得」為過**——只被 legacy 鑰解得開的 jr1b./jr1c. 篇若過門，finish 後 legacy 退場即不可解＝本設計自稱的「唯一損失點」（舊版「active 或 legacy 任一解得即過」條款廢除）。
 2. **前綴面（輔助）**：全量 pull，計 `ciphertext LIKE 'jr1b.%'`（附件 `jr1c.%`、IDB 本地掃 `jr1d.%`）篇數——只作進度透明與 R8 輔助告警輸入，**非收斂門**。
 3. 判據①全過→`stage='converging'` 完成→POST finish（判據②計數隨 finish payload 作輔助告警輸入）。
 4. **掃描成本**：N 篇×≤2 次 GCM 試解（門面 1 次＋未輪替篇修復解密 1 次）＝與一次全量同步同級（GCM 解密是本機操作，非 KDF）；附件面：N 附件×全量密文過線＋本機解密（附件密文 pull 過線，decrypt 同篇面＝**本機操作**、非 KDF——過線成本隨附件量線性，解密成本與篇同級）；不觸 Argon。
@@ -224,12 +224,12 @@ RotationProgress = {
 - **前綴**：`jr2p.`（`PinLockConfig.pinLock2` 注入；未配置＝API 拒絕，jr1p. 面零變——cfg 選配律）。
 - **payload**（與 jr1p. 同構，鹽內嵌族）：`jr2p. + b64( pinSalt[16] ‖ iv[12] ‖ GCM(KEK, hex(noteKey), aad=<cfg.pinLockAad>) )`，嚴格 108B。**AAD 零動**（沿用 cfg.pinLockAad＝同 AAD 串——新前綴新 KDF 同 AAD，前綴已負版本空間，AAD 不需再帶 kid；與 jr2w.→jr3d. 同先例）。
 - **KEK**：`Argon2id(pinNorm, pinLockSaltPrefix + hex(pinSalt), m, t, p=1) → AES-256`（nonextractable；normalizePin 入口；Argon2 載體同 argon2.ts 雙載體——hash-wasm 瀏覽器/node:crypto，禁 fallback 鐵律）。
-- **讀舊寫新（過渡保護，卡體否決案承繼面）**：`unwrapNoteKeyPinLock2` 解鎖路由＝**先試 `jr2p.`、回落 `jr1p.`**（**依前綴分派，非 KDF 失敗重試**：blob 前綴 `jr2p.`→走 jr2p. 路徑、GCM 失敗回 `null` 不再試 jr1p.；前綴 `jr1p.`→走 jr1p. 回落路徑）（舊 blob 恆可解、jr1p. 讀契約保留——帶內版本化母型：解舊寫新；存量 PIN 用戶的解鎖不能斷）。**rewrap 觸發動線（MINOR-7 收口）**：**ring 過渡期在場**（ring 快照有 pending-retire entry）且解鎖命中 `jr1p.`（舊形）→以**同一 PIN** 重包 `jr2p.` 回寫（只換前綴不換 PIN；**重包成功即止**——前綴已換、不再命中，非每次解鎖重寫；ring 收斂後不觸發＝收斂後再重包無意義；接線點＝tacet lock-store `enableLock` 解鎖成功路徑——階段 2 tacet 半）；實作者**不可漏 unwrap 回落**（漏＝存量 PIN 用戶鎖死，違反卡體否決案「舊 jr1p. 直接禁解（強制升級）＝否決」）。
+- **讀舊寫新（過渡保護，卡體否決案承繼面）**：`unwrapNoteKeyPinLock2` 解鎖路由＝**先試 `jr2p.`、回落 `jr1p.`**（**依前綴分派，非 KDF 失敗重試**：blob 前綴 `jr2p.`→走 jr2p. 路徑、GCM 失敗回 `null` 不再試 jr1p.；前綴 `jr1p.`→走 jr1p. 回落路徑）（舊 blob 恆可解、jr1p. 讀契約保留——帶內版本化母型：解舊寫新；存量 PIN 用戶的解鎖不能斷）。**rewrap 觸發（r4 修案＝MINOR-7 面修正）**：解鎖命中 `jr1p.`（舊形）→以**同一 PIN** 重包 `jr2p.` 回寫**一次**（只換前綴不換 PIN；**重包成功即止**——前綴已換、不再命中，非每次解鎖重寫；**「ring 過渡期在場」與「ring 收斂後不觸發」兩聯不設**＝冪等面自足：jr2p. 在場即不再命中觸發路徑，收斂後重包無意義且無路徑可觸發＝MINOR-7 原問題不復發；接線點＝tacet lock-store `enableLock` 解鎖成功路徑——階段 2 tacet 半）。**卡序邊界消融（r4 定案意涵）**＝不設「ring 過渡期」前提後，jr2p. 卡與 rotate 卡任意開卡序皆自動覆蓋 J3 存量 PIN 面＝**J3 存量 PIN 自動救援路徑達標**（jr2p. 卡先行＝存量 PIN 裝置解鎖即升級 jr2p.，rotate 卡到後零縫補；rotate 卡先行＝過渡期 PIN 鎖裝置解鎖重包，① 規格契約動線，§5.1）。實作者**不可漏 unwrap 回落**（漏＝存量 PIN 用戶鎖死，違反卡體否決案「舊 jr1p. 直接禁解（強制升級）＝否決」）。
 - **雙檔位參數**（裁定點 R3；動機＝解鎖延遲實測 120-240ms 平、記憶體困難跨裝置穩定）：
   - **fast 檔**（預設，行動裝置優先）：m=256MiB（262144 KiB）、t=1、p=1。hash-wasm 64MiB 實測 ~180ms（argon2.ts 檔頭），256MiB 外推 ~500-700ms（行動）/~150-250ms（桌面）——**需階段 2 前實測校準**（實測計畫：桌面 Chrome＋iOS Safari＋Android Chrome 三點，KAT 凍結前取真值）。
   - **heavy 檔**（可選，tacet 若實測 fast 檔延遲可接受而强度不足時升級）：m=1GiB、t=1。
   - **參數凍結律**：檔位參數定案後凍結進 KAT 向量（docs/vectors 新段，母型＝ARGON_RFC9106_PARAMS＋正式參數向量 J14 先例）；改參數＝換新前綴（jr3p.），帶內版本化。
-  - **強度帳（fast 檔，離線爆破）**——**攻擊速率是外推非實測**（R3/R4 裁定的依據面，階段 2 前實測校準）：64MiB（t=3）實測 ≈500-2000 猜/s（PoC 底）；256MiB（t=1）≈200-1000 猜/s。**兩口徑分標（MINOR-1）**：**實測速率比**＝500-2000→200-1000 猜/s＝單次試解成本 **2-2.5×**；**模型正規化比**＝頻寬×t 口徑（頻寬腿取 raw m-ratio 4× 而非實測 2-2.5×）＝**6-7.5×**——下游 17-83 分鐘等全部數字只與**實測速率 200-1000/s 口徑**自洽（×t 句＝t 值本身線性折算時間的模型口徑，t=3→t=1 在成本上是 ÷3 腿、非 ×3——對照其他 t 參數的檔位時按 t 比折算）。照此速率：6 位（10⁶）≈**17-83 分鐘**（對帳：jr1p. PBKDF2 RTX 4090 外推 68s → ×14.7-73.5，同序；實測底＝4 位 16 核 28.7s PoC）；8 位（10⁸）≈**28-139 小時**；10 位（10¹⁰）≈**116-579 天**。獨立重推（README:379 自家基準：64MiB t=3 ≈ PBKDF2 600k GPU 成本 ×10-20，折 t=3→t=1 與 m 64→256MiB 檔位——reviewer r1 並列路徑，推導鏈未凍結為規範）≈ **對 PBKDF2 ×13-27** → 6 位 ≈15-31 分鐘，與外推速率路徑同序（差距＝速率外推不確定度，階段 2 以實測校準收口）。**但人選 PIN（生日/連號）仍遠快於此**→PIN 政策（§7.2）是主防線，KDF 升檔是成本乘數。
+  - **強度帳（fast 檔，離線爆破）**——**攻擊速率是外推非實測**（R3/R4 裁定的依據面，階段 2 前實測校準）：64MiB（t=3）實測 ≈500-2000 猜/s（PoC 底）；256MiB（t=1）≈200-1000 猜/s。**兩口徑分標（MINOR-1）**：**實測速率比**＝500-2000→200-1000 猜/s＝單次試解成本 **2-2.5×**；**m·t 正規化模型比**＝(256MiB×t1)/(64MiB×t3)＝256/192≈**1.33×**（r4 勘誤：原「頻寬×t 口徑（頻寬腿取 raw m-ratio 4×）＝6-7.5×」算術不自洽——4×3=12≠6-7.5，D1 同型勘誤）；**實測 2-2.5× 高於模型＝真機頻寬腿非線性**（memory-bandwidth 腿在真實硬體上超線性），下游 17-83 分鐘等全部數字只與**實測速率 200-1000/s 口徑為準**（×t 句＝t 值本身線性折算時間的模型口徑，t=3→t=1 在成本上是 ÷3 腿、非 ×3——對照其他 t 參數的檔位時按 t 比折算）。照此速率：6 位（10⁶）≈**17-83 分鐘**（對帳：jr1p. PBKDF2 RTX 4090 外推 68s → ×14.7-73.5，同序；實測底＝4 位 16 核 28.7s PoC）；8 位（10⁸）≈**28-139 小時**；10 位（10¹⁰）≈**116-579 天**。獨立重推（README:379 自家基準：64MiB t=3 ≈ PBKDF2 600k GPU 成本 ×10-20，折 t=3→t=1 與 m 64→256MiB 檔位——reviewer r1 並列路徑，推導鏈未凍結為規範）≈ **對 PBKDF2 ×13-27** → 6 位 ≈15-31 分鐘，與外推速率路徑同序（差距＝速率外推不確定度，階段 2 以實測校準收口）。**但人選 PIN（生日/連號）仍遠快於此**→PIN 政策（§7.2）是主防線，KDF 升檔是成本乘數。
 
 ### 7.2 PIN 政策面
 
@@ -267,9 +267,9 @@ RotationProgress = {
 
 **J8 全收口，無殘留**（legacy jr1w./jr3w. 檔照解＝過渡保護，非待辦）。
 
-## 9. 裁定點總表（階段 1 交付用戶裁定）
+## 9. 裁定點總表（階段 1；用戶 2026-10-24 已裁：全採建議案＝定案）
 
-> r1 審查後重編：R2 拆 R2a（已定動線，不列裁定）/R2b（真裁定）；新增 R9（復原套件管道）；R6 補 kid/stage 明文欄；R8 收斂面與 §5.4 對齊（COUNT 降輔助告警）。
+> r1 審查後重編：R2 拆 R2a（已定動線，不列裁定）/R2b（真裁定）；新增 R9（復原套件管道）；R6 補 kid/stage 明文欄；R8 收斂面與 §5.4 對齊（COUNT 降輔助告警）。**用戶 2026-10-24 裁定：R1-R9 全採「本文建議」列＝定案**（階段 2 實施準據；§11 分批開卡前置已滿）。
 
 | # | 裁定點 | 本文建議 | 裁量空間 |
 |---|---|---|---|
@@ -296,7 +296,7 @@ RotationProgress = {
 
 - **core 半（rotate 卡）**：`generateKeyId`／`KeyRing` 原語族／`encryptNote2`/`decryptNote` 路由擴（jr2b./jr2c./jr2d. 族）／`wrapNoteKeyPinLock2`／`unwrapNoteKeyPinLock2`（jr2p. 先試＋jr1p. 回落，讀舊寫新，§7.1）＋KAT 向量段／復原套件重發動線（依 R9 裁定）／`storeLocalWrap` JSDoc 補 `@deprecated`（README 界限段＋家族表 deprecated 標＝**階段 1 已落**，不在本清單）。
 - **tacet 半（rotate 卡）**：ring LS 鏡像＋server ring 欄 migration（keyring blob＋kid/stage 明文欄，R6；**PIN 形欄不入 blob**）＋`/auth/rotate` 端點（階段 A/B，含 finish 後 legacy 前綴族×退場 kid 集拒收面 R8(c)）＋recToken 出示動線 UI（M-B 三案裁定後形）／doPush 輪替驅動（held 雙鑰升級＋過渡期雙包裹，§5.1）＋進度 UI（excluded 清單告知面，§5.4）。
-- **tacet 半（jr2p. 卡）**：lock-store jr2p. 接線（讀舊寫新 unwrap 回落＋過渡期 rewrap 觸發，§7.1）＋PIN 政策 UI（R4）；threat-model 輪替界線句（三語，含 §12 復原套件管道句）＋trust-gate 斷言（輪替句入 threat-model 卡面，隨任一卡收口）。
+- **tacet 半（jr2p. 卡）**：lock-store jr2p. 接線（讀舊寫新 unwrap 回落＋同 PIN rewrap 觸發（成功即止，§7.1）＋rotating 期 PIN blob 雙包拒寫守衛，§5.1/§7.1）＋PIN 政策 UI（R4）；threat-model 輪替界線句（三語，含 §12 復原套件管道句）＋trust-gate 斷言（輪替句入 threat-model 卡面，隨任一卡收口）。
 - **部署窗**：migration 0019+（ring 欄）＋canary。
 
 ## 12. 威脅模型界線（輪替後，誠實面）
