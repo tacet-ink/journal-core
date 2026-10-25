@@ -1,6 +1,6 @@
 {
   "format": "journal-core-vectors/1",
-  "package_version": "0.3.1",
+  "package_version": "0.4.3",
   "spec": "docs/format-spec.md",
   "generator": "scripts/generate-vectors.ts",
   "note": "Frozen evidence generated once by calling the real primitives; not recomputed in CI (random iv/salt). Verify gate [26] checks presence and shape only.",
@@ -27,6 +27,17 @@
     "password": "tacet-ph1-prod",
     "salt_hex": "00000000000000000000000000000000",
     "expected_tag_hex": "d1b7810d06134e154f3c5cca963174ec9946aeb0e470fab17cb566bb1acec6a7"
+  },
+  "pinlock2_kat": {
+    "algorithm": "Argon2id",
+    "version": "0x13",
+    "memory_kib": 262144,
+    "iterations": 1,
+    "parallelism": 1,
+    "password": "2580ab",
+    "salt": "tacet-pinlock-v1:00000000000000000000000000000000",
+    "expected_kek_hex": "aa6eacc6e786b3e7464afd7db13d17a5a1f9a20d9ba19cdf6d763c37ffe77137",
+    "verify_ok": true
   },
   "frozen_blobs": [
     {

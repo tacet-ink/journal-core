@@ -81,6 +81,14 @@ export interface NoteCryptoConfig {
   cipherAttach?: string;
   /** 本機 IDB 密文前綴（jr1d.，notes store stored 形）。未配置 = local API 拒絕（未配置行為不變）。 */
   cipherLocal?: string;
+  /** 綁定時代「輪替後」密文基前綴（jr2b.，rotation-design §3.2；完整前綴＝cipherBound2 + kid + '.'，
+   *  由 core 原語組裝、呼叫端不手拼）。未配置 = encryptNote2/decryptNote jr2b. 族退場
+   *  （encrypt 面拒、decrypt 面該族回 null——兄弟 fork 行為零變）。 */
+  cipherBound2?: string;
+  /** 附件「輪替後」基前綴（jr2c.，同構 §3.2；完整前綴＝cipherAttach2 + kid + '.'）。未配置 = attach2 API 拒絕。 */
+  cipherAttach2?: string;
+  /** 本機 IDB「輪替後」基前綴（jr2d.，同構 §3.2；完整前綴＝cipherLocal2 + kid + '.'）。未配置 = local2 API 拒絕。 */
+  cipherLocal2?: string;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: KeyStore;
 }
@@ -368,6 +376,169 @@ export async function generateNoteKey(): Promise<CryptoKey> {
   return importAesGcm(raw, true);
 }
 
+// ── 輪替後密文族（jr2b.<kid>.／jr2c.<kid>.／jr2d.<kid>.，rotation-design §3.2） ──
+//
+// 帶內版本化：新前綴家族，舊前綴（jr1b./jr1c./jr1d.）照解永不移——decrypt 路由收口
+// 「jr2b.<kid>. 族 → jr1b. → guest → 舊明文相容層」。前綴組裝單一真相＝base(kid) =
+// cfg.cipherX2 + kid + '.'（core 原語組裝，呼叫端不手拼）；kid 形檢 fail-closed
+//（畸形 kid 欄＝null，不回落盲試＝防 junk 前綴面）。AAD 零動（輪替換鑰不換 AAD 域）。
+
+/** kid 形：隨機 4B → 8 位小寫 hex（§3.1）。kid 絕非秘密（進帶前綴區＋進 ring 欄位；安全靠 GCM）。 */
+const KID_RE = /^[0-9a-f]{8}$/;
+
+/** kid 形檢（8 位小寫 hex）。'legacy' 保留位不經本函式（它無密文前綴——jr1b. 裸形）。 */
+export function isValidKid(kid: string): boolean {
+  return KID_RE.test(kid);
+}
+
+/** 產生新 kid（§3.1）：只由輪替流程呼叫（新綁定不產生 kid——ring 初值＝legacy 位）。 */
+export function generateKeyId(): string {
+  const b = crypto.getRandomValues(new Uint8Array(4));
+  return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+/** 輪替後完整前綴組裝（單一真相）：base + kid + '.'。kid 形非 8 位 hex＝throw（呼叫端
+ *  恆先過 isValidKid；fail-closed 禁靜默組出畸形前綴）。 */
+function kidPrefix(base: string, kid: string): string {
+  if (!KID_RE.test(kid)) throw new Error('ERR_KID_BAD');
+  return base + kid + '.';
+}
+
+/** 輪替後前綴判定＋kid 抽出：`jr2b.<kid>.` 族形檢（base startsWith＋kid 欄形檢）。
+ *  kid 欄畸形＝null（fail-closed——不回落盲試）。 */
+export function kidPrefixOf(base: string | undefined, cipher: string): { kid: string; body: string } | null {
+  if (!base) return null;
+  if (!cipher.startsWith(base)) return null;
+  const rest = cipher.slice(base.length);
+  const dot = rest.indexOf('.');
+  if (dot < 0) return null;
+  const kid = rest.slice(0, dot);
+  if (!KID_RE.test(kid)) return null;
+  return { kid, body: rest.slice(dot + 1) };
+}
+
+/** 綁定時代輪替後加密（jr2b.<kid>.；§3.2「寫入恆新」：ring 已輪替時 encryptNote 面
+ *  恆走本原語；activeKid=='legacy'（ring 未輪替）時寫入仍是裸 jr1b.＝零變）。 */
+export async function encryptNote2(cfg: NoteCryptoConfig, key: CryptoKey, plaintext: string, aad: string, kid: string): Promise<string> {
+  if (!cfg.cipherBound2) throw new Error('ERR_BOUND2_NOT_CONFIGURED');
+  return kidPrefix(cfg.cipherBound2, kid) + await encryptWithKey(key, plaintext, aad);
+}
+
+/** 運行期 held 鑰表（§5.1「held 容器升級為 kid 對址 map」）：kid（含 'legacy' 保留位）→
+ *  該 entry 解包後之 CryptoKey。過渡期 ≤2 鑰（ring 恆 ≤2 entries）。 */
+export type HeldKeyMap = Record<string, CryptoKey>;
+
+/** 綁定時代輪替後解包路由（§3.2 decrypt 收口，本篇面）：
+ *  `jr2b.<kid>.` 族 → 直查 held[kid]（缺席＝null，不降級不盲試——該 kid 已退場）；
+ *  `jr1b.` → held 全鑰逐一試（GCM tag＝oracle；held 恆 ≤2 鑰→≤2 次試解）；
+ *  他前綴（guest/舊明文）＝null——decryptNote2 只收 bound 族（§3.2 路由序中
+ *  guest/舊明文層由 decryptNote 承載，本原語是輪替面，不混 guest 面）。
+ *  任何不符回 null 不拋。 */
+export async function decryptNote2(
+  cfg: NoteCryptoConfig,
+  held: HeldKeyMap,
+  cipher: string,
+  aad: string,
+): Promise<string | null> {
+  try {
+    // 空字串密文正規化（t_b81f22cd 面1 同律）：trim 後空＝拒（null）。
+    if (cipher.trim() === '') return null;
+    if (cfg.cipherBound2) {
+      const hit = kidPrefixOf(cfg.cipherBound2, cipher);
+      if (hit) {
+        const key = held[hit.kid];
+        if (!key) return null; // 該 kid 已退場（held 缺席）＝null（不降級、不盲試）
+        return await decryptWithKey(key, unb64(hit.body), aad);
+      }
+    }
+    if (cipher.startsWith(cfg.cipherBound)) {
+      const body = unb64(cipher.slice(cfg.cipherBound.length));
+      for (const key of Object.values(held)) {
+        const plain = await decryptWithKey(key, body, aad);
+        if (plain !== null) return plain;
+      }
+      return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 附件輪替後加密（jr2c.<kid>.，同構 §3.2；AAD `jr1a:<noteId>:<attachId>` 零動）。 */
+export async function encryptAttach2(cfg: NoteCryptoConfig, key: CryptoKey, plaintext: string, aad: string, kid: string): Promise<string> {
+  if (!cfg.cipherAttach2) throw new Error('ERR_ATTACH2_NOT_CONFIGURED');
+  return kidPrefix(cfg.cipherAttach2, kid) + await encryptWithKey(key, plaintext, aad);
+}
+
+/** 附件輪替後解包路由（jr2c.<kid>. 直查 held→jr1c. 全鑰試解；同 decryptNote2 母型）。 */
+export async function decryptAttach2(
+  cfg: NoteCryptoConfig,
+  held: HeldKeyMap,
+  cipher: string,
+  aad: string,
+): Promise<string | null> {
+  try {
+    if (cipher.trim() === '') return null;
+    if (cfg.cipherAttach2) {
+      const hit = kidPrefixOf(cfg.cipherAttach2, cipher);
+      if (hit) {
+        const key = held[hit.kid];
+        if (!key) return null;
+        return await decryptWithKey(key, unb64(hit.body), aad);
+      }
+    }
+    if (cfg.cipherAttach && cipher.startsWith(cfg.cipherAttach)) {
+      const body = unb64(cipher.slice(cfg.cipherAttach.length));
+      for (const key of Object.values(held)) {
+        const plain = await decryptWithKey(key, body, aad);
+        if (plain !== null) return plain;
+      }
+      return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 本機 IDB 輪替後加密（jr2d.<kid>.，同構 §3.2；AAD 綁 note_id 零動）。 */
+export async function encryptLocal2(cfg: NoteCryptoConfig, key: CryptoKey, plaintext: string, aad: string, kid: string): Promise<string> {
+  if (!cfg.cipherLocal2) throw new Error('ERR_LOCAL2_NOT_CONFIGURED');
+  return kidPrefix(cfg.cipherLocal2, kid) + await encryptWithKey(key, plaintext, aad);
+}
+
+/** 本機 IDB 輪替後解包路由（jr2d.<kid>. 直查 held→jr1d. 全鑰試解；同 decryptNote2 母型）。 */
+export async function decryptLocal2(
+  cfg: NoteCryptoConfig,
+  held: HeldKeyMap,
+  cipher: string,
+  aad: string,
+): Promise<string | null> {
+  try {
+    if (cipher.trim() === '') return null;
+    if (cfg.cipherLocal2) {
+      const hit = kidPrefixOf(cfg.cipherLocal2, cipher);
+      if (hit) {
+        const key = held[hit.kid];
+        if (!key) return null;
+        return await decryptWithKey(key, unb64(hit.body), aad);
+      }
+    }
+    if (cfg.cipherLocal && cipher.startsWith(cfg.cipherLocal)) {
+      const body = unb64(cipher.slice(cfg.cipherLocal.length));
+      for (const key of Object.values(held)) {
+        const plain = await decryptWithKey(key, body, aad);
+        if (plain !== null) return plain;
+      }
+      return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** 登入憑證：PH1 = SHA-256(pass)——pass 明文從此不過線（伺服器存 PH2）。
  *  @deprecated 無塩 SHA-256(pass)——登入 wire 用 ph1_legacy 暴露 GPU 可全速爆破的密碼
  *  指標（外部審查 2026-10-18 J2：不可與 Argon2id PH1 同時作為上線探證；DB 洩後 ph2 的
@@ -649,6 +820,12 @@ export async function buildBindPayload4(
  * 「本機字串是否可能誤入 server 包裹欄」對帳失真。新前綴＝讀舊寫新自癒：
  * loadLocalWrap 先試 jr1l.（本體嚴格面），命中舊形（jr1w.）回落解密後即重包
  * cfg.wrapLocal 回寫（自癒一次），寫入恆 jr1l.。
+ *
+ * @deprecated J9（2026-10-25，rotation-design §10）：jr1l.＝KEK 由 identity 派生
+ *（passphrase-free）＝**混淆級**（PoC E：讀得到 localStorage 就能還原主鑰）——
+ * 用途由「開啟時鎖定」jr1p.／設計面 jr2p. 取代。讀面照走（舊 blob 可解承諾不破）；
+ * 寫面＝新整合不配置 wrapLocal（未配置＝無寫入退場，讀取面照走舊形回落——
+ * 退場自然完成）。
  */
 export async function storeLocalWrap(cfg: NoteCryptoConfig, identity: string, noteKey: CryptoKey): Promise<void> {
   try {

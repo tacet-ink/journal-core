@@ -38,8 +38,17 @@ import {
   normalizePassphrase,
   encryptAttach,
   decryptAttach,
+  encryptAttach2,
+  decryptAttach2,
   encryptLocal,
   decryptLocal,
+  encryptLocal2,
+  decryptLocal2,
+  encryptNote2,
+  decryptNote2,
+  generateKeyId,
+  isValidKid,
+  kidPrefixOf,
   hexToBytes,
   encryptWithKey,
   decryptWithKey,
@@ -48,7 +57,22 @@ import {
   deriveGuestKey,
   sealNoteKey,
   importAesGcm,
+  type HeldKeyMap,
 } from '../src/client/note-crypto.ts';
+import {
+  KEYRING_LEGACY_KID,
+  KEYRING_MAX_ENTRIES,
+  initKeyRing,
+  keyRingGet,
+  keyRingIsRotated,
+  keyRingAddEntry,
+  keyRingRetire,
+  keyRingRetiredKids,
+  serializeKeyRing,
+  parseKeyRing,
+  type KeyRing,
+  type WrappedForms,
+} from '../src/client/keyring.ts';
 import {
   verifyArgonKat,
   wrapNoteKey3,
@@ -83,6 +107,13 @@ import type { NoteCryptoConfig } from '../src/client/note-crypto.ts';
 import {
   wrapNoteKeyPinLock,
   unwrapNoteKeyPinLock,
+  wrapNoteKeyPinLock2,
+  unwrapNoteKeyPinLock2,
+  isPinLockWrap2,
+  PINLOCK2_MEMORY_KIB,
+  PINLOCK2_KAT,
+  PINLOCK2_KAT_EXPECTED,
+  verifyPinLock2KatProd,
   type PinLockConfig,
 } from '../src/client/pinlock.ts';
 import {
@@ -173,7 +204,8 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 0.4.3 book 578→591（itemized [2]+2／[7]+1／[12]+3／[16]+6／[25]+1＝+13，其中 [2]+2 與 [16] 補帳
 // 2 案＝補帳 4 案追平 main 已跑超額、其餘 9 案＝本卡新增斷言）；真執行 582→591（run-delta +9
 // ≠ book-delta +13——分寫，把 +13 加到真執行會誤得 595；新增斷言 9 案，全段 ranN==帳無超額）；
-// 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」）。
+// 0.5.0 book 591→618（t_55925c66 輪替卡：[26]+1 pinlock2_kat 對帳＋[32] 新段 26 案＝+27）；
+// 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」。
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
 // --only 態僅 skip 段 ranN=0 合法（選中段欠向照咬）；POISON_GATE_INNER 內層跑份僅 sentinel
@@ -187,9 +219,9 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 8, 27: 23, 28: 11, 29: 8, 30: 21, 31: 7 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 7, 32: 26 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -266,6 +298,9 @@ const wrappedRec = await (await import('../src/client/note-crypto.ts')).wrapNote
 const unwrapped = await unwrapNoteKey(TACET, wrapped, pass, salt);
 const recUnwrapped = await unwrapNoteKeyWithRecToken(TACET, wrappedRec, recToken, identityA);
 const origRaw = hex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
+// 本機鎖定 cfg（原 [12] 段內宣告——[32] pinlock2 跨段消費＝setup 恆跑群；--only 16 內層跑份
+// 不跑 [12] 但 [32] 段帳登記於 secCases 恆在＝POISON 內層 [16] 基準全綠前提需 PINLOCK 在場）。
+const PINLOCK: PinLockConfig = { pinLock: 'jr1p.', pinLock2: 'jr2p.', pinLockSaltPrefix: 'tacet-pinlock-v1:', pinLockAad: 'notekey-pinlock' };
 const localIdentity = 'acct-localwrap-test';
 const TACET2: NoteCryptoConfig = { ...TACET, wrapDual: 'jr2w.', pinSaltPrefix: 'tacet-note-pin1:' };
 const passD = 'dual-factor-passphrase-42';
@@ -1132,7 +1167,7 @@ await A('pickKeyPackage：錯前綴整組放棄',
   (() => { const p = pickKeyPackage({ wrapped: 'jr9x.' + b64(new Uint8Array(32)), salt: 'a'.repeat(32) }, 'jr1w.'); return p.wrapped === null; })());
 
 // 本機鎖定（jr1p.）：全函式 roundtrip＋嚴格檢查面（閘本有斷言缺席）
-const PINLOCK: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'tacet-pinlock-v1:', pinLockAad: 'notekey-pinlock' };
+//（PINLOCK cfg 已上移至 setup 恆跑群——[32] 跨段消費＋--only 16 內層跑份 [16] 基準全綠前提）
 const pinWrapped = await wrapNoteKeyPinLock(PINLOCK, noteKey, '2580ab');
 await A('jr1p 包裹前綴 jr1p.', pinWrapped.startsWith('jr1p.'));
 const pinUnwrapped = await unwrapNoteKeyPinLock(PINLOCK, pinWrapped, '2580ab');
@@ -2181,7 +2216,9 @@ secOpen(18, '[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫�
   // ── 源碼窗靜態錨（本地段結構——毒化形即計數/窗錨變異） ──
   const ncSrc18 = await srcOf('../src/client/note-crypto.ts');
   const localWin18 = ncSrc18.slice(ncSrc18.indexOf('── 本機包裹'), ncSrc18.indexOf('── 日記密文入口'));
-  await A('[18] 源碼窗：窗尾 floor 插值帳（真窗 ' + localWin18.length + ' 字元當地量——floor 是帳漂移承重件，隨窗漂移即帳錯）', localWin18.length > 1910, 'win=' + localWin18.length);
+  // floor 2150（t_55925c66 輪替卡重校：era-2 原語族＋J9 @deprecated 註解落本窗後真窗 2228、
+  // P18 毒化 shrink 2077——floor 須落 (毒化窗, 真窗]，舊 1910 隨窗長大失去咬力（P18 第三案不翻））。
+  await A('[18] 源碼窗：窗尾 floor 插值帳（真窗 ' + localWin18.length + ' 字元當地量——floor 是帳漂移承重件，隨窗漂移即帳錯）', localWin18.length > 2150, 'win=' + localWin18.length);
   await A('[18] 源碼窗：本機段零 ERR_WRAP_NOT_CONFIGURED 禁令面（throw 復活即反——毒化咬復活）',
     !localWin18.includes('ERR_WRAP_NOT_CONFIGURED'));
   await A('[18] 源碼窗：寫面唯 cfg.wrapLocal seal＋舊借形零殘留（v1 借用面復活即反）',
@@ -3057,8 +3094,8 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
   const specRows26 = spec26.split('\n').filter((l) => /^\| `jr[0-9a-z]{2}\.`(（[^|]*）)? \|/.test(l) && /\| (content|salt-external|salt-embedded) \|/.test(l));
   const specPrefixes26 = new Set(specRows26.map((l) => l.match(/^\| `(jr[0-9a-z]{2}\.)`/)![1]));
   const vecPrefixes26 = new Set(vecs26.map((v) => v.prefix));
-  await A('[26] 家族覆蓋雙向：規格家族表 16 列前綴集＝families.json 前綴集（15 前綴；jr1w. 兩世代各一組）',
-    specRows26.length === 16 && vecs26.length === 16 && specPrefixes26.size === 15
+  await A('[26] 家族覆蓋雙向：規格家族表 17 列前綴集＝families.json 前綴集（16 前綴；jr1w. 兩世代各一組）',
+    specRows26.length === 17 && vecs26.length === 17 && specPrefixes26.size === 16
     && [...specPrefixes26].every((p) => vecPrefixes26.has(p)) && [...vecPrefixes26].every((p) => specPrefixes26.has(p)));
   const VKEYS26 = ['prefix', 'family', 'layout', 'kdf', 'aad', 'inputs', 'wire', 'payload_len', 'fields'];
   await A('[26] families 位元組 shape：payload_len＝wire b64 解碼真長；fields offset 連續、len 總和＝payload_len、hex 拼接＝payload 逐位元組',
@@ -3087,15 +3124,17 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
   const rfcKeys26 = Object.keys((kat26?.rfc9106 ?? {}) as object);
   const frozenKeys26 = keysOf26(kat26?.frozen_blobs), credKeys26 = keysOf26(kat26?.credentials), sampleKeys26 = keysOf26(bip26?.samples);
   const prodKeys26 = Object.keys((kat26?.argon_prod ?? {}) as object); // J14a：正式參數 KAT 向量
+  const pl2Keys26 = Object.keys((kat26?.pinlock2_kat ?? {}) as object); // jr2p. fast 檔參數凍結 KAT（§7.1）
   // 反空轉下限：實際鍵集須涵蓋閘面讀取的欄（鍵集取自資料＝資料缺欄時下限擋住空集合真值）
   const floor26 = (ks: string[], need: string[]): boolean => need.every((k) => ks.includes(k));
   await A('[26] 欄位名對規格（限定形）：頂層欄＝§7 頭表／§7.1 vectors 表／§7.2 kat 表逐列；巢狀欄逐一以 `fields[].欄`／`rfc9106.欄`／`argon_prod.欄`／`frozen_blobs[].欄`／`credentials[].欄`／`samples[].欄` 出現在對應節（欄名集取自向量檔實鍵＋閘讀欄下限）',
     spec26.length > 0 && !!kat26 && !!bip26
     && HEAD26.every((k) => row26(s7h26, k)) && keysOf26(vecs26).every((k) => row26(s71_26, k)) && VKEYS26.every((k) => row26(s71_26, k))
-    && ['rfc9106', 'argon_prod', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
+    && ['rfc9106', 'argon_prod', 'pinlock2_kat', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
     && floor26(fieldKeys26, ['name', 'offset', 'len', 'hex']) && fieldKeys26.every((k) => s71_26.includes('`fields[].' + k + '`'))
     && floor26(rfcKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password_hex', 'salt_hex', 'expected_tag_hex']) && rfcKeys26.every((k) => s72_26.includes('`rfc9106.' + k + '`'))
     && floor26(prodKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password', 'salt_hex', 'expected_tag_hex']) && prodKeys26.every((k) => s72_26.includes('`argon_prod.' + k + '`'))
+    && floor26(pl2Keys26, ['memory_kib', 'iterations', 'parallelism', 'password', 'salt', 'expected_kek_hex']) && pl2Keys26.every((k) => s72_26.includes('`pinlock2_kat.' + k + '`'))
     && floor26(frozenKeys26, ['prefix', 'wire', 'payload_len', 'expected_note_key_hex', 'source']) && frozenKeys26.every((k) => s72_26.includes('`frozen_blobs[].' + k + '`'))
     && floor26(credKeys26, ['kind', 'expected_hex']) && credKeys26.every((k) => s72_26.includes('`credentials[].' + k + '`'))
     && floor26(sampleKeys26, ['entropy_hex', 'checksum_hex', 'words', 'source']) && sampleKeys26.every((k) => s73_26.includes('`samples[].' + k + '`')));
@@ -3119,6 +3158,18 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
     && frozen26.length === 7 && frozen26.every((b) => gate26.includes("'" + b.wire + "'") && b.wire.startsWith(b.prefix)
       && unb64Mod(b.wire.slice(b.prefix.length)).length === b.payload_len && /^[0-9a-f]{64}$/.test(b.expected_note_key_hex))
     && creds26.length === 5 && creds26.every((c) => /^[0-9a-f]{64}$/.test(c.expected_hex)));
+  // jr2p. fast 檔參數凍結 KAT（§7.1 參數凍結律；J14 母型）：kat.json pinlock2_kat 對
+  // pinlock.ts PINLOCK2_KAT／PINLOCK2_KAT_EXPECTED 同源（真原語重推導＝凍結值——載體正確性
+  // 與參數凍結雙面；改參數＝換新前綴 jr3p.，本面翻紅）。
+  const pl226 = (kat26?.pinlock2_kat ?? {}) as Record<string, unknown>;
+  const pinlock26 = await import('../src/client/pinlock.ts');
+  await A('[26] pinlock2_kat 對帳：expected_kek_hex＝PINLOCK2_KAT_EXPECTED、m/t/p/pwd/salt＝PINLOCK2_KAT（pinlock.ts 常數——verifyPinLock2KatProd／產生器同源）＋真原語重推導＝凍結值（載體正確性行為面）',
+    pinlock26.PINLOCK2_KAT_EXPECTED === pl226.expected_kek_hex
+    && pl226.memory_kib === pinlock26.PINLOCK2_KAT.memoryKib && pl226.iterations === pinlock26.PINLOCK2_KAT.iterations
+    && pl226.parallelism === pinlock26.PINLOCK2_KAT.parallelism && pl226.password === pinlock26.PINLOCK2_KAT.password
+    && pl226.salt === pinlock26.PINLOCK2_KAT.salt
+    && pl226.memory_kib === PINLOCK2_MEMORY_KIB
+    && (await verifyPinLock2KatProd()));
   const samples26 = (Array.isArray(bip26?.samples) ? bip26!.samples : []) as { entropy_hex: string; checksum_hex: string; words: string[]; source: string }[];
   await A('[26] bip39 抽樣 ≥32 組：entropy hex64＋24 詞＋checksum＝SHA-256(entropy)[0]；逐組對照現行轉寫原語（recTokenToWords 逐詞相等——確定性轉寫非 KDF 重算）',
     samples26.length >= 32 && (await (async () => {
@@ -4259,6 +4310,201 @@ await A('[31] index barrel 匯出 buildBindPayload4（＝note-crypto 子路徑�
   const src = (await import('../src/index.ts')) as unknown as { buildBindPayload4?: unknown; buildBindPayload?: unknown };
   return typeof src.buildBindPayload4 === 'function' && typeof src.buildBindPayload === 'function' && src.buildBindPayload4 === buildBindPayload4;
 })());
+}
+
+// ── 32. 主鑰輪替原語族（rotation-design §3/§7.1；J3 併案 jr2p.） ──────────────
+//
+// 行為面（對真模組）：kid 契約（§3.1）／jr2b.<kid>. 族＋decrypt 路由收口（§3.2：
+// jr2b. 直查 held[kid] 缺席＝null 不降級不盲試；jr1b. 全鑰試解＝GCM oracle；
+// 過渡期新寫 jr1b.-newKey 由試解面救回）／KeyRing 資料模型（§3.3：legacy 保留位、
+// 兩 entry 上限、冪等 add/retire、serialize/parse fail-closed）／jr2p. pinlock2
+//（§7.1：fast 檔 256MiB t=1 p=1、嚴格 108B、前綴分派 unwrap 非 KDF 失敗重試、
+// upgraded 回傳面＝rewrap 觸發、參數凍結 KAT）。
+secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口／KeyRing／jr2p. pinlock2）'); if (secEnter(32)) {
+{
+  const CFG32: NoteCryptoConfig = { ...TACET, cipherBound2: 'jr2b.', cipherAttach2: 'jr2c.', cipherLocal2: 'jr2d.', cipherAttach: 'jr1c.', cipherLocal: 'jr1d.' };
+  const heldKey = noteKey; // setup 群 noteKey（extractable）＝legacy 鑰
+  const rotKid32 = generateKeyId();
+  const rotKey32 = await generateNoteKey();
+  const raw32 = async (k: CryptoKey | null): Promise<string | null> => (k ? hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) : null);
+  // ① kid 契約（§3.1）
+  await A('[32] kid 形契約：generateKeyId＝8 位小寫 hex（4B 熵）＋isValidKid 正/負向（7 位/大寫/非 hex/legacy 皆拒）',
+    /^[0-9a-f]{8}$/.test(rotKid32) && isValidKid(rotKid32)
+    && !isValidKid(rotKid32.slice(0, 7)) && !isValidKid(rotKid32.toUpperCase())
+    && !isValidKid('zzzzzzzz') && !isValidKid('legacy'));
+  await A('[32] 雙輪 kid 獨立（generateKeyId 兩次≠；碰撞概率 2^-32——ring 碰撞面由 generateKeyId 重試承載，不設 collision 欄）',
+    generateKeyId() !== rotKid32);
+  // ② jr2b. 族寫入面（§3.2 前綴組裝單一真相＝base+kid+'.'；呼叫端不手拼）
+  const aad32 = 'jr1:note-rot-32';
+  const plain32 = '輪替後密文——帶 kid 標記。🌙';
+  const ct2 = await encryptNote2(CFG32, rotKey32, plain32, aad32, rotKid32);
+  await A('[32] encryptNote2 前綴形＝jr2b.<kid>.＋kidPrefixOf 抽出同 kid/body（前綴組裝＝base+kid+`.` 單一真相）',
+    ct2.startsWith('jr2b.' + rotKid32 + '.')
+    && kidPrefixOf(CFG32.cipherBound2, ct2)?.kid === rotKid32
+    && kidPrefixOf(CFG32.cipherBound2, ct2)?.body === ct2.slice(('jr2b.' + rotKid32 + '.').length));
+  await A('[32] kidPrefixOf fail-closed：kid 欄畸形（7 位/大寫/無點）＝null（不回落盲試＝防 junk 前綴面）',
+    kidPrefixOf('jr2b.', 'jr2b.' + rotKid32.slice(0, 7) + '.AAAA') === null
+    && kidPrefixOf('jr2b.', 'jr2b.' + rotKid32.toUpperCase() + '.AAAA') === null
+    && kidPrefixOf('jr2b.', 'jr2b.AAAA') === null
+    && kidPrefixOf('jr2b.', 'jr1b.AAAA') === null);
+  await A('[32] encryptNote2 未配置 cipherBound2 → ERR_BOUND2_NOT_CONFIGURED（兄弟 fork 選配律；attach/local 同律）',
+    await (async () => {
+      const bare = { ...TACET };
+      let e1 = ''; try { await encryptNote2(bare, rotKey32, plain32, aad32, rotKid32); } catch (e) { e1 = (e as Error).message; }
+      let e2 = ''; try { await encryptAttach2(bare, rotKey32, plain32, aad32, rotKid32); } catch (e) { e2 = (e as Error).message; }
+      let e3 = ''; try { await encryptLocal2(bare, rotKey32, plain32, aad32, rotKid32); } catch (e) { e3 = (e as Error).message; }
+      return e1 === 'ERR_BOUND2_NOT_CONFIGURED' && e2 === 'ERR_ATTACH2_NOT_CONFIGURED' && e3 === 'ERR_LOCAL2_NOT_CONFIGURED';
+    })());
+  await A('[32] encryptNote2 畸形 kid → ERR_KID_BAD（fail-closed 禁靜默組出畸形前綴——呼叫端恆先過 isValidKid）',
+    await (async () => { try { await encryptNote2(CFG32, rotKey32, plain32, aad32, 'XYZ'); return false; } catch (e) { return (e as Error).message === 'ERR_KID_BAD'; } })());
+  // ③ decrypt 路由收口（§3.2：jr2b.<kid>. 直查 → jr1b. 全鑰試解 → 他前綴 null）
+  const held32: HeldKeyMap = { [KEYRING_LEGACY_KID]: heldKey, [rotKid32]: rotKey32 };
+  await A('[32] decryptNote2 jr2b.<kid>. 直查解得（active 鑰）＋wrong AAD → null（AAD 域零動＝跨列搬移守衛）',
+    (await decryptNote2(CFG32, held32, ct2, aad32)) === plain32
+    && (await decryptNote2(CFG32, held32, ct2, 'jr1:note-other')) === null);
+  await A('[32] decryptNote2 jr1b. 全鑰試解（GCM tag＝oracle）：legacy 鑰寫 jr1b. → 命中（≤2 次試解；held 序不敏感）',
+    (async () => {
+      const legacyHeld = { set(k: CryptoKey) { this._k = k; }, get() { return this._k ?? null; }, _k: heldKey };
+      const ctLegacy = await encryptNote(CFG32, legacyHeld, plain32, aad32, { current: () => identityA });
+      if (!ctLegacy.startsWith('jr1b.')) return false;
+      const hitLegacy = await decryptNote2(CFG32, held32, ctLegacy, aad32);
+      const swapped: HeldKeyMap = { [rotKid32]: rotKey32, [KEYRING_LEGACY_KID]: heldKey };
+      return hitLegacy === plain32 && (await decryptNote2(CFG32, swapped, ctLegacy, aad32)) === plain32;
+    })());
+  await A('[32] decryptNote2 過渡期新寫面（§4.2）：jr1b. 以**新鑰**加密（舊 App 過渡期寫入）→ 試解面命中＝不阻塞收斂',
+    (async () => {
+      const newHeld = { set(k: CryptoKey) { this._k = k; }, get() { return this._k ?? null; }, _k: rotKey32 };
+      const ctLegacyNewKey = await encryptNote(CFG32, newHeld, plain32, aad32, { current: () => identityA });
+      return ctLegacyNewKey.startsWith('jr1b.') && (await decryptNote2(CFG32, held32, ctLegacyNewKey, aad32)) === plain32;
+    })());
+  await A('[32] decryptNote2 fail-closed：retired kid 缺席＝null（不降級不盲試）／空字串＝null／guest/舊前綴＝null（bound 族面不混 guest 層）',
+    (await decryptNote2(CFG32, { [KEYRING_LEGACY_KID]: heldKey }, ct2, aad32)) === null
+    && (await decryptNote2(CFG32, held32, '', aad32)) === null
+    && (await decryptNote2(CFG32, held32, 'jr1g.' + modB64(new Uint8Array(16)), aad32)) === null);
+  await A('[32] decryptAttach2／decryptLocal2 同構（jr2c.<kid>.／jr2d.<kid>. 直查＋jr1c./jr1d. 試解；AAD `jr1a:<noteId>:<attachId>`／note_id 零動）',
+    (async () => {
+      const atPlain = JSON.stringify({ v: 1, kind: 'img', mime: 'image/png', w: 1, h: 1, b64: 'AA==' });
+      const at2 = await encryptAttach2(CFG32, rotKey32, atPlain, attachAad, rotKid32);
+      const loc2 = await encryptLocal2(CFG32, rotKey32, JSON.stringify({ v: 1, body: plain32 }), 'note-rot-32', rotKid32);
+      const atLegacy = await encryptAttach(CFG32, heldKey, atPlain, attachAad);
+      const locLegacy = await encryptLocal(CFG32, heldKey, JSON.stringify({ v: 1, body: plain32 }), 'note-rot-32');
+      return at2.startsWith('jr2c.' + rotKid32 + '.') && loc2.startsWith('jr2d.' + rotKid32 + '.')
+        && (await decryptAttach2(CFG32, held32, at2, attachAad)) === atPlain
+        && (await decryptAttach2(CFG32, held32, atLegacy, attachAad)) === atPlain
+        && (await decryptLocal2(CFG32, held32, loc2, 'note-rot-32')) === JSON.stringify({ v: 1, body: plain32 })
+        && (await decryptLocal2(CFG32, held32, locLegacy, 'note-rot-32')) === JSON.stringify({ v: 1, body: plain32 });
+    })());
+  // ④ KeyRing 資料模型（§3.3）
+  const wfLegacy32: WrappedForms = { wrapped: 'jr4w.' + modB64(new Uint8Array(92)), salt: 'ab'.repeat(16), wrappedRec: 'jr1r.' + modB64(new Uint8Array(92)) };
+  const wfNew32: WrappedForms = { wrapped: 'jr4w.' + modB64(new Uint8Array(92)), salt: 'cd'.repeat(16) };
+  const ring32 = initKeyRing(wfLegacy32.wrapped, wfLegacy32.salt, wfLegacy32.wrappedRec);
+  await A('[32] ring 初值（§3.3）：activeKid=legacy＋單 entry＋wrappedRec 保留＋未輪替',
+    ring32.activeKid === KEYRING_LEGACY_KID && Object.keys(ring32.entries).length === 1
+    && !keyRingIsRotated(ring32)
+    && ring32.entries[KEYRING_LEGACY_KID].wrappedForms.wrappedRec === wfLegacy32.wrappedRec);
+  await A('[32] ring addEntry（階段 A）：新 kid 加入＋active 切換＋legacy 保留＋isRotated；冪等＝同 kid 重發同值覆寫（serialize 恆同字面）',
+    (async () => {
+      const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32);
+      const r2b = keyRingAddEntry(r2, rotKid32, wfNew32);
+      return r2.activeKid === rotKid32 && keyRingIsRotated(r2) && Object.keys(r2.entries).length === 2
+        && !!r2.entries[KEYRING_LEGACY_KID] && serializeKeyRing(r2) === serializeKeyRing(r2b);
+    })());
+  await A('[32] ring 超限 fail-closed：2 entry＋新 kid 缺席 → ERR_RING_FULL（先退場再加——輪替串行動作、並行輪替禁）',
+    (async () => {
+      const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32);
+      let e = ''; try { keyRingAddEntry(r2, 'f'.repeat(8), { wrapped: 'jr4w.x', salt: 'aa'.repeat(16) }); } catch (x) { e = (x as Error).message; }
+      return e === 'ERR_RING_FULL';
+    })());
+  await A('[32] ring addEntry 畸形 kid → ERR_KID_BAD（8 位小寫 hex 門；legacy 保留位不經 add）',
+    (() => { let e = ''; try { keyRingAddEntry(ring32, 'XYZ', { wrapped: 'w', salt: 's' }); } catch (x) { e = (x as Error).message; } return e === 'ERR_KID_BAD'; })());
+  await A('[32] ring retire（階段 B）：legacy 退場→單 entry 收斂；冪等＝已缺席原样；retiredKids＝非 active 位排序',
+    (async () => {
+      const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32);
+      if (JSON.stringify(keyRingRetiredKids(r2)) !== JSON.stringify([KEYRING_LEGACY_KID])) return false;
+      const r3 = keyRingRetire(r2, KEYRING_LEGACY_KID);
+      return !r3.entries[KEYRING_LEGACY_KID] && r3.activeKid === rotKid32 && Object.keys(r3.entries).length === 1
+        && serializeKeyRing(keyRingRetire(r3, KEYRING_LEGACY_KID)) === serializeKeyRing(r3);
+    })());
+  const ringBlob32 = (() => { const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32); return serializeKeyRing(r2); })();
+  await A('[32] serializeKeyRing 定長序（§3.3 server blob 形）：entry 順序打亂 → 同字面（冪等覆寫「同值」面；b64(JSON) 定長序）',
+    (() => {
+      const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32);
+      const reordered: KeyRing = { activeKid: r2.activeKid, entries: { [rotKid32]: r2.entries[rotKid32], [KEYRING_LEGACY_KID]: r2.entries[KEYRING_LEGACY_KID] } };
+      return serializeKeyRing(reordered) === ringBlob32;
+    })());
+  await A('[32] parseKeyRing 往返：blob → 同形（activeKid/兩 entry/wrappedForms/wrappedRec 逐欄）',
+    (() => {
+      const p = parseKeyRing(ringBlob32);
+      return !!p && p.activeKid === rotKid32 && p.entries[rotKid32].wrappedForms.salt === wfNew32.salt
+        && p.entries[KEYRING_LEGACY_KID].wrappedForms.wrapped === wfLegacy32.wrapped
+        && p.entries[KEYRING_LEGACY_KID].wrappedForms.wrappedRec === wfLegacy32.wrappedRec;
+    })());
+  const badRing32 = (o: unknown): boolean => parseKeyRing(modB64(new Uint8Array(enc.encode(JSON.stringify(o))))) === null;
+  await A('[32] parseKeyRing fail-closed 十案（§3.3 形狀門）：非 b64／壞 JSON／entries 空／3 entries／畸形 kid key／flat 形（無 wrappedForms）／wrappedRec 非字串／active 位缺席／空 salt／空 wrapped 皆 → null（ring 是解鑰索引，畸形禁靜默降級）',
+    (() => {
+      const badB64 = (() => { try { parseKeyRing('!!!'); return true; } catch { return false; } })();
+      const badJson = parseKeyRing(modB64(new Uint8Array(enc.encode('{"activeKid":"legacy"')))) === null;
+      return badB64 && badJson && badRing32({ activeKid: 'legacy', entries: {} })
+        && badRing32({ activeKid: rotKid32, entries: { [rotKid32]: { wrappedForms: { wrapped: 'w', salt: 's' } }, ['a'.repeat(8)]: { wrappedForms: { wrapped: 'w', salt: 's' } }, ['b'.repeat(8)]: { wrappedForms: { wrapped: 'w', salt: 's' } } } })
+        && badRing32({ activeKid: rotKid32, entries: { ZZZ: { wrappedForms: { wrapped: 'w', salt: 's' } } } })
+        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrapped: 'w', salt: 's' } } })
+        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: 'w', salt: 's', wrappedRec: 42 } } } })
+        && badRing32({ activeKid: rotKid32, entries: { legacy: { wrappedForms: { wrapped: 'w', salt: 's' } } } })
+        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: 'w', salt: '' } } } })
+        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: '', salt: 's' } } } });
+    })());
+  // ⑤ jr2p. pinlock2（§7.1 J3 併案）
+  await A('[32] pinlock2 參數凍結（§7.1 fast 檔）：PINLOCK2_MEMORY_KIB=262144（256MiB）/t=1/p=1＝PINLOCK2_KAT 同源＋verifyPinLock2KatProd 真原語重推導＝凍結值',
+    PINLOCK2_MEMORY_KIB === 262144 && PINLOCK2_KAT.memoryKib === 262144 && PINLOCK2_KAT.iterations === 1 && PINLOCK2_KAT.parallelism === 1
+    && (await verifyPinLock2KatProd()));
+  const p2blob = await wrapNoteKeyPinLock2(PINLOCK, heldKey, pinD);
+  await A('[32] jr2p. 包裹面：前綴 jr2p.＋payload 嚴格 108B（salt-embedded 同 jr1p.）＋unwrap 同 PIN 解回同鑰（extractable 鐵律 1）',
+    p2blob.startsWith('jr2p.') && modB64.length > 0 && unb64Mod(p2blob.slice(5)).length === 108
+    && (await (async () => { const u = await unwrapNoteKeyPinLock2(PINLOCK, p2blob, pinD); return u.upgraded === false && (await raw32(u.key)) === origRaw; })()));
+  await A('[32] jr2p. 解鎖 fail-closed：錯 PIN → null／空 PIN → null／PIN 正規化等價（全形＋大小寫）',
+    (await unwrapNoteKeyPinLock2(PINLOCK, p2blob, '999999')).key === null
+    && (await unwrapNoteKeyPinLock2(PINLOCK, p2blob, '  ')).key === null
+    && (await unwrapNoteKeyPinLock2(PINLOCK, p2blob, ' ２５８０ＡＢ ')).key !== null);
+  await A('[32] 前綴分派（§7.1 讀舊寫新）：jr1p. blob → 回落路徑＋upgraded=true（rewrap 觸發面；同 PIN）；jr2p. blob GCM 失敗不試 jr1p.（junk 截斷 → null）',
+    (async () => {
+      const p1 = await wrapNoteKeyPinLock(PINLOCK, heldKey, pinD);
+      const u1 = await unwrapNoteKeyPinLock2(PINLOCK, p1, pinD);
+      const junkP2 = p2blob.slice(0, 8) + 'AAAAAAAAAAAAAAAA';
+      return u1.upgraded === true && (await raw32(u1.key)) === origRaw
+        && (await unwrapNoteKeyPinLock2(PINLOCK, junkP2, pinD)).key === null;
+    })());
+  await A('[32] rewrap 動線（§7.1 r4）：jr1p. 命中 → 同 PIN 重包 jr2p. → 新 blob 解回同鑰＋二次解鎖 upgraded=false（重包成功即止——冪等面自足）',
+    (async () => {
+      const p1 = await wrapNoteKeyPinLock(PINLOCK, heldKey, pinD);
+      const hit = await unwrapNoteKeyPinLock2(PINLOCK, p1, pinD);
+      if (hit.key === null || !hit.upgraded) return false;
+      const rewrap = await wrapNoteKeyPinLock2(PINLOCK, hit.key, pinD);
+      const u2 = await unwrapNoteKeyPinLock2(PINLOCK, rewrap, pinD);
+      return rewrap.startsWith('jr2p.') && u2.upgraded === false && (await raw32(u2.key)) === origRaw;
+    })());
+  await A('[32] pinLock2 未配置面（兄弟 fork 選配律）：wrap → ERR_PINLOCK2_NOT_CONFIGURED；jr1p. blob unwrap 照走但 upgraded=false（無升級路徑不給會 throw 的觸發面）；isPinLockWrap2 恆 false',
+    (async () => {
+      const bare = { pinLock: 'jr1p.', pinLockSaltPrefix: PINLOCK.pinLockSaltPrefix, pinLockAad: PINLOCK.pinLockAad };
+      let e = ''; try { await wrapNoteKeyPinLock2(bare, heldKey, pinD); } catch (x) { e = (x as Error).message; }
+      const p1 = await wrapNoteKeyPinLock(PINLOCK, heldKey, pinD);
+      const u1 = await unwrapNoteKeyPinLock2(bare, p1, pinD);
+      return e === 'ERR_PINLOCK2_NOT_CONFIGURED' && u1.key !== null && u1.upgraded === false
+        && isPinLockWrap2(p2blob, bare) === false && isPinLockWrap2(p2blob, PINLOCK) === true;
+    })());
+  await A('[32] barrel 面：keyring/pinlock2/2 族原語公開匯出（＝子路徑同一函式——單一真相；kid 契約 keyring re-export＝note-crypto 同源）',
+    (async () => {
+      const m = await import('../src/index.ts');
+      const kr = await import('../src/client/keyring.ts');
+      const pl = await import('../src/client/pinlock.ts');
+      const nc = await import('../src/client/note-crypto.ts');
+      return typeof m.serializeKeyRing === 'function' && typeof m.parseKeyRing === 'function' && typeof m.keyRingAddEntry === 'function'
+        && typeof m.encryptNote2 === 'function' && typeof m.decryptNote2 === 'function'
+        && typeof m.wrapNoteKeyPinLock2 === 'function' && typeof m.unwrapNoteKeyPinLock2 === 'function'
+        && m.KEYRING_LEGACY_KID === KEYRING_LEGACY_KID && m.KEYRING_MAX_ENTRIES === 2
+        && m.generateKeyId === kr.generateKeyId && kr.generateKeyId === nc.generateKeyId
+        && m.isValidKid === nc.isValidKid && m.PINLOCK2_MEMORY_KIB === pl.PINLOCK2_MEMORY_KIB;
+    })());
+}
 }
 
 secOpen(24, '[24] runner 契約自證（--only 解析契約 fail-closed＋段級帳面顯形）'); if (secEnter(24)) {

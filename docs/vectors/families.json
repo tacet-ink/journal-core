@@ -1,6 +1,6 @@
 {
   "format": "journal-core-vectors/1",
-  "package_version": "0.3.1",
+  "package_version": "0.4.3",
   "spec": "docs/format-spec.md",
   "generator": "scripts/generate-vectors.ts",
   "note": "Frozen evidence generated once by calling the real primitives; not recomputed in CI (random iv/salt). Verify gate [26] checks presence and shape only.",
@@ -18,26 +18,26 @@
         "identity": "acct-aaaaaaaaaaaaaaaa",
         "key_hex": "ea50fc9b0196cfd3b25b4e518f431aa3bf50c1cfe92cd9f15b441e2ec7517e71"
       },
-      "wire": "jr1u.ZS3BwfTBUpRTPqEw9u3uv5/A8txoYvKn6YFJN1TmF9lZB+654r7obmOlD/jygE7GpyQMOp5uSw==",
+      "wire": "jr1u.ry3SBUAeec5uJquNFOTN3rk/JyOt0DuJZT6smrFmA+hA5Wt4mknrnhEarhyXYA5ayV8BuO6qXg==",
       "payload_len": 55,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "652dc1c1f4c15294533ea130"
+          "hex": "af2dd205401e79ce6e26ab8d"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 27,
-          "hex": "f6edeebf9fc0f2dc6862f2a7e981493754e617d95907eeb9e2bee8"
+          "hex": "14e4cddeb93f2723add03b89653eac9ab16603e840e56b789a49eb"
         },
         {
           "name": "tag",
           "offset": 39,
           "len": 16,
-          "hex": "6e63a50ff8f2804ec6a7240c3a9e6e4b"
+          "hex": "9e111aae1c97600e5ac95f01b8eeaa5e"
         }
       ]
     },
@@ -52,26 +52,26 @@
         "aad": "noteId:n1",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1b.owQXSki9NwrZ173EXj1SukQM1Bm4yOd0AZPIZkgNeLYWipScEGgAsTVoVBei1VFl/OOvDNkCfw==",
+      "wire": "jr1b.Zw7x+KuBN6a9Uz3oWU9oBxAJV4r4lvQUCysN3rthj0gM9hqC1vNhU8YI4bfSjbFvjdGJ1XzTuA==",
       "payload_len": 55,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "a304174a48bd370ad9d7bdc4"
+          "hex": "670ef1f8ab8137a6bd533de8"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 27,
-          "hex": "5e3d52ba440cd419b8c8e7740193c866480d78b6168a949c106800"
+          "hex": "594f68071009578af896f4140b2b0ddebb618f480cf61a82d6f361"
         },
         {
           "name": "tag",
           "offset": 39,
           "len": 16,
-          "hex": "b135685417a2d55165fce3af0cd9027f"
+          "hex": "53c608e1b7d28db16f8dd189d57cd3b8"
         }
       ]
     },
@@ -86,26 +86,26 @@
         "aad": "jr1a:note-abc:att-001",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1c.fuZfaRmnWhXl1nc4Uvr8l1Qtz9PSULC6wW8Qe1ArhTGBsuwTnsCIFuNV21iNbR2gtoDKlh3w9KDBkG+C8CYhg8gmaljx1OauhfbcB1vDa5tPiaw4e3JtoDNrI/U=",
+      "wire": "jr1c.9J1dB0EE2rpOMAMh2vMd+lgN97OtqNF76nc1mfI5ZPXDD7iCKe0rbuxb8CxQkF8RHUxuDXPRKA86P2t/3WsbHVAK7OnVdWvEkmsCJCGJfD/kq4Y86GPaskwjYZE=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "7ee65f6919a75a15e5d67738"
+          "hex": "f49d5d074104daba4e300321"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "52fafc97542dcfd3d250b0bac16f107b502b853181b2ec139ec08816e355db588d6d1da0b680ca961df0f4a0c1906f82f0262183c8266a58f1d4e6ae85f6dc07"
+          "hex": "daf31dfa580df7b3ada8d17bea773599f23964f5c30fb88229ed2b6eec5bf02c50905f111d4c6e0d73d1280f3a3f6b7fdd6b1b1d500aece9d5756bc4926b0224"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "5bc36b9b4f89ac387b726da0336b23f5"
+          "hex": "21897c3fe4ab863ce863dab24c236191"
         }
       ]
     },
@@ -120,26 +120,26 @@
         "aad": "note-abc",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1d.QkXjAJTB+XOcY8p6dmQXQeQVEv4876//2FzmWPc0AiqvSgyYGa7EsrpTWPD9bF3BKVbJ4vz7Ig4UnvgOpvkUWJ4mcqZHC2Hf",
+      "wire": "jr1d.Y0c/eFQm1NOfJxBDjYXW1jxvU7IZaFttnKjYSmy37JcXQCOIuoks3nab7X0/lwUOPFDrqtAaBZtq8FHcqumM2sXGkHeq6exF",
       "payload_len": 72,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "4245e30094c1f9739c63ca7a"
+          "hex": "63473f785426d4d39f271043"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 44,
-          "hex": "76641741e41512fe3cefafffd85ce658f734022aaf4a0c9819aec4b2ba5358f0fd6c5dc12956c9e2fcfb220e"
+          "hex": "8d85d6d63c6f53b219685b6d9ca8d84a6cb7ec9717402388ba892cde769bed7d3f97050e3c50ebaad01a059b"
         },
         {
           "name": "tag",
           "offset": 56,
           "len": 16,
-          "hex": "149ef80ea6f914589e2672a6470b61df"
+          "hex": "6af051dcaae98cdac5c69077aae9ec45"
         }
       ]
     },
@@ -151,29 +151,29 @@
       "aad": "notekey",
       "inputs": {
         "passphrase": "correct-horse-battery-staple-42",
-        "salt_hex": "544a80b6d0fad5505c5da067d9446464",
+        "salt_hex": "2cb361fa8af4886549031a3b6e3f8243",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1w.Qwo31pQ9k/o+RN+HqI4Q5SPgcSfLutpy+F2c3H4B26/KLHcoaqHcswGlHFQE7WPCpjO+jlxBLj2PhCv4S5UgB10vvDHu7MXc0dFndA1t28/zxU+YtojkoeXbCgY=",
+      "wire": "jr1w.h0rqKcmMI57158ZjltIJ5w5V4HCdKpujxuNnDxX5bZODIfGLWjrW/a4ox+WSKdZoXqJE23J7xa1wcSuEZoptL1gPa5a+A8qOVASoUtorTH+dEaRQorAWOAtR6pY=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "430a37d6943d93fa3e44df87"
+          "hex": "874aea29c98c239ef5e7c663"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "a88e10e523e07127cbbada72f85d9cdc7e01dbafca2c77286aa1dcb301a51c5404ed63c2a633be8e5c412e3d8f842bf84b9520075d2fbc31eeecc5dcd1d16774"
+          "hex": "96d209e70e55e0709d2a9ba3c6e3670f15f96d938321f18b5a3ad6fdae28c7e59229d6685ea244db727bc5ad70712b84668a6d2f580f6b96be03ca8e5404a852"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "0d6ddbcff3c54f98b688e4a1e5db0a06"
+          "hex": "da2b4c7f9d11a450a2b016380b51ea96"
         }
       ]
     },
@@ -189,26 +189,26 @@
         "identity": "acct-aaaaaaaaaaaaaaaa",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1w.m7GyIzde0APyA4WemhwffzQvBzwORvJ/A/mgXwzSvdLhyCRZ7Ap4jtgXyVZrWuKL3Wfx7iuf5aPi5qNb9qx1GUSymzI3JFOnM9zzUnDadcPyXWmzdj7X7XakE5A=",
+      "wire": "jr1w.iTM6aBSib9gCwihTxzZu0Bo4XHS9eSzS1N2WAf3RNAY+QcDYqaakyTXZ/qTxMejq6tyxvpAmGHydojxJ+ipBhR3PfRoa4xYqwWegQp7MyO9OOjuRSgJRRa63EgM=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "9bb1b223375ed003f203859e"
+          "hex": "89333a6814a26fd802c22853"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "9a1c1f7f342f073c0e46f27f03f9a05f0cd2bdd2e1c82459ec0a788ed817c9566b5ae28bdd67f1ee2b9fe5a3e2e6a35bf6ac751944b29b32372453a733dcf352"
+          "hex": "c7366ed01a385c74bd792cd2d4dd9601fdd134063e41c0d8a9a6a4c935d9fea4f131e8eaeadcb1be9026187c9da23c49fa2a41851dcf7d1a1ae3162ac167a042"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "70da75c3f25d69b3763ed7ed76a41390"
+          "hex": "9eccc8ef4e3a3b914a025145aeb71203"
         }
       ]
     },
@@ -225,26 +225,26 @@
         "hkdf_info": "journal-kek-rec-v1:jr1r.",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1r.4ZXONUPnf30yza91DvOvEwvekyRh4XrouaFjz6oDBcfT/F3VcziKrIWncTFrI7aQUz7sdNpjSclxd1msGFDasWSzJBzxT302yp/AQTcMuX+yY2av+lUzUqoALqM=",
+      "wire": "jr1r.L1iJ1/zNgnTSDJqvElHMN0aiqDwt7TaFzJ3pm4F2R+V2edB/VkCAsYfSt6QkybyFX4Auq9yzoz8vKylAk6wsGdFg98lEL71m/BpbolnAWR0jx335hxXQRp0N9I8=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "e195ce3543e77f7d32cdaf75"
+          "hex": "2f5889d7fccd8274d20c9aaf"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "0ef3af130bde932461e17ae8b9a163cfaa0305c7d3fc5dd573388aac85a771316b23b690533eec74da6349c9717759ac1850dab164b3241cf14f7d36ca9fc041"
+          "hex": "1251cc3746a2a83c2ded3685cc9de99b817647e57679d07f564080b187d2b7a424c9bc855f802eabdcb3a33f2f2b294093ac2c19d160f7c9442fbd66fc1a5ba2"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "370cb97fb26366affa553352aa002ea3"
+          "hex": "59c0591d23c77df98715d0469d0df48f"
         }
       ]
     },
@@ -260,26 +260,26 @@
         "storage_key": "tacet_notekey:acct-localwrap-vector",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1l.HSWPG10UxS1C5WIYxRyu4WvlwuOqkwTMcNs4ld6BQ/QOMmion9JpP6Ob+JjyjRFDfjiWtFi0tcE+ePiFjefuK6rgSbUy6KLpPnt7fGOTTPSBRV3Voia3+owb5Es=",
+      "wire": "jr1l.aGqxDfNQ2KGg50BSK09c2OZ35CjChbS5lRgKrwt+f+B0Qv/8Q/KIZ/RfDhVpsR9JJ/IYd1QhgSE3TNgWJhUT6hugZmk/W6NgQ8w+tX0C4Vopo+ZuQB9bQ1apBZI=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "1d258f1b5d14c52d42e56218"
+          "hex": "686ab10df350d8a1a0e74052"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "c51caee16be5c2e3aa9304cc70db3895de8143f40e3268a89fd2693fa39bf898f28d11437e3896b458b4b5c13e78f8858de7ee2baae049b532e8a2e93e7b7b7c"
+          "hex": "2b4f5cd8e677e428c285b4b995180aaf0b7e7fe07442fffc43f28867f45f0e1569b11f4927f2187754218121374cd816261513ea1ba066693f5ba36043cc3eb5"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "63934cf481455dd5a226b7fa8c1be44b"
+          "hex": "7d02e15a29a3e66e401f5b4356a90592"
         }
       ]
     },
@@ -291,29 +291,29 @@
       "aad": "notekey-share",
       "inputs": {
         "share_passphrase": "share-link-passphrase-42",
-        "salt_hex": "b06336f3c3dfe2efb8ad81ca87e2601c",
+        "salt_hex": "4aadf795663a4cc3a2da02344ca21c90",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jrsw.9K5zuYF9Nvqj9P7323sh7EF/21kqcLOpSnr0pAGTW2o5sQgKws+fyH6nFLYnXFxDiTASRvmtLQYpVjFRprdqJJ7c82x0gJUQfShNcmszM6tX33XjdHjtFq2AP64=",
+      "wire": "jrsw.jPyM/BzM9cBch6qc0G2nlPK5ZNh82MZ8SbsVNq7ak/3vqeiIPqzFOWwjyL0VnGdn0L9T7DFD+rMhMdFjjamX7zYmHqW45qyWRxCKhHqCaIpP2bGURKSWjB5yECM=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "f4ae73b9817d36faa3f4fef7"
+          "hex": "8cfc8cfc1cccf5c05c87aa9c"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "db7b21ec417fdb592a70b3a94a7af4a401935b6a39b1080ac2cf9fc87ea714b6275c5c4389301246f9ad2d0629563151a6b76a249edcf36c748095107d284d72"
+          "hex": "d06da794f2b964d87cd8c67c49bb1536aeda93fdefa9e8883eacc5396c23c8bd159c6767d0bf53ec3143fab32131d1638da997ef36261ea5b8e6ac9647108a84"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "6b3333ab57df75e37478ed16ad803fae"
+          "hex": "7a82688a4fd9b19444a4968c1e721023"
         }
       ]
     },
@@ -325,29 +325,29 @@
       "aad": "notekey",
       "inputs": {
         "passphrase": "correct-horse-battery-staple-42",
-        "salt_hex": "d594d58c276dabc1a9e1302dc122f5a3",
+        "salt_hex": "4f385d06c04660d64966904dbe6da675",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr3w.8AgE83Npz9nggDW87UIREjOagSWGJuJjqgvq5+Y55FM7Zq/NcolNVVdvghG1Zx46Gn+wrUnVkPmzHYScG3//1xD9L3y0k9tGGSz8ASGqwl/dDN0Kh1Q5uVghup0=",
+      "wire": "jr3w.T2GtlB5MNo1G4gfS+RHw6ZmOoFZFR9vwTP5N/pPZUif9LR7eCXG9DKyudlE9k6I4otMN1I3e0MP0btZujGjzbxE0aCHhd4oTQI7YILzUcdvqEI+lKPr5eY3MtM8=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "f00804f37369cfd9e08035bc"
+          "hex": "4f61ad941e4c368d46e207d2"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "ed421112339a81258626e263aa0beae7e639e4533b66afcd72894d55576f8211b5671e3a1a7fb0ad49d590f9b31d849c1b7fffd710fd2f7cb493db46192cfc01"
+          "hex": "f911f0e9998ea0564547dbf04cfe4dfe93d95227fd2d1ede0971bd0cacae76513d93a238a2d30dd48dded0c3f46ed66e8c68f36f11346821e1778a13408ed820"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "21aac25fdd0cdd0a875439b95821ba9d"
+          "hex": "bcd471dbea108fa528faf9798dccb4cf"
         }
       ]
     },
@@ -360,29 +360,29 @@
       "inputs": {
         "passphrase": "ｖ３－ｇｅｎｅｒａｔｉｏｎ－ｐａｓｓｐｈｒａｓｅ－４２",
         "passphrase_nfkc": "v3-generation-passphrase-42",
-        "salt_hex": "9cd98ef12dd938be4e66c378aaf027c8",
+        "salt_hex": "e0c4e925e912008aabda067f93c80d28",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr4w.ZVCBeMIKtqPCN7qYPJE+GJ79fMc/DDoYVu/yyiAGYjXzpSl/AEMiaM4IME+A2qwpYwpPimnkyDf+NdP+YwP6PDMIsPRhsz/JmOGhxtA5J8QVnG1JhXPqvLBmNzo=",
+      "wire": "jr4w.YpJpOt9wmz0OgB39eiTLe+bBuY3wXmRbpetKe+NDz4mvlAo4UqL+OTYTUo2uXg7lXufEY4pwyOlGFHfOag2EfCpNPMwtrHUU2Wc4mQ3zmQlbC7WyBx2GSDTp+vM=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "65508178c20ab6a3c237ba98"
+          "hex": "6292693adf709b3d0e801dfd"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "3c913e189efd7cc73f0c3a1856eff2ca20066235f3a5297f00432268ce08304f80daac29630a4f8a69e4c837fe35d3fe6303fa3c3308b0f461b33fc998e1a1c6"
+          "hex": "7a24cb7be6c1b98df05e645ba5eb4a7be343cf89af940a3852a2fe393613528dae5e0ee55ee7c4638a70c8e9461477ce6a0d847c2a4d3ccc2dac7514d9673899"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "d03927c4159c6d498573eabcb066373a"
+          "hex": "0df399095b0bb5b2071d864834e9faf3"
         }
       ]
     },
@@ -394,29 +394,29 @@
       "aad": "notekey-share",
       "inputs": {
         "share_passphrase": "share-link-passphrase-42",
-        "salt_hex": "37b82b8b9aa3cd09cc093cba415d6fcb",
+        "salt_hex": "a21e5df14a6c455f567c51e949b8eab4",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr3s.jnQ8uwSc2Flji1DTrQwYxW4ffqEvc7htOx37ComKJ3jNNXxnkEf2zDvzkW9YYgFOUTyVDYCW7akPHvyP/xBLV1WTApZNkSExVcPi6lfGbInUIoSptVB5E/C7VBc=",
+      "wire": "jr3s.ySk+R8loIAmfa3E3VwHcLdeEakiLQTpNyMlrCIaPBZBfdR0GLo6k3SQCqYmsy6vKoXH4JKiO0LNsA8GM1mjziw586gLTnPU3V2Z0cvy2PEgMhPFjKGkh+fvE9Ao=",
       "payload_len": 92,
       "fields": [
         {
           "name": "iv",
           "offset": 0,
           "len": 12,
-          "hex": "8e743cbb049cd859638b50d3"
+          "hex": "c9293e47c96820099f6b7137"
         },
         {
           "name": "ct",
           "offset": 12,
           "len": 64,
-          "hex": "ad0c18c56e1f7ea12f73b86d3b1dfb0a898a2778cd357c679047f6cc3bf3916f5862014e513c950d8096eda90f1efc8fff104b57559302964d91213155c3e2ea"
+          "hex": "5701dc2dd7846a488b413a4dc8c96b08868f05905f751d062e8ea4dd2402a989accbabcaa171f824a88ed0b36c03c18cd668f38b0e7cea02d39cf53757667472"
         },
         {
           "name": "tag",
           "offset": 76,
           "len": 16,
-          "hex": "57c66c89d42284a9b5507913f0bb5417"
+          "hex": "fcb63c480c84f163286921f9fbc4f40a"
         }
       ]
     },
@@ -431,35 +431,35 @@
         "pin": "2580ab",
         "pinSaltPrefix": "tacet-note-pin1:",
         "hkdf_info": "journal-kek2-v1:jr2w.",
-        "salt1_hex": "ea9e0674d00b7d24e8e0edee651dd364",
+        "salt1_hex": "696b07a765bc41d1c9652f9814c09e5c",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr2w.+if5XW6YNbRyZiTMeDRlZNv67y/+OxQGi1fFPqxe4sUOUgowZ7Kb1ShTvku4+QZSJ8QusPoIni+zNDgZ0Fq77PALPof0HsgitA/40hnZ9qsPLDaB2Wkx59WdtuMto2M2wb54FwbXGOD2wWPa",
+      "wire": "jr2w.USBftGehUZV12dt+gZnG84PuXkZBMhGdGB2XRrs8XEpj1yk07hi0lPbpRkzW+tfBXNZLQd19MUhl4VZh7tOzOiCINl2ArGeHAHEACnbix5ktelXMJne8vWqHkQRRrR/7Q5r950Mz4NVwDRnt",
       "payload_len": 108,
       "fields": [
         {
           "name": "pinSalt",
           "offset": 0,
           "len": 16,
-          "hex": "fa27f95d6e9835b4726624cc78346564"
+          "hex": "51205fb467a1519575d9db7e8199c6f3"
         },
         {
           "name": "iv",
           "offset": 16,
           "len": 12,
-          "hex": "dbfaef2ffe3b14068b57c53e"
+          "hex": "83ee5e464132119d181d9746"
         },
         {
           "name": "ct",
           "offset": 28,
           "len": 64,
-          "hex": "ac5ee2c50e520a3067b29bd52853be4bb8f9065227c42eb0fa089e2fb3343819d05abbecf00b3e87f41ec822b40ff8d219d9f6ab0f2c3681d96931e7d59db6e3"
+          "hex": "bb3c5c4a63d72934ee18b494f6e9464cd6fad7c15cd64b41dd7d314865e15661eed3b33a2088365d80ac67870071000a76e2c7992d7a55cc2677bcbd6a879104"
         },
         {
           "name": "tag",
           "offset": 92,
           "len": 16,
-          "hex": "2da36336c1be781706d718e0f6c163da"
+          "hex": "51ad1ffb439afde74333e0d5700d19ed"
         }
       ]
     },
@@ -474,35 +474,35 @@
         "pin": "2580ab",
         "pinSalt3Prefix": "tacet-note-pin3:",
         "hkdf_info": "journal-kek2-v1:jr3d.",
-        "salt1_hex": "4d7870b820f67d49e16e12a77d89e1f2",
+        "salt1_hex": "d1148d5ded7665630c773b178d5a7b46",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr3d.M4mF/2xsr2Detprhjx98du58U57nFnfdB0Z4i4+Qxl6iXUA799QN9DSSXszfyvv6ZouZsanCAKz6nls8SywMkorfw5TBKSl7YoqRI5SdEM8pOCpFRU439rJi2P+bUvF6I69hC8ox28Hw/l6g",
+      "wire": "jr3d.IKvnHAz1Twuyj4GWigtkFE2cV5IRd6VzjfbmlsP2ypAz1/LIoPxbRj1KixvBujzLhNcXwk5lgCLaZalP+0wD16uzj4+BWQWpmQp0uwzGAxsV7ftnBgBdLC/StqlL2NMVB2VqtVo+a8MZxO1B",
       "payload_len": 108,
       "fields": [
         {
           "name": "pinSalt",
           "offset": 0,
           "len": 16,
-          "hex": "338985ff6c6caf60deb69ae18f1f7c76"
+          "hex": "20abe71c0cf54f0bb28f81968a0b6414"
         },
         {
           "name": "iv",
           "offset": 16,
           "len": 12,
-          "hex": "ee7c539ee71677dd0746788b"
+          "hex": "4d9c57921177a5738df6e696"
         },
         {
           "name": "ct",
           "offset": 28,
           "len": 64,
-          "hex": "8f90c65ea25d403bf7d40df434925eccdfcafbfa668b99b1a9c200acfa9e5b3c4b2c0c928adfc394c129297b628a9123949d10cf29382a45454e37f6b262d8ff"
+          "hex": "c3f6ca9033d7f2c8a0fc5b463d4a8b1bc1ba3ccb84d717c24e658022da65a94ffb4c03d7abb38f8f815905a9990a74bb0cc6031b15edfb6706005d2c2fd2b6a9"
         },
         {
           "name": "tag",
           "offset": 92,
           "len": 16,
-          "hex": "9b52f17a23af610bca31dbc1f0fe5ea0"
+          "hex": "4bd8d31507656ab55a3e6bc319c4ed41"
         }
       ]
     },
@@ -518,35 +518,35 @@
         "pin": "2580ab",
         "pinSalt3Prefix": "tacet-note-pin3:",
         "hkdf_info": "journal-kek2-v1:jr4d.",
-        "salt1_hex": "2e3a9e65ac9bf74541ef3ccb2b8e30b0",
+        "salt1_hex": "d68a7c59dfa4596141164b2950dc82c6",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr4d.bMi3+BuBUawgYyjCsPmRVwzkNu2obrPeQgMS4jRjYp6PAEy2FtL+MqqPtZyLuiY/4aM8VMCF7vD5euCkyVKyYZK7n7AMSj8MqGRyTabmPu3HermfU+C+ay9EDoVjKqVz11wioGLtearh7yg2",
+      "wire": "jr4d.XrsQvSKD9TkuT5IfwoCzwrRVpXDejxwk8bHOoYu5wQe/26GDBoxL1QIb5TBamYULjxgO5IvRFwdZRUfY1qYt5Rs4t5QVLMX0epB+TJvlLop7l7MwXtMgf5zun3CHRjZGSQyCnlduV75tIBJa",
       "payload_len": 108,
       "fields": [
         {
           "name": "pinSalt",
           "offset": 0,
           "len": 16,
-          "hex": "6cc8b7f81b8151ac206328c2b0f99157"
+          "hex": "5ebb10bd2283f5392e4f921fc280b3c2"
         },
         {
           "name": "iv",
           "offset": 16,
           "len": 12,
-          "hex": "0ce436eda86eb3de420312e2"
+          "hex": "b455a570de8f1c24f1b1cea1"
         },
         {
           "name": "ct",
           "offset": 28,
           "len": 64,
-          "hex": "3463629e8f004cb616d2fe32aa8fb59c8bba263fe1a33c54c085eef0f97ae0a4c952b26192bb9fb00c4a3f0ca864724da6e63eedc77ab99f53e0be6b2f440e85"
+          "hex": "8bb9c107bfdba183068c4bd5021be5305a99850b8f180ee48bd11707594547d8d6a62de51b38b794152cc5f47a907e4c9be52e8a7b97b3305ed3207f9cee9f70"
         },
         {
           "name": "tag",
           "offset": 92,
           "len": 16,
-          "hex": "632aa573d75c22a062ed79aae1ef2836"
+          "hex": "87463646490c829e576e57be6d20125a"
         }
       ]
     },
@@ -561,32 +561,72 @@
         "pinLockSaltPrefix": "tacet-pinlock-v1:",
         "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
       },
-      "wire": "jr1p.N8eyu8Mj2/XKCF2ICVc+9m2nP/0AyLAH4PPoyUv5gdKYouuPGX8KjP3JMsK01qe13fg/KPv+BDWkE6yhnx2yuEGRmG2LV4s8jLe4+HwxovGvGg7Q8Y5R8XlPrrDizIi1iuznMj0gW6vGYF0e",
+      "wire": "jr1p.CIEfNuZ3VzeRT4bPe1qUbFiE6v5fi85cPyTl3wK2cqLARi3B6SL+x1TcGrUrbQ7x84+AG9XABg9T2ebN5VsOFXFjWypmPosvOZj5COUPUDWapMzkXlLaFAFA8hvk2V4t2VNSs75KVSJTinyk",
       "payload_len": 108,
       "fields": [
         {
           "name": "pinSalt",
           "offset": 0,
           "len": 16,
-          "hex": "37c7b2bbc323dbf5ca085d8809573ef6"
+          "hex": "08811f36e6775737914f86cf7b5a946c"
         },
         {
           "name": "iv",
           "offset": 16,
           "len": 12,
-          "hex": "6da73ffd00c8b007e0f3e8c9"
+          "hex": "5884eafe5f8bce5c3f24e5df"
         },
         {
           "name": "ct",
           "offset": 28,
           "len": 64,
-          "hex": "4bf981d298a2eb8f197f0a8cfdc932c2b4d6a7b5ddf83f28fbfe0435a413aca19f1db2b84191986d8b578b3c8cb7b8f87c31a2f1af1a0ed0f18e51f1794faeb0"
+          "hex": "02b672a2c0462dc1e922fec754dc1ab52b6d0ef1f38f801bd5c0060f53d9e6cde55b0e1571635b2a663e8b2f3998f908e50f50359aa4cce45e52da140140f21b"
         },
         {
           "name": "tag",
           "offset": 92,
           "len": 16,
-          "hex": "e2cc88b58aece7323d205babc6605d1e"
+          "hex": "e4d95e2dd95352b3be4a5522538a7ca4"
+        }
+      ]
+    },
+    {
+      "prefix": "jr2p.",
+      "family": "本機 PIN 鎖定（Argon2id fast 檔）",
+      "layout": "salt-embedded",
+      "kdf": "Argon2id(normalizePin(pin), UTF8(pinLockSaltPrefix ‖ hex(pinSalt)), m=262144KiB t=1 p=1)",
+      "aad": "notekey-pinlock",
+      "inputs": {
+        "pin": "135790",
+        "pinLockSaltPrefix": "tacet-pinlock-v1:",
+        "note_key_hex": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      },
+      "wire": "jr2p.QTKX/8JlKZMEWA/UW2SXKY1K/T0z5RWTCjHLMotwN8f4ucqAB1n77AKOGeli0FrO4YmyyvxRxApdyKy032YTujLwb5yViTzB6N5po9nobXDe+DLC9KU0pOXS8jRXSWm9v/ToBUSvNYCT6vAc",
+      "payload_len": 108,
+      "fields": [
+        {
+          "name": "pinSalt",
+          "offset": 0,
+          "len": 16,
+          "hex": "413297ffc265299304580fd45b649729"
+        },
+        {
+          "name": "iv",
+          "offset": 16,
+          "len": 12,
+          "hex": "8d4afd3d33e515930a31cb32"
+        },
+        {
+          "name": "ct",
+          "offset": 28,
+          "len": 64,
+          "hex": "8b7037c7f8b9ca800759fbec028e19e962d05acee189b2cafc51c40a5dc8acb4df6613ba32f06f9c95893cc1e8de69a3d9e86d70def832c2f4a534a4e5d2f234"
+        },
+        {
+          "name": "tag",
+          "offset": 92,
+          "len": 16,
+          "hex": "574969bdbff4e80544af358093eaf01c"
         }
       ]
     }
