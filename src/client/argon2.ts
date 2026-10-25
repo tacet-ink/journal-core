@@ -193,7 +193,7 @@ export function getArgonLoader(): ArgonLoader | null {
  * Argon2id 派生 32B。雙載體：injectedLoader（瀏覽器 hash-wasm）優先；
  * 無注入時走 node:crypto 原生（僅 node 執行環境可達）。皆不可得即 throw（禁 fallback）。
  */
-async function deriveArgon2id(
+export async function deriveArgon2id(
   password: string | Uint8Array,
   salt: Uint8Array,
   memoryKib: number,
