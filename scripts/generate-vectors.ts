@@ -28,7 +28,7 @@ import {
   ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM, ARGON_TAG_LEN, PH1_V2_SALT, PH1_V3_SALT,
   type Argon3Config,
 } from '../src/client/argon2.ts';
-import { wrapNoteKeyPinLock, unwrapNoteKeyPinLock, PINLOCK_ITERATIONS, type PinLockConfig } from '../src/client/pinlock.ts';
+import { wrapNoteKeyPinLock, unwrapNoteKeyPinLock, wrapNoteKeyPinLock2, unwrapNoteKeyPinLock2, PINLOCK_ITERATIONS, PINLOCK2_KAT, PINLOCK2_KAT_EXPECTED, verifyPinLock2KatProd, type PinLockConfig } from '../src/client/pinlock.ts';
 import { PBKDF2_ITERATIONS, PIN_PBKDF2_ITERATIONS } from '../src/client/note-crypto.ts';
 import type { KeyStore } from '../src/client/keys.ts';
 import * as bip from '../src/client/bip39.ts';
@@ -126,7 +126,7 @@ const CFG: NoteCryptoConfig = {
 };
 const CFG_REC: NoteCryptoConfig = { ...CFG, wrapRec: 'jr1r.', recKekHkdf: 'jr1r.', recKekSalt: KAT20.recSalt };
 const ARGON: Argon3Config = { wrap3: 'jr3w.', wrapDual3: 'jr3d.', pinSalt3Prefix: 'tacet-note-pin3:', wrapShare3: 'jr3s.', wrap4: 'jr4w.', wrapDual4: 'jr4d.' };
-const PINLOCK: PinLockConfig = { pinLock: 'jr1p.', pinLockSaltPrefix: 'tacet-pinlock-v1:', pinLockAad: 'notekey-pinlock' };
+const PINLOCK: PinLockConfig = { pinLock: 'jr1p.', pinLock2: 'jr2p.', pinLockSaltPrefix: 'tacet-pinlock-v1:', pinLockAad: 'notekey-pinlock' };
 
 const NOTE_KEY_HEX = KAT17.raw; // c3×32（閘 KAT 母型）
 const noteKey = await importAesGcm(hexToBytes(NOTE_KEY_HEX), true);
@@ -269,6 +269,11 @@ async function rawOfGuest(): Promise<string> {
   await family('jr1p.', '本機 PIN 鎖定', 'salt-embedded', `PBKDF2-HMAC-SHA256(normalizePin(pin), UTF8(pinLockSaltPrefix ‖ hex(pinSalt)), ${PINLOCK_ITERATIONS})`, PINLOCK.pinLockAad!,
     { pin: lockPin, pinLockSaltPrefix: PINLOCK.pinLockSaltPrefix, note_key_hex: NOTE_KEY_HEX }, lock,
     async () => keyIs(await unwrapNoteKeyPinLock(PINLOCK, lock, lockPin)));
+  const lock2 = await wrapNoteKeyPinLock2(PINLOCK, noteKey, lockPin);
+  await family('jr2p.', '本機 PIN 鎖定（Argon2id fast 檔）', 'salt-embedded',
+    `Argon2id(normalizePin(pin), UTF8(pinLockSaltPrefix ‖ hex(pinSalt)), m=${PINLOCK2_KAT.memoryKib}KiB t=${PINLOCK2_KAT.iterations} p=${PINLOCK2_KAT.parallelism})`, PINLOCK.pinLockAad!,
+    { pin: lockPin, pinLockSaltPrefix: PINLOCK.pinLockSaltPrefix, note_key_hex: NOTE_KEY_HEX }, lock2,
+    async () => keyIs((await unwrapNoteKeyPinLock2(PINLOCK, lock2, lockPin)).key));
 }
 
 // ── KAT ──────────────────────────────────────────────────────────────────────
@@ -355,6 +360,13 @@ write('kat.json', {
     parallelism: ARGON_PROD_PARAMS.parallelism, tag_len: ARGON_PROD_PARAMS.tagLen,
     password: ARGON_PROD_PARAMS.password, salt_hex: '00'.repeat(ARGON_PROD_PARAMS.saltLen),
     expected_tag_hex: ARGON_PROD_EXPECTED,
+  },
+  pinlock2_kat: { // jr2p. fast 檔參數凍結 KAT（rotation-design §7.1；J14 母型；僅 node 閘面跑）
+    algorithm: 'Argon2id', version: '0x13', memory_kib: PINLOCK2_KAT.memoryKib, iterations: PINLOCK2_KAT.iterations,
+    parallelism: PINLOCK2_KAT.parallelism,
+    password: PINLOCK2_KAT.password, salt: PINLOCK2_KAT.salt,
+    expected_kek_hex: PINLOCK2_KAT_EXPECTED,
+    verify_ok: await verifyPinLock2KatProd(),
   },
   frozen_blobs: frozen,
   credentials,

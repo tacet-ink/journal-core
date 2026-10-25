@@ -83,6 +83,7 @@ payload 三種布局：
 | `jr3d.` | PIN 第二因子合鑰（Argon2id） | salt-embedded | 108 | Argon2id×2 → HKDF-SHA256 | `notekey2` |
 | `jr4d.` | PIN 第二因子合鑰（密語正規化 v3） | salt-embedded | 108 | Argon2id×2（pass 段 NFKC） → HKDF-SHA256 | `notekey2` |
 | `jr1p.` | 本機 PIN 鎖定 | salt-embedded | 108 | PBKDF2-SHA256 600000 | 呼叫端 config（Tacet＝`notekey-pinlock`） |
+| `jr2p.` | 本機 PIN 鎖定（Argon2id fast 檔） | salt-embedded | 108 | Argon2id m=262144 KiB t=1 p=1（參數凍結 KAT `pinlock2_kat`） | 呼叫端 config（同 `jr1p.`——AAD 零動） |
 
 驗證閘另以 `jr1g.` 當 guest 前綴對照組（驗證品牌參數化本身）；與 `jr1u.` 同一家族、同布局。
 
@@ -306,6 +307,24 @@ wire    = 'jr1p.' + b64(pinSalt[16] ‖ iv[12] ‖ GCM(KEK, UTF8(hex(noteKey)), 
 - 入口：`wrapNoteKeyPinLock`／`unwrapNoteKeyPinLock(cfg, wrapped, pin)`。
 - 刻意用 PBKDF2 600000（解鎖要即時）；本機裝置閘，與登入第二因子契約分離。
 
+### 4.14 `jr2p.` 本機 PIN 鎖定（Argon2id fast 檔；rotation-design §7.1）
+
+```
+pinSalt = random(16)              // 內嵌；與 jr1p. 同構（salt-embedded 族）
+KEK     = Argon2id(UTF8(normalizePin(pin)), UTF8(pinLockSaltPrefix ‖ hex(pinSalt)), 262144 KiB, 1, 1)   // nonextractable
+wire    = 'jr2p.' + b64(pinSalt[16] ‖ iv[12] ‖ GCM(KEK, UTF8(hex(noteKey)), UTF8(pinLockAad)))          // payload 108B
+```
+
+- 入口：`wrapNoteKeyPinLock2(cfg, noteKey, pin)`；解鎖路由 `unwrapNoteKeyPinLock2`（§4.13 同 cfg）。
+- **讀舊寫新**：解鎖路由依前綴分派（非 KDF 失敗重試）——`jr2p.` → jr2p. 路徑（GCM 失敗回 null
+  不試 `jr1p.`）；`jr1p.` → 回落路徑（舊 blob 恆可解，jr1p. 讀契約保留）；命中 `jr1p.` 回
+  `upgraded=true`（且 `pinLock2` 已配置）＝呼叫端同 PIN 重包 `jr2p.` 回寫一次的觸發面
+  （重包成功即止；接線點＝Tacet lock-store enableLock 解鎖成功路徑）。
+- 參數凍結律：fast 檔（256MiB/t=1/p=1，行動裝置優先）參數凍結進 KAT 向量（`pinlock2_kat`）；
+  改參數＝換新前綴（`jr3p.`），帶內版本化。heavy 檔（m=1GiB）為可選升級面，未入本規格。
+- 與 `jr1p.` 的分工：`jr1p.` 刻意 PBKDF2（解鎖即時性）；`jr2p.` 是強度升檔面（離線爆破
+  成本乘數），兩前綴並存期以讀舊寫新收斂。
+
 ## 5. 登入憑證（非前綴形，供第三方對帳）
 
 | 名稱 | 定義 | 輸出 |
@@ -362,6 +381,7 @@ content 家族以 `inputs.plaintext`／`inputs.aad` 解密須得回原文。
 | --- | --- |
 | `rfc9106` | Argon2id RFC 9106 §5.3 參數：`rfc9106.algorithm`、`rfc9106.version`、`rfc9106.memory_kib`、`rfc9106.iterations`、`rfc9106.parallelism`、`rfc9106.tag_len`、`rfc9106.password_hex`、`rfc9106.salt_hex`、`rfc9106.secret`／`rfc9106.associated_data`（恆 null），與 `rfc9106.expected_tag_hex` |
 | `argon_prod` | 正式參數 KAT（J14a：prod 參數 m=64MiB t=3 p=1，僅 node 閘面跑——載入延遲契約下瀏覽器 KAT 維持 `rfc9106` 小參數）：`argon_prod.algorithm`、`argon_prod.version`、`argon_prod.memory_kib`、`argon_prod.iterations`、`argon_prod.parallelism`、`argon_prod.tag_len`、`argon_prod.password`（確定性測試輸入，非生產密語）、`argon_prod.salt_hex`（恆 16B 0x00）、與 `argon_prod.expected_tag_hex` |
+| `pinlock2_kat` | jr2p. fast 檔參數凍結 KAT（rotation-design §7.1；J14 母型；僅 node 閘面跑）：`pinlock2_kat.algorithm`、`pinlock2_kat.version`、`pinlock2_kat.memory_kib`（262144＝256MiB）、`pinlock2_kat.iterations`（t=1）、`pinlock2_kat.parallelism`（p=1）、`pinlock2_kat.password`（確定性測試 PIN，非生產 PIN）、`pinlock2_kat.salt`（pinLockSaltPrefix ‖ 16B 0x00 hex）、`pinlock2_kat.expected_kek_hex`（KEK 32B）與 `pinlock2_kat.verify_ok`（產生時真原語重推導對凍結值的在場存證） |
 | `frozen_blobs` | 驗證閘凍結 blob（[14] `jr2w.`、[17] `jr3w.`／`jr3d.`／`jr4w.`／`jr4d.`、[20] `jr1r.`／`jr1w.` 復原舊契約）：`frozen_blobs[].prefix`、`frozen_blobs[].wire`、`frozen_blobs[].payload_len`、`frozen_blobs[].inputs`（解包輸入）、`frozen_blobs[].expected_note_key_hex`、`frozen_blobs[].source`（閘段號） |
 | `credentials` | §5 憑證派生樣本：`credentials[].kind`、`credentials[].input`、`credentials[].input_nfkc`（僅 `ph1_v3`：`input` 經 `normalizePassphrase` 後的值）、`credentials[].salt`、`credentials[].expected_hex` |
 
