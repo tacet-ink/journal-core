@@ -2297,7 +2297,7 @@ secOpen(18, '[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫�
           const designated18 = cases.filter((kw) => failLines18.some((l: string) => l.includes(kw)));
           const account18 = failLines18.map((l: string) => l.replace(/^\s*✗\s*/, '').slice(0, 40)).join(';;');
           await A(label + '→ [18] 名單真紅 ' + want + '（designated-FAIL 帳：實測 ' + designated18.length + '/' + want +
-            '；' + account18.slice(0, 110) + '；others=' + others18.length + '）',
+            '；' + account18.slice(0, 110) + '；others=' + others18.length + (others18.length > 1 ? ' [' + others18.map((l: string) => l.trim().slice(0, 70)).join('‖') + ']' : '') + '）',
             g.rc === 1 && designated18.length === want && failLines18.length === want
             && others18.length === 1 && others18[0]!.includes('與 @scure/bip39 參照 200 組雙向一致')
             && cases.every((kw) => failLines18.filter((l: string) => l.includes(kw)).length === 1),
