@@ -5,6 +5,33 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.5.2] — 2026-11-07
+
+**Fixed** — `decryptNote` 對輪替後 kid 前綴族 miss→null（外審 2026-11-07 高優先 #1：
+相容層串漏封）：`cfg.cipherBound2/cipherAttach2/cipherLocal2` 配置時，`jr2b./jr2c./jr2d.<kid>.`
+族字串在 `decryptNote` 本面一律 null（rotation-design §3.2 路由序「jr2b.<kid>. 族 → jr1b. →
+guest → 舊明文相容層」的 miss 面＝null 不降級；該族解密由 `decryptNote2/decryptAttach2/
+decryptLocal2` 承載）。修前無此分支＝`cipherGuest` 在場時走舊明文相容層原樣回傳。判定＝基前綴
+字面在場（startsWith）：kid 欄畸形同樣整面 null（不回落盲試）。未配置基前綴＝零變（opt-in 律；
+gate [32] J1-d byte-identical 面證）。
+
+**Fixed** — `makeInboundCipher` kid 前綴族驗形（外審高優先 #2：雙點形辨不出＝超帽誤落明文
+截斷 40054→20480 且 `isCipherFor:true`）：`CipherFormats` 新增 optional `cipherPrefixes2`
+（基前綴族如 `['jr2b.']`；完整前綴＝base + kid + '.'，kid 欄 `^[0-9a-f]{8}$`——core 原語組裝）。
+配置後：帽內完整形原樣入庫；帽內形廢（junk 身體／kid 欄形廢）→ null 不落明文層；超帽帶任何
+kid 族字面一律 null 絕不截斷。`isCipherFor` 對 kid 族完整形 true／形廢 false／未配置 false，
+既存 tuple 面零動。未配置＝整面退場（現行消費端 byte-identical；gate [32] J2-d）。
+
+**Changed** — gate 帳 618→630：[32] +9（J1-a..d decryptNote 四情境正常鑰/舊鑰/竄改/搬列全 null
+＋同構/畸形/opt-in 零變；J2-a..e inboundCipher 帽內/帽外/形廢/未配置/isCipherFor）、[31] +3
+拷貝樹毒化（P1 摘三族判定→J1-a 翻紅；P2 摘帽內分派→J2-a 翻紅＋J2-b 由尾段防禦行承載照綠；
+P3 摘超帽子句→J2-c 翻紅；錨行漂移＝`ERR_POISON_ANCHOR_DRIFT_31_P*` fail-closed）；`secCases`
+[31] 7→10、[32] 26→35（帳齒兩向咬）。
+
+**Security** — 修前 server 不需任何金鑰即可毀本地副本（回傳 `jr2b.<kid>.` 殘列＝相容層原樣
+落 UI／覆寫本地）與截斷密文面（超帽 kid 族被當明文截斷入庫＝密文損毀）——外審 2026-11-07
+報告 #1/#2 俱封。
+
 ## [0.4.3] — 2026-10-22
 
 **Changed** — 安全文件「不可驗證字樣」改實測公開基準（J14 外審 D1：誠實面收口）：
