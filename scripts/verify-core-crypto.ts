@@ -219,7 +219,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 10, 32: 42 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 42 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -4334,7 +4334,41 @@ await A('[31] bind4 salt 面＝pass 段隨機鹽（hex32；rec 腿定值鹽不�
     fs31.writeFileSync!(pAuth31, srcAuth31, 'utf8');
     await A('[31] P3 毒化（超帽腿 kidFamilyHit 子句摘除）→ [32] J2-c 翻紅（超帽 kid 族回截斷＝40054→20480 截斷面復現；正碼此面 null）',
       mutP3 === 1 && gP3.rc === 1 && redLine31(gP3.out, '[32] J2-c'), 'mut=' + mutP3 + ' rc=' + gP3.rc);
-    const g32 = runGate31('31,32'); // 還原回綠連 [32]（P1-P3 毒化檔 note-crypto.ts/auth.ts 的消費段）
+    // P4/P5：明文相容層 opt-out 閘齒（t_a54d080c；外審 #4）。P4＝client 閘行；P5＝server 三面。
+    //   錨行缺席/多重＝ERR_POISON_ANCHOR_DRIFT_31_P* fail-closed throw（P1-P3 母型同形）。
+    // P4：摘 client 關閉態返回閘（note-crypto.ts decryptNote 相容層）→ 關閉態無前綴字串落相容層
+    //   原樣回傳＝[32] PLT-a 翻紅；guest/bound 軌（PLT-b）與未配置態（PLT-c）不受牽連＝照綠。
+    const needleP4 = "    if (cfg.allowPlaintext === false) return null; // 關閉態：明文相容層摘除（不拋不降級）\n";
+    const mutP4 = src31.split(needleP4).length - 1;
+    if (mutP4 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P4: ' + mutP4);
+    fs31.writeFileSync!(p31, src31.split(needleP4).join(''), 'utf8');
+    const gP4 = runGate31('31,32');
+    fs31.writeFileSync!(p31, src31, 'utf8');
+    await A('[31] P4 毒化（client 明文相容層閘摘除）→ [32] PLT-a 翻紅（關閉態落相容層原樣回傳＝外審 #4「Forged by the server」缺陷形復現）＋PLT-b/c 照綠（guest/bound 軌與未配置態不受牽連＝毒化面恰斷關閉態）',
+      mutP4 === 1 && gP4.rc === 1 && redLine31(gP4.out, '[32] PLT-a') && greenLine31(gP4.out, '[32] PLT-b') && greenLine31(gP4.out, '[32] PLT-c'), 'mut=' + mutP4 + ' rc=' + gP4.rc);
+    // P5：摘 server 關閉態閘三件（auth.ts）→ 關閉態明文形照收＝[32] PLT-d/PLT-f 翻紅；家族密文
+    //   與禁截各軌（PLT-e）照綠。三面合一跑份：超帽截斷門回舊形／pltOk 常數翻 true（b64 慣例
+    //   軌重開＋關閉態 b64 閘行恆假自滅）／尾段真明文行回舊形。
+    const needleP5a = "        : c.allowPlaintext === false ? null : text.slice(0, c.cipherMax); // 純明文（舊版客戶端）：截到上限照收／關閉態→null（無截斷面＝不折半收假密文）";
+    const mutP5a = srcAuth31.split(needleP5a).length - 1;
+    if (mutP5a !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P5a: ' + mutP5a);
+    const needleP5b = "    const pltOk = c.allowPlaintext !== false;";
+    const mutP5b = srcAuth31.split(needleP5b).length - 1;
+    if (mutP5b !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P5b: ' + mutP5b);
+    const needleP5c = "    return c.allowPlaintext === false ? null : text; // 真明文：照收（舊版相容）／關閉態→null（相容層摘除）";
+    const mutP5c = srcAuth31.split(needleP5c).length - 1;
+    if (mutP5c !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P5c: ' + mutP5c);
+    const srcP5a = srcAuth31.split(needleP5a).join("        : text.slice(0, c.cipherMax); // 純明文（舊版客戶端）：截到上限照收");
+    const srcP5b = srcP5a.split(needleP5b).join("    const pltOk = true;");
+    const srcP5c = srcP5b.split(needleP5c).join("    return text; // 真明文：照收（舊版相容）");
+    fs31.writeFileSync!(pAuth31, srcP5c, 'utf8');
+    const gP5 = runGate31('31,32');
+    fs31.writeFileSync!(pAuth31, srcAuth31, 'utf8');
+    await A('[31] P5 毒化（server 關閉態閘三面摘除）→ [32] PLT-d 翻紅（關閉態落帽/超帽明文照收＝截斷面復現）＋PLT-f 翻紅（關閉態 b64 軌重開）＋PLT-e 照綠（家族密文/禁截/junk 軌與 isCipherFor 零動＝毒化恰斷明文門）',
+      mutP5a === 1 && mutP5b === 1 && mutP5c === 1 && gP5.rc === 1
+      && redLine31(gP5.out, '[32] PLT-d') && redLine31(gP5.out, '[32] PLT-f')
+      && greenLine31(gP5.out, '[32] PLT-e'), 'mut=' + mutP5a + '/' + mutP5b + '/' + mutP5c + ' rc=' + gP5.rc);
+    const g32 = runGate31('31,32'); // 還原回綠連 [32]（P1-P5 毒化檔 note-crypto.ts/auth.ts 的消費段）
     fs31.rmSync!(tree31, { recursive: true, force: true });
     await A('[31] 毒化還原回綠＋樹出生即棄（byte-exact 還原；本 repo 樹零接觸）', g32.rc === 0, 'rc=' + g32.rc);
   }
