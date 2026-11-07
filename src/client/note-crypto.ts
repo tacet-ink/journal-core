@@ -93,7 +93,7 @@ export interface NoteCryptoConfig {
    *  （現行契約零變；回傳值＝未驗證內容——伺服器或任何傳輸層不需金鑰即可寫入此層）；
    *  false＝關閉相容層——無前綴字串一律 null，不落明文（guest/bound 軌不受牽連）。
    *  未配置態 byte-identical（opt-out 母型：關閉是 fork 顯式選擇）；相容層退場條件
-   *  （0.7.0 目標——README「設計」節＋界限節＋rotation-design §3.2 誠實面）。 */
+   *  （0.7.0 目標——README「設計」節＋界限節＋rotation-design §12 誠實面）。 */
   allowPlaintext?: boolean;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: KeyStore;

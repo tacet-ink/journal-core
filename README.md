@@ -69,7 +69,7 @@ run: `npm install @tacet-ink/journal-core && node example.mts`（0.3.4 起；Nod
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 630 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
+npm run verify   # 639 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
 ```
 
 上例為高階 Vault API；錯誤碼見[例外契約](#例外契約錯誤碼語意)（`VaultError` 表）。低階原語範例（note-crypto 兩時代加解密、前綴自配）與完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
@@ -91,6 +91,14 @@ npm run verify   # 630 assertions, all green, run against the real modules (no m
   解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。wrapLocal 為選配：
   未配置＝寫面功能退場——v1 可用者（借用期部署）升級後需配置 wrapLocal 才保留本機包裹寫入
   （讀取面照走舊形回落，零資料損失面）。
+- **明文相容層 opt-out（`allowPlaintext`，0.6.0 起）**：反 opt-in——**未配置／true＝現行
+  契約零變**（opt-out 母型：關閉是 fork 顯式選擇，未配置態 byte-identical）；`false`＝關閉：
+  client `decryptNote` 無前綴字串一律 null 不落明文；server `makeInboundCipher` 落帽真明文
+  →null、超帽真明文→null（明文截斷帽不折半收假密文，截斷必壞同律）、帽內純 b64 慣例軌
+  →null（無前綴＝不可驗證內容）。**相容層回傳值＝未驗證內容**——伺服器或傳輸層不需金鑰
+  即可寫入此層（舊版客戶端明文筆記的唯一通道）；關閉態回傳值不再含未驗證內容。退場條件：
+  0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘（屆時 fork 需顯式配置 `allowPlaintext:true`
+  或接受摘除面；詳「界限」節＋rotation-design §12 誠實面）。
 
 ## 模組（Modules）
 
@@ -153,7 +161,7 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 
 ```sh
 npm ci --ignore-scripts
-npm run verify   # 630 斷言對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 639 帳對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -165,7 +173,7 @@ npm run verify   # 630 斷言對真模組（禁鏡像；限流單句 UPSERT…RE
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   630 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
+                 #   639 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
                  # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
                  # ＋高階 Vault API [27]（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）
@@ -372,6 +380,13 @@ Node ≥ 24.7 走內建 `node:crypto` 免注入。
 ## 界限（誠實面）
 
 - guest 時代是混淆級不是 e2e（K_u 由 identity 可派生）；e2e 承諾從綁定（隨機 noteKey）起。
+- **明文相容層**（`allowPlaintext`，0.6.0 起）：未配置／true 時 `decryptNote` 對無前綴舊版
+  明文原樣返回、`makeInboundCipher` 對明文照收截帽入庫——該面回傳值／入庫值＝**未驗證內容**
+  （伺服器或傳輸層不需金鑰即可寫入此層；舊版客戶端明文筆記的唯一通道）；`false`＝關閉
+  （無前綴明文一律 null、截斷面同步關閉、帽內 b64 慣例軌同面 null）。**退場條件（誠實面
+  落條）**：0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘——屆時 fork 需顯式
+  `allowPlaintext:true`（接受未驗證內容面）或接受相容層摘除（舊明文讀 null）；未遷移
+  fork 摘除面零通知（相容層靜默消失＝舊明文筆記不可讀），升級前先盤點 own 明文存量。
 - PIN 類保護（本機鎖定／雙因子 PIN 腿）是 PBKDF2-SHA256 600k：6 位純數字在 RTX 4090 公開基準（≈8.8e9 iter/s）≈68 秒、8 位數字 ≈1.9 小時、6 碼小寫英數 ≈41 小時（PoC C 實證底：4 位 16 核 CPU 28.7s 命中）＝**門檻不是牆**——鎖定閘取即時性、非登入 oracle 戰場，強度取捨見設計。
 - 分享面金鑰範圍：v0.3.6 起 `createShareEnvelope` 用**一次性** `shareKey`（單篇分享建檔、不可傳入帳戶主鑰）；此前分享面＝帳戶歷史主鑰（J1 收口前的舊形，舊 blob 照解）。
 - `jr1l.` 本機包裹（`storeLocalWrap`／`loadLocalWrap`，`wrapLocal` 選配）是混淆級非 e2e（KEK 由 identity 派生、passphrase-free——與 guest 同級）：已 deprecated，用途由「開啟時鎖定」（`jr1p.`／設計面 `jr2p.`）取代；讀面照走（舊 blob 可解承諾不破），新整合不配置 `wrapLocal`（寫面自然退場）。
@@ -412,6 +427,12 @@ deliberately share one code, since telling them apart would create an oracle.
   passphrase (KEK) and with a recovery package (KEK_rec) — before upload. From that point the
   passphrase never crosses the wire: only PH1 (a client-side hash form) is transmitted, and the
   server stores only `PH2 = SHA-256(PH1)`.
+- **Plaintext compat rail (`allowPlaintext`, 0.6.0).** Legacy unprefixed plaintext notes are
+  still accepted by default (`decryptNote` passes them through; `makeInboundCipher` stores them
+  up to `cipherMax`) — that rail carries **unverified content** the server (or any transport layer)
+  can write without any key. Opting out (`allowPlaintext: false` on client config and server
+  `CipherFormats`) makes unprefixed plaintext return/store `null` with no truncation path; the
+  rail is scheduled for removal two minor cycles after 0.7.0.
 - **In-band versioning.** Payload layout and KDF are defined by configurable cipher prefixes
   (e.g. `jr1b.` for bound-era ciphertext, `jr3w.` for Argon2id-wrapped note keys). Upgrading KDF
   parameters always means a new prefix; old prefixes keep decrypting forever (no in-place
@@ -478,7 +499,7 @@ prefix family (`families.json`), known-answer vectors (RFC 9106 Argon2id, the ga
 `scripts/generate-vectors.ts` against the real primitives and committed as frozen evidence; the
 verify gate checks their presence and shape (section [26]) and does not regenerate them.
 
-**Verification.** `npm run verify` runs 630 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
+**Verification.** `npm run verify` runs 639 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
 login ladder-guard behavior suite (external audit #8), and presence/shape checks for the format
