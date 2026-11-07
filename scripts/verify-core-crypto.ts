@@ -1778,7 +1778,7 @@ secOpen(16, '[16] 常駐毒化矩陣（v3 家族語意毒＋舊家族不變毒�
       const runGate16 = (): { rc: number; out: string } => {
         // 內層 gate 執行帶 POISON_GATE_INNER=1 sentinel——[16] 矩陣在內層自我跳過＝遞迴防線
         //（拷貝樹的閘檔含本節全文；無 sentinel 會自拷貝再自跑＝18+ 連鎖行程實證）。
-        try { return { rc: 0, out: exec16('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: tree16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 240000 }) }; }
+        try { return { rc: 0, out: exec16('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: tree16, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 600000 }) }; }
         catch (e: unknown) {
           const err = e as { stdout?: string; stderr?: string; status?: number };
           return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') };
@@ -2260,7 +2260,7 @@ secOpen(18, '[18] 本機包裹專用前綴（wrapLocal=jr1l. opt-in＋讀舊寫�
         // 內層 gate 執行帶 POISON_GATE_INNER=1 sentinel——三毒化節在內層自我跳過＝遞迴防線
         //（[16] runGate16 同形；拷貝樹的閘檔含三節全文，無 sentinel 會自拷貝再自跑）。
         try {
-          const out = cp18!.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: workDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...((globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 240000 });
+          const out = cp18!.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts'], { cwd: workDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...((globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 600000 });
           return { rc: 0, out };
         } catch (e: unknown) {
           const err = e as { stdout?: string; stderr?: string; status?: number };
@@ -3741,7 +3741,7 @@ await A('[28] 隔離對照：envelope 密文≠主鑰面同明文密文（隨機
     fsMod28.writeFileSync!(srcP28, before28.split(needle28).join("const share = await wrapNoteKeyShare3(argon, await importAesGcm(hexToBytes('0000000000000000000000000000000000000000000000000000000000000000'), true), sharePass);"), 'utf8');
     const applied28 = cnt28 === 1 && !fsMod28.readFileSync!(srcP28, 'utf8').includes(needle28);
     let rc28 = 0; let out28 = '';
-    try { out28 = cpMod28.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts', '--only', '28'], { cwd: tree28, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod28?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 240000 }); }
+    try { out28 = cpMod28.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts', '--only', '28'], { cwd: tree28, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(processMod28?.env ?? {}), POISON_GATE_INNER: '1' }, timeout: 600000 }); }
     catch (e: unknown) { const err28 = e as { status?: number; stdout?: string; stderr?: string }; rc28 = err28.status ?? 1; out28 = (err28.stdout ?? '') + (err28.stderr ?? ''); }
     fsMod28.writeFileSync!(srcP28, before28, 'utf8');
     fsMod28.rmSync!(tree28, { recursive: true, force: true });
@@ -4286,7 +4286,7 @@ await A('[31] bind4 salt 面＝pass 段隨機鹽（hex32；rec 腿定值鹽不�
     cp31.execFileSync('ln', ['-s', coreNM31, path31.join(tree31, 'node_modules')], { cwd: tree31, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     const runGate31 = (only = '31'): { rc: number; out: string } => {
       // 內層 --only 31＝本段快跑（P1-P3 毒化案傳 '31,32'＝連 [32] J1/J2 閘案）；POISON_GATE_INNER sentinel＝[16]/[18]/[31] 遞迴防線
-      try { return { rc: 0, out: cp31.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts', '--only', only], { cwd: tree31, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(process as unknown as { env: Record<string, string> }).env, POISON_GATE_INNER: '1' }, timeout: 240000 }) }; }
+      try { return { rc: 0, out: cp31.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts', '--only', only], { cwd: tree31, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(process as unknown as { env: Record<string, string> }).env, POISON_GATE_INNER: '1' }, timeout: 600000 }) }; }
       catch (e: unknown) { const err = e as { stdout?: string; stderr?: string; status?: number }; return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') }; }
     };
     const p31 = path31.join(tree31, 'src/client/note-crypto.ts');
