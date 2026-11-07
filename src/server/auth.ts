@@ -40,6 +40,11 @@ export interface CipherFormats {
   wrapPrefix: string;
   /** 密文上限：UTF-16 code unit 計數（.length 語意；非 UTF-8 bytes）。 */
   cipherMax: number;
+  /** 輪替後 kid 前綴家族基前綴（如 'jr2b.'；完整前綴＝base + kid + '.'，kid 欄 ^[0-9a-f]{8}$——
+   *  core 原語組裝，呼叫端不手拼；rotation-design §3.2）。未配置 = 該族整面退場（現行消費端
+   *  零影響；opt-in 律——外審 2026-11-07 #2：雙點形入 cipherPrefixes 的 startsWith 槽辨不出
+   *  ＝超帽誤落明文截斷）。 */
+  cipherPrefixes2?: readonly string[];
 }
 
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -66,6 +71,16 @@ function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
   return new RegExp(`^(${escaped.join('|')})[A-Za-z0-9+/]+={0,2}$`);
 }
 
+/** kid 前綴家族 regex（輪替後族，rotation-design §3.2）：逐 base 組
+ *  `<base>[0-9a-f]{8}\.[A-Za-z0-9+/]+={0,2}$`（完整形驗形：kid 欄 8 位小寫 hex＋b64 身體）。
+ *  never-match 守衛同 cipherPrefixRe 語意但各自 in-house（空集／全空槽＝null＝恆不命中；
+ *  不入 cipherPrefixRe 的守衛面）。base 字面全字元跳脫（escapeReLiteral）。 */
+function kidFamilyRe(bases: readonly string[] | undefined): RegExp | null {
+  const usable = (bases ?? []).filter(p => typeof p === 'string' && p.length > 0);
+  if (usable.length === 0) return null;
+  return new RegExp(`^(${usable.map(p => escapeReLiteral(p) + '[0-9a-f]{8}\\.').join('|')})[A-Za-z0-9+/]+={0,2}$`);
+}
+
 /**
  * 入庫前校正：前綴密文原樣入庫；超限密文／編碼丟棄（截斷必壞）、明文截到上限照收。
  * cipherMax（UTF-16 單位）同為明文截斷帽：明文相容層無 opt-out——明文一律照收、
@@ -73,18 +88,30 @@ function cipherPrefixRe(cipherPrefixes: readonly string[]): RegExp {
  */
 export function makeInboundCipher(c: CipherFormats) {
   const RE = cipherPrefixRe(c.cipherPrefixes);
+  // kid 前綴族（cipherPrefixes2 opt-in；外審 2026-11-07 #2）兩腿分工：RE2＝完整形驗形；
+  // 字面腿＝「形檢可能 false 但 base 字面在場」仍屬已知前綴（junk 身體 jr2b.0596ea50.!!!：kid 欄過、
+  // 身體廢；kid 欄形廢 jr2b.XXXXXXXX.…：RE2 false＋startsWith true）——兩案都要有閘，皆不落明文層。
+  const RE2 = kidFamilyRe(c.cipherPrefixes2);
+  const kidFamilyHit = (text: string): boolean =>
+    (RE2?.test(text) ?? false) ||
+    (c.cipherPrefixes2 ?? []).some(p => typeof p === 'string' && p.length > 0 && text.startsWith(p));
   return function inboundCipher(raw: unknown): string | null {
     if (typeof raw !== 'string') return null;
     const text = raw.trim();
     if (!text) return null;
     if (text.length > c.cipherMax) {
-      return RE.test(text) || BASE64_RE.test(text)
-        ? null // 密文/編碼超限：截斷必壞，直接丟棄
+      return RE.test(text) || BASE64_RE.test(text) || kidFamilyHit(text)
+        ? null // 密文/編碼超限：截斷必壞，直接丟棄（kid 族任何字面在場同律——超帽禁截，絕不落明文截斷）
         : text.slice(0, c.cipherMax); // 純明文（舊版客戶端）：截到上限照收
     }
     if (RE.test(text)) return text; // 前綴密文：原樣入庫
+    if (kidFamilyHit(text)) { if (!RE2?.test(text)) return null; return text; } // kid 族：完整形原樣入庫；形廢 null 不落明文層
     if (BASE64_RE.test(text) && text.length > 40) return text; // 舊客戶端 b64 慣例：照收
     if (BINARY_RE.test(text)) return null; // 控制字元垃圾：丟棄
+    // 防禦面（上行 kid 族分派在場時不可達：base 字面含 '.' 在 b64 charset 外＝BASE64_RE 恆 false，
+    // 任何字面命中皆已在上行分派）。上行被摘除時 junk『jr2b.0596ea50.!!!』／kid 欄形廢由此行接住
+    // ＝gate [31] P2 毒化案「J2-b 照綠」的承載行。
+    if (kidFamilyHit(text)) return null;
     return text; // 真明文：照收（舊版相容）
   };
 }
@@ -96,7 +123,10 @@ export function isCipherFor(text: string | null | undefined, c: CipherFormats): 
   // 另一組裝點）。守衛形＝跳過空字首的 some() 單點承載：空集恆 false（與 never-match 家族拒絕、
   // opt-in 未配置即拒鐵律同向）、混合形只摘空槽（['','jr1b.']＝jr1b. 家族面照活）——
   // 「空集 if 檢＋保留 startsWith(tuple) 原式」兩行形對混合形不設防（空槽仍經 startsWith('') 放行）。
-  return c.cipherPrefixes.some(p => typeof p === 'string' && p.length > 0 && text.startsWith(p));
+  // kid 前綴族（cipherPrefixes2 opt-in）：完整形驗形（kidFamilyRe）——形廢 false、未配置 null＝false；
+  // 既存 tuple 面零動（2 欄在場時 jr1b. 面照 startsWith）。
+  return c.cipherPrefixes.some(p => typeof p === 'string' && p.length > 0 && text.startsWith(p))
+    || (kidFamilyRe(c.cipherPrefixes2)?.test(text) ?? false);
 }
 
 export function validWrappedKey(v: unknown, wrapPrefix: string | string[]): string | null {

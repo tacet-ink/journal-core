@@ -911,7 +911,10 @@ export async function encryptNote(
 }
 
 /** 解密一則：按前綴選鑰匙；無前綴 = 舊版明文（相容層）原樣返回（guest 前綴未配置時
- *  不明字串一律 null＝guest 家族整面拒絕，跨前綴鐵律不降級）；失敗回 null。 */
+ *  不明字串一律 null＝guest 家族整面拒絕，跨前綴鐵律不降級）；失敗回 null。
+ *  輪替後 kid 前綴族（cfg.cipherBound2/cipherAttach2/cipherLocal2 配置時之 jr2b./jr2c./jr2d.<kid>.）
+ *  本面恆 null——解密走 decryptNote2/decryptAttach2/decryptLocal2（rotation-design §3.2 路由序
+ *  「jr2b.<kid>. 族 → jr1b. → guest → 舊明文相容層」的 miss 面＝null 不降級）。 */
 export async function decryptNote(
   cfg: NoteCryptoConfig,
   held: HeldKey,
@@ -925,6 +928,14 @@ export async function decryptNote(
     // 畸形進解密面、被當舊明文落 UI（truthiness 正規化缺失）。空/空白非合法舊明文，
     // fail-closed 回 null（與本函式任何不符面同一 null 契約，不拋）；非空字串零影響。
     if (cipher.trim() === '') return null;
+    // 輪替後帶 kid 前綴族（jr2b./jr2c./jr2d.，rotation-design §3.2）：decryptNote 本面不承載
+    // 解密（該族由 decryptNote2/decryptAttach2/decryptLocal2 直查 held[kid] 路由）——整面 null
+    // 不落 guest/舊明文相容層（miss＝null 不降級；外審 2026-11-07 #1：相容層原樣回傳＝伺服器
+    // 不需金鑰即可毀本地副本）。判定＝基前綴字面在場（startsWith）：kid 欄畸形同樣整面 null
+    //（字面在場即族 claim，不回落盲試——kid 欄形檢在此只會讓畸形串漏回相容層）。
+    // 未配置（falsy）基前綴跳過＝opt-in 零變（與 guest 正規化同 truthiness 律）。
+    const bound2s = [cfg.cipherBound2, cfg.cipherAttach2, cfg.cipherLocal2];
+    if (bound2s.some(b => !!b && cipher.startsWith(b))) return null;
     // guest 前綴正規化：畸形配置 ''（空字串）會讓
     // startsWith('') 恆真＝bound 列誤導 guest 分支回 null（解密面整列滅失）。
     // falsy 一律收斂為 undefined，與加密面「未配置即拒」truthiness 對稱。
