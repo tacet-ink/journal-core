@@ -219,7 +219,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 10, 32: 35 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 10, 32: 42 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -4480,6 +4480,40 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
     await A('[32] J2-e isCipherFor kid 族：真形 true（帽外同 true＝分類器非帽）／junk false／kid 欄形廢 false／未配置 false；既存 formats（無 2 欄）jr1b.abc 維持 true＋2 欄在場 jr1b. 面零誤傷',
       isCipherFor(fullIn, f2) && isCipherFor(fullOver, f2) && !isCipherFor(junkIn, f2) && !isCipherFor(badKidIn, f2) && !isCipherFor(fullIn, f1)
       && isCipherFor('jr1b.abc', f1) && isCipherFor('jr1b.abc', f2));
+    // ③c PLT（t_a54d080c；外審 2026-11-07 #4）：明文相容層 opt-out——allowPlaintext
+    //   未配置＝現行態（byte-identical 帳面零變）；false＝關閉態（client 相容層返回→null／
+    //   server 明文照收→null：落帽真明文＋超帽無截斷＋b64 慣例軌）。
+    {
+      const pltTxt = 'Forged by the server'; // 外審 #4 實測串（空格非 b64 charset＝不落 b64 慣例軌；≤500 帽）
+      const CFG32plt: NoteCryptoConfig = { ...CFG32, allowPlaintext: false };
+      const guestCt32 = await encryptNote(CFG32, makeHeldKey(), plain32, aad32, idp32);
+      const boundHeld32 = makeHeldKey();
+      boundHeld32.set(heldKey);
+      const boundCt32 = await encryptNote(CFG32, boundHeld32, plain32, aad32, idp32);
+      await A('[32] PLT-a decryptNote 關閉態（allowPlaintext:false）：無前綴字串（外審 #4 實測串）→ null 不落相容層（伺服器偽造筆記內容面收口）',
+        (await decryptNote(CFG32plt, heldOf(rotKey32), pltTxt, aad32, idp32)) === null);
+      await A('[32] PLT-b 關閉態 guest/bound 軌不受牽連：guest 解密面（無 held 依賴）＋bound 解密面（held 鑰）＝關閉面只封相容層',
+        (await decryptNote(CFG32plt, makeHeldKey(), guestCt32, aad32, idp32)) === plain32
+        && (await decryptNote(CFG32plt, heldOf(heldKey), boundCt32, aad32, idp32)) === plain32);
+      await A('[32] PLT-c 未配置 byte-identical：CFG32（guest 在場）明文原樣回傳＝現行契約零變（毒化樣本自洽——同串在關閉態 null＝PLT-a、開放態原樣＝本面）',
+        (await decryptNote(CFG32, heldOf(rotKey32), pltTxt, aad32, idp32)) === pltTxt);
+      // server 面（明文樣本避 b64 charset：空格／'-'／'.'——BINARY_RE 只咬控制字元）
+      const f2c: CipherFormats = { ...f1, cipherPrefixes2: ['jr2b.'], allowPlaintext: false };
+      const in2c = makeInboundCipher(f2c);
+      const pltIn = 'server-forged note body---plain.';
+      const pltOver = (pltTxt + ' ').repeat(30); // 630 > 500 帽、空格非 b64＝超帽真明文（未配置態截 500 入庫）
+      const b64In = 'A'.repeat(400); // 純 b64 charset 帽內＝舊客戶端 b64 慣例軌（非前綴不可驗證內容）
+      const b64Over = 'A'.repeat(600); // b64 超帽＝編碼丟棄軌（未配置態即 null——byte-identical 帳）
+      await A('[32] PLT-d server 關閉態（allowPlaintext:false）：真明文落帽 → null／超帽真明文 → null 無截斷面（修前截 500 入庫）',
+        in2c(pltIn) === null && in2c(pltOver) === null);
+      await A('[32] PLT-e server 關閉態非明文軌道：前綴密文原樣／超帽完整形 null（截斷必壞）／kid 族 junk null／isCipherFor 分類零動',
+        in2c(fullIn) === fullIn && in2c(fullOver) === null && in2c(junkIn) === null
+        && isCipherFor(fullIn, f2c) && !isCipherFor(pltIn, f2c));
+      await A('[32] PLT-f server 關閉態 b64 慣例軌：帽內純 b64 明文（400）→ null（無前綴不可驗證內容同明文相容層面——關閉態只收家族密文）',
+        in2c(b64In) === null && in2c(b64Over) === null);
+      await A('[32] PLT-g server 未配置 byte-identical：真明文照收／超帽明文截 500／帽內 b64 照收／超帽 b64 null＝現行契約零變（與 J2-d 對配）',
+        in1(pltIn) === pltIn && in1(pltOver) === pltOver.slice(0, 500) && in1(b64In) === b64In && in1(b64Over) === null);
+    }
   }
   // ④ KeyRing 資料模型（§3.3）
   const wfLegacy32: WrappedForms = { wrapped: 'jr4w.' + modB64(new Uint8Array(92)), salt: 'ab'.repeat(16), wrappedRec: 'jr1r.' + modB64(new Uint8Array(92)) };
