@@ -306,3 +306,20 @@ RotationProgress = {
 - **復原套件是特殊管道**：已外流的套件（wrappedRec＋使用者 recToken）是**仍然有效的憑證**，不是資料副本——輪替後它照樣取得新鑰的 wrappedRec（§4.2 階段 B 同一 recToken 重包），解 PIN 後開新鑰→**本設計預設不關閉此管道＝裁定點 R9**（輪替同時重發套件＝舊套件失效，或明示接受缺口）。R9 裁定前，threat-model 三語面此句暫以「已知管道、待裁定」落。
 - 輪替**不保護**：輪替期間的中斷窗——但 §5.2 不變量保證中斷窗內主人（已同步 ring 的裝置）仍可解全篇（ring 雙鑰並存、整體可解），風險只在「外流者恰好在中斷窗內且持有舊密文」＝與未輪替同態（輪替不讓事情變差，只讓它變好）。
 - **明文相容層（`allowPlaintext`，0.6.0 起）**：未配置態下，被入侵的伺服器**不需任何金鑰**即可寫入無前綴字串（`decryptNote` 相容層原樣回傳、`makeInboundCipher` 照收入庫）＝偽造筆記內容／毀本地副本的零鑰管道（外審 2026-11-07 #4）。`allowPlaintext:false` 收此管道（無前綴明文一律 null＋截斷面/b64 慣例軌同面關閉；gate [32] PLT-a..g）。**退場條件**：0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘（屆時 fork 需顯式 `allowPlaintext:true` 或接受摘除面；詳 README「設計」節＋「界限」節）。
+- **ring 回滾面（`RingMacConfig`＋單調 epoch，0.7.0 起；外審 2026-11-07 #3）**：被入侵的伺服器對
+  legacy 態 ring blob（無 MAC 欄）仍可**回推舊 blob**（被輪替掉的舊 kid 集復活＝回滾攻擊）或**置
+  null**（client 鏡像摘除＝`clearKeyringMirror` 語意復活）。收口面＝**blob 內 MAC**：序列化 v2 形在頂
+  層帶 `epoch`/`mac` 兩欄，`mac＝HMAC-SHA256(HKDF-SHA256(macKey, info=macAad), `ep<epoch>:<v1 形
+  canonical JSON>`)`——macKey 由 host app per-account 本地持有（`tacet_keyring_mac:<acc>` 慣例）、
+  不進 blob 不過 server＝server 面零知識保持；parse 配置態 fail-closed（驗證聲明後 key 缺/錯/竄改
+  ＝null、epoch 形檢是 `"3"`/[3] 字串化同 `ep3:` 型別混淆的唯一防線、**epoch floor**（r2 MAJOR-1：
+  配置態 epoch 缺席/<1 恆拋/null——「epoch ≥ 1 ⇔ MAC 已驗」不變式，v2 面 epoch-0 恆 null＝與
+  legacy face（恆 epoch 0）自然可分辨，epoch-0 v2 blob 無出廠面））、legacy blob（無 mac 欄）
+  讀契約保留（epoch=0，帶內兼容）；gate [32] KRM-a..o＋毒化 P1..P4（MAC 驗證呼叫摘除→案群翻紅、
+  epoch 形檢摘除→KRM-g 翻紅、serialize/parse floor 摘除→KRM-o 翻紅——[31] 段拷貝樹母型同形）。
+  **殘餘界線（誠實面）**：新裝置無本地
+  epoch 記錄＝首見即信——單調 epoch 的本質界線；**已配置但從未寫出 v2≥1 blob 的帳（高水 book
+  仍 0）期窗內，strip-both/replay 落地仍是 0≥0 照收**（floor 只殲 <1 訊號，首個 v2 blob 前無
+  單調歷史可比——write-side 接線落地即解）；`users.keyring:null` 拒絕接線（sync echo 位
+  guard）、LS 高水標記 book（per-account 最高已見 epoch 持久化）與 v2 blob 寫入端（rotateStart/
+  rotateFinish serialize(v2) 接線）＝tacet 半 follow-up 卡（本卡 core 半只交付原語＋形面）。

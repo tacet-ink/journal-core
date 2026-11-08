@@ -72,6 +72,7 @@ import {
   parseKeyRing,
   type KeyRing,
   type WrappedForms,
+  type RingMacConfig,
 } from '../src/client/keyring.ts';
 import {
   verifyArgonKat,
@@ -209,7 +210,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
 // --only 態僅 skip 段 ranN=0 合法（選中段欠向照咬）；POISON_GATE_INNER 內層跑份僅 sentinel
-// 自我跳過段 [16]/[18]/[20]/[23]/[28]/[29]/[30]/[31] 豁免（遞迴防線＝設計中的條件態；內層實跑
+// 自我跳過段 [16]/[18]/[20]/[23]/[28]/[29]/[30]/[31]/[32] 豁免（遞迴防線＝設計中的條件態；內層實跑
 // 案數＜外層全帳——r2 實測欠面 16:1/19、18:32/39、20:37/47、23:15/18、30:20/21、31:6/7）；
 // 內層非 sentinel 段欠向照咬（U2 teeth 記錄承載）。
 // （MAJOR-1，J14b 完整形，2026-10-22 r1：0.4.3 首版只補超額齒＝半交付；卡前提「原先只咬執行<帳」錯
@@ -219,7 +220,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 42 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 61 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -4562,7 +4563,7 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32);
       const r2b = keyRingAddEntry(r2, rotKid32, wfNew32);
       return r2.activeKid === rotKid32 && keyRingIsRotated(r2) && Object.keys(r2.entries).length === 2
-        && !!r2.entries[KEYRING_LEGACY_KID] && serializeKeyRing(r2) === serializeKeyRing(r2b);
+        && !!r2.entries[KEYRING_LEGACY_KID] && (await serializeKeyRing(r2)) === (await serializeKeyRing(r2b));
     })());
   await A('[32] ring 超限 fail-closed：2 entry＋新 kid 缺席 → ERR_RING_FULL（先退場再加——輪替串行動作、並行輪替禁）',
     (async () => {
@@ -4578,36 +4579,339 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       if (JSON.stringify(keyRingRetiredKids(r2)) !== JSON.stringify([KEYRING_LEGACY_KID])) return false;
       const r3 = keyRingRetire(r2, KEYRING_LEGACY_KID);
       return !r3.entries[KEYRING_LEGACY_KID] && r3.activeKid === rotKid32 && Object.keys(r3.entries).length === 1
-        && serializeKeyRing(keyRingRetire(r3, KEYRING_LEGACY_KID)) === serializeKeyRing(r3);
+        && (await serializeKeyRing(keyRingRetire(r3, KEYRING_LEGACY_KID))) === (await serializeKeyRing(r3));
     })());
-  const ringBlob32 = (() => { const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32); return serializeKeyRing(r2); })();
+  const ringBlob32 = await (async () => { const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32); return serializeKeyRing(r2); })();
   await A('[32] serializeKeyRing 定長序（§3.3 server blob 形）：entry 順序打亂 → 同字面（冪等覆寫「同值」面；b64(JSON) 定長序）',
-    (() => {
+    (async () => {
       const r2 = keyRingAddEntry(ring32, rotKid32, wfNew32);
       const reordered: KeyRing = { activeKid: r2.activeKid, entries: { [rotKid32]: r2.entries[rotKid32], [KEYRING_LEGACY_KID]: r2.entries[KEYRING_LEGACY_KID] } };
-      return serializeKeyRing(reordered) === ringBlob32;
+      return (await serializeKeyRing(reordered)) === ringBlob32;
     })());
   await A('[32] parseKeyRing 往返：blob → 同形（activeKid/兩 entry/wrappedForms/wrappedRec 逐欄）',
-    (() => {
-      const p = parseKeyRing(ringBlob32);
+    (async () => {
+      const p = await parseKeyRing(ringBlob32);
       return !!p && p.activeKid === rotKid32 && p.entries[rotKid32].wrappedForms.salt === wfNew32.salt
         && p.entries[KEYRING_LEGACY_KID].wrappedForms.wrapped === wfLegacy32.wrapped
         && p.entries[KEYRING_LEGACY_KID].wrappedForms.wrappedRec === wfLegacy32.wrappedRec;
     })());
-  const badRing32 = (o: unknown): boolean => parseKeyRing(modB64(new Uint8Array(enc.encode(JSON.stringify(o))))) === null;
+  const badRing32 = async (o: unknown): Promise<boolean> => (await parseKeyRing(modB64(new Uint8Array(enc.encode(JSON.stringify(o)))))) === null;
   await A('[32] parseKeyRing fail-closed 十案（§3.3 形狀門）：非 b64／壞 JSON／entries 空／3 entries／畸形 kid key／flat 形（無 wrappedForms）／wrappedRec 非字串／active 位缺席／空 salt／空 wrapped 皆 → null（ring 是解鑰索引，畸形禁靜默降級）',
-    (() => {
-      const badB64 = (() => { try { parseKeyRing('!!!'); return true; } catch { return false; } })();
-      const badJson = parseKeyRing(modB64(new Uint8Array(enc.encode('{"activeKid":"legacy"')))) === null;
-      return badB64 && badJson && badRing32({ activeKid: 'legacy', entries: {} })
-        && badRing32({ activeKid: rotKid32, entries: { [rotKid32]: { wrappedForms: { wrapped: 'w', salt: 's' } }, ['a'.repeat(8)]: { wrappedForms: { wrapped: 'w', salt: 's' } }, ['b'.repeat(8)]: { wrappedForms: { wrapped: 'w', salt: 's' } } } })
-        && badRing32({ activeKid: rotKid32, entries: { ZZZ: { wrappedForms: { wrapped: 'w', salt: 's' } } } })
-        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrapped: 'w', salt: 's' } } })
-        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: 'w', salt: 's', wrappedRec: 42 } } } })
-        && badRing32({ activeKid: rotKid32, entries: { legacy: { wrappedForms: { wrapped: 'w', salt: 's' } } } })
-        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: 'w', salt: '' } } } })
-        && badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: '', salt: 's' } } } });
+    (async () => {
+      const badB64 = await (async () => { try { await parseKeyRing('!!!'); return true; } catch { return false; } })();
+      const badJson = (await parseKeyRing(modB64(new Uint8Array(enc.encode('{"activeKid":"legacy"'))))) === null;
+      return badB64 && badJson && (await badRing32({ activeKid: 'legacy', entries: {} }))
+        && (await badRing32({ activeKid: rotKid32, entries: { [rotKid32]: { wrappedForms: { wrapped: 'w', salt: 's' } }, ['a'.repeat(8)]: { wrappedForms: { wrapped: 'w', salt: 's' } }, ['b'.repeat(8)]: { wrappedForms: { wrapped: 'w', salt: 's' } } } }))
+        && (await badRing32({ activeKid: rotKid32, entries: { ZZZ: { wrappedForms: { wrapped: 'w', salt: 's' } } } }))
+        && (await badRing32({ activeKid: 'legacy', entries: { legacy: { wrapped: 'w', salt: 's' } } }))
+        && (await badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: 'w', salt: 's', wrappedRec: 42 } } } }))
+        && (await badRing32({ activeKid: rotKid32, entries: { legacy: { wrappedForms: { wrapped: 'w', salt: 's' } } } }))
+        && (await badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: 'w', salt: '' } } } }))
+        && (await badRing32({ activeKid: 'legacy', entries: { legacy: { wrappedForms: { wrapped: '', salt: 's' } } } }));
     })());
+  // ④b KRM（t_19eed277；外審 2026-11-07 #3 ring 回滾面）：ring blob 帶內版本化——RingMacConfig 選配 MAC＋單調 epoch。
+  //   未配置＝v1 形 byte-identical（serialize/parse 現行契約零變）；配置＝v2 形（v1 兩欄原樣＋頂層 epoch/mac 兩欄；
+  //   mac＝HMAC-SHA256(HKDF-SHA256(macKey, salt=∅, info=macAad), `ep<epoch>:<v1 canonical JSON>`)）。
+  //   parse 配置態：mac 在場＝必驗（key 缺/錯/竄改→null）／雙欄缺席＝legacy 照讀 epoch=0／epoch 形檢
+  //   fail-closed／epoch floor（≥1——r2 MAJOR-1「epoch ≥ 1 ⇔ MAC 已驗」不變式：v2 面 epoch-0 恆 null）。
+  {
+    // keyRingBumpEpoch 動態取（原語缺席＝KRM-k 案級紅，非模組連結失敗）
+    const kr32 = (await import('../src/client/keyring.ts')) as unknown as { keyRingBumpEpoch?: (r: KeyRing) => KeyRing };
+    type RingJson32 = { activeKid?: unknown; entries: Record<string, { wrappedForms: Record<string, unknown> }>; epoch?: unknown; mac?: unknown };
+    const MAC32: RingMacConfig = { macAad: 'tacet-keyring-mac' };
+    const MAC32b: RingMacConfig = { macAad: 'sennight-keyring-mac' };
+    const mk32 = crypto.getRandomValues(new Uint8Array(32));
+    mk32[0] = 0xab; // 首位定字母 hex＝大寫變體恆異字面（KRM-j 形檢樣本確定性）
+    const macKey32 = hex(mk32); // B 面同形：crypto.getRandomValues 32B → hex（client 持有、不入 blob）
+    const macKey32b = hex(crypto.getRandomValues(new Uint8Array(32)));
+    const krm = async (f: () => Promise<boolean>): Promise<boolean> => { try { return await f(); } catch { return false; } }; // 拋＝紅（fail-closed 案形）
+    const blobJson32 = (b: string): RingJson32 => JSON.parse(new TextDecoder().decode(unb64Mod(b))) as RingJson32;
+    const tamper32 = (b: string, f: (o: RingJson32) => void): string => { const o = blobJson32(b); f(o); return modB64(new Uint8Array(enc.encode(JSON.stringify(o)))); };
+    const flip32 = (s: string): string => s.slice(0, -1) + (s.endsWith('A') ? 'B' : 'A');
+    const r2fix32 = keyRingAddEntry(ring32, '0596ea50', wfNew32); // 定 kid 雙 entry＝pre-change 凍結錨樣本
+    const r2ep32: KeyRing = { ...keyRingAddEntry(ring32, rotKid32, wfNew32), epoch: 3 };
+    const v2blob32 = await (async () => { try { return await serializeKeyRing(r2ep32, MAC32, macKey32); } catch { return ''; } })();
+    const okV2 = async (b: string): Promise<boolean> => (await parseKeyRing(b, MAC32, macKey32)) !== null;
+    const nullV2 = async (b: string, cfg: RingMacConfig = MAC32, k: string | undefined = macKey32): Promise<boolean> => (await parseKeyRing(b, cfg, k)) === null;
+    /** KRM-a：opt-in 鐵律——未配置 serialize＝pre-change 字面（凍結錨＝d7c40c9 serializeKeyRing(r2fix32) 之 SHA-256）。 */
+    await A('[32] KRM-a serialize 未配置 byte-identical（opt-in 鐵律）：定 kid 雙 entry 樣本＝pre-change（d7c40c9）凍結錨 SHA-256 字面＋JSON 頂層恰 activeKid/entries 兩欄；ring 帶 epoch／傳 macKey 不帶 cfg 皆同字面（v1 不寫 epoch、key 無 cfg 不生效）',
+      krm(async () => {
+        const v1 = await serializeKeyRing(r2fix32);
+        return (await sha(v1)) === '21c906def34429776c70e300cfee413e594eeac5747019270f07b81c3ddb232d'
+          && JSON.stringify(Object.keys(blobJson32(v1))) === JSON.stringify(['activeKid', 'entries'])
+          && (await serializeKeyRing({ ...r2fix32, epoch: 7 })) === v1
+          && (await serializeKeyRing(r2fix32, undefined, macKey32)) === v1;
+      }));
+    /** KRM-b：v2 形＝v1 兩欄原樣＋epoch/mac；parse→serialize 往返同字面（HMAC 確定性＝定長序契約延伸）。 */
+    await A('[32] KRM-b v2 blob 形（配置態）：JSON 頂層＝activeKid/entries/epoch/mac 四欄（v1 兩欄逐字同＋epoch=ring.epoch＋mac hex64）＋parse 往返逐欄同＋epoch 帶回＋parse→serialize 同字面（同 ring/key 恆同 blob）',
+      krm(async () => {
+        const o = blobJson32(v2blob32);
+        const v1o = blobJson32(await serializeKeyRing(r2ep32));
+        const p = await parseKeyRing(v2blob32, MAC32, macKey32);
+        return JSON.stringify(Object.keys(o)) === JSON.stringify(['activeKid', 'entries', 'epoch', 'mac'])
+          && JSON.stringify({ activeKid: o.activeKid, entries: o.entries }) === JSON.stringify(v1o)
+          && o.epoch === 3 && typeof o.mac === 'string' && /^[0-9a-f]{64}$/.test(o.mac)
+          && !!p && p.activeKid === rotKid32 && p.epoch === 3
+          && p.entries[rotKid32].wrappedForms.salt === wfNew32.salt
+          && p.entries[KEYRING_LEGACY_KID].wrappedForms.wrappedRec === wfLegacy32.wrappedRec
+          && (await serializeKeyRing(p, MAC32, macKey32)) === v2blob32;
+      }));
+    /** KRM-c：外審 #3——server 改 blob 內容（包裹字面／entry 集）→ MAC 攔截。 */
+    await A('[32] KRM-c MAC 攔 entries 竄改（外審 #3：入侵 server 改 blob）：wrapped 改一字元／salt 抽換／wrappedRec 摘除／legacy entry 摘除／兩 entry 包裹對調 → null（正確 key；基準未竄改照過＝防全 null 假綠）',
+      krm(async () => {
+        const wf = (o: RingJson32, k: string): Record<string, unknown> => o.entries[k].wrappedForms;
+        return (await okV2(v2blob32))
+          && (await nullV2(tamper32(v2blob32, o => { wf(o, rotKid32).wrapped = flip32(wf(o, rotKid32).wrapped as string); })))
+          && (await nullV2(tamper32(v2blob32, o => { wf(o, KEYRING_LEGACY_KID).salt = 'ef'.repeat(16); })))
+          && (await nullV2(tamper32(v2blob32, o => { delete wf(o, KEYRING_LEGACY_KID).wrappedRec; })))
+          && (await nullV2(tamper32(v2blob32, o => { delete o.entries[KEYRING_LEGACY_KID]; })))
+          && (await nullV2(tamper32(v2blob32, o => { const t = o.entries[rotKid32]; o.entries[rotKid32] = o.entries[KEYRING_LEGACY_KID]; o.entries[KEYRING_LEGACY_KID] = t; })));
+      }));
+    /** KRM-d：activeKid／epoch 皆入 MAC——回切單鑰態與 epoch 改值（前推/回推）同攔。
+     *  （floor 化（r2 MAJOR-1）後 3→0 arm 由 parse floor 形檢先攔（epoch<1 恆 null、MAC 未及算），
+     *  4/2 arms 恆 MAC 攔——案照綠，機制歸屬隨 floor 收口。） */
+    await A('[32] KRM-d MAC 攔 activeKid／epoch 竄改：activeKid rotKid→legacy（回切單鑰態）／epoch 3→4（前推）／3→2（回推）／3→0 → null（epoch 入 MAC 輸入 `ep<epoch>:`＝非可自由改寫的旁註；3→0 arm floor 化後由 epoch<1 形檢先攔——r2 MAJOR-1）',
+      krm(async () => (await okV2(v2blob32))
+        && (await nullV2(tamper32(v2blob32, o => { o.activeKid = KEYRING_LEGACY_KID; })))
+        && (await nullV2(tamper32(v2blob32, o => { o.epoch = 4; })))
+        && (await nullV2(tamper32(v2blob32, o => { o.epoch = 2; })))
+        && (await nullV2(tamper32(v2blob32, o => { o.epoch = 0; })))));
+    /** KRM-e：key 不對齊＝讀不到（同 blob 換 key 攔截；異 key serialize 異 mac）。 */
+    await A('[32] KRM-e MAC key 錯 → null（同 blob 換 key＝攔截；key 不對齊者連形都拿不到）＋異 key serialize mac 異值、key 對齊照過',
+      krm(async () => (await nullV2(v2blob32, MAC32, macKey32b)) && (await okV2(v2blob32))
+        && blobJson32(await serializeKeyRing(r2ep32, MAC32, macKey32b)).mac !== blobJson32(v2blob32).mac));
+    /** KRM-f：macAad＝HKDF info 混域——同 key 異域＝異 MAC 鑰（兄弟 fork 域分離）。 */
+    await A('[32] KRM-f macAad 異域 → null（HKDF info 混域確定面：同 key 異 info＝異 MAC 鑰）：tacet 域 blob 以 sennight 域讀／反向皆 null；異域 mac 異值、v1 兩欄同字面',
+      krm(async () => {
+        const v2b = await serializeKeyRing(r2ep32, MAC32b, macKey32);
+        const o = blobJson32(v2blob32); const ob = blobJson32(v2b);
+        return (await nullV2(v2blob32, MAC32b)) && (await nullV2(v2b, MAC32))
+          && (await parseKeyRing(v2b, MAC32b, macKey32)) !== null
+          && o.mac !== ob.mac && JSON.stringify(o.entries) === JSON.stringify(ob.entries) && o.activeKid === ob.activeKid;
+      }));
+    /** KRM-g：epoch 形檢＝型別混淆唯一防線（"3"／[3] 字串化同 `ep3:`——MAC 照過）。 */
+    await A('[32] KRM-g epoch 形檢 fail-closed（配置態）：字串 "3"／陣列 [3]（字串化同 `ep3:`＝MAC 照過——形檢是唯一防線）／負數／小數／2^53／null／true → null；mac 在場 epoch 缺席 → null（v2 形必帶 epoch）',
+      krm(async () => {
+        const bad = async (ep: unknown): Promise<boolean> => nullV2(tamper32(v2blob32, o => { o.epoch = ep; }));
+        return (await okV2(v2blob32)) && (await bad('3')) && (await bad([3])) && (await bad(-1)) && (await bad(1.5))
+          && (await bad(2 ** 53)) && (await bad(null)) && (await bad(true))
+          && (await nullV2(tamper32(v2blob32, o => { delete o.epoch; })));
+      }));
+    /** KRM-h：legacy blob 恆可讀（epoch=0）；半 v2 形（剝 mac 留 epoch）禁採信未認證 epoch。 */
+    await A('[32] KRM-h legacy blob（v1 形雙欄缺席）＋cfg 在場 → 照 parse＋epoch=0（帶內兼容：舊 blob 恆可讀；key 缺席亦照讀＝無 mac 無需 key）；半 v2 形（mac 剝除、epoch 留存）→ null（未認證 epoch 禁採信——剝 mac 抬 epoch＝單調面繞道）',
+      krm(async () => {
+        const v1 = await serializeKeyRing(r2ep32);
+        const p = await parseKeyRing(v1, MAC32, macKey32);
+        const pNoKey = await parseKeyRing(v1, MAC32);
+        return !!p && p.epoch === 0 && p.activeKid === rotKid32 && !!pNoKey && pNoKey.epoch === 0
+          && (await serializeKeyRing(p)) === v1
+          && (await nullV2(tamper32(v2blob32, o => { delete o.mac; })))
+          && (await nullV2(tamper32(v2blob32, o => { delete o.mac; o.epoch = 99; })));
+      }));
+    /** KRM-i：升級兼容窗——未配置 reader 讀 v2 blob 照 parse（欄位不審；拒多餘欄＝鏡像清空事故）。 */
+    await A('[32] KRM-i 未配置 reader＋v2 blob → 照 parse（升級兼容窗：多餘 mac/epoch 欄不審、不拒）＋回傳形＝同 ring v1 blob 現行 parse 同字面（無 epoch 鍵）；欄值畸形（mac:42／epoch:"x"）照 parse',
+      krm(async () => {
+        const pv2 = await parseKeyRing(v2blob32);
+        const pv1 = await parseKeyRing(await serializeKeyRing(r2ep32));
+        return typeof blobJson32(v2blob32).mac === 'string' // 前提：v2 形在場（案非空轉）
+          && !!pv2 && !!pv1 && JSON.stringify(pv2) === JSON.stringify(pv1) && !('epoch' in pv2)
+          && (await parseKeyRing(tamper32(v2blob32, o => { o.mac = 42; o.epoch = 'x'; }))) !== null;
+      }));
+    /** KRM-j：聲明了驗證就禁跳過——mac 在場而 key/cfg 不可用＝null，不降級成 legacy 讀。 */
+    await A('[32] KRM-j 聲明驗證禁跳過（cfg 在場＋mac 欄在場）：macKey 缺席／62 位／大寫 hex／非 hex → null；macAad 空 → null；mac 欄 null／數字／空字串 → null（key 缺＝讀不到，不降級 legacy 讀）',
+      krm(async () => {
+        const nm = async (m: unknown): Promise<boolean> => nullV2(tamper32(v2blob32, o => { o.mac = m; }));
+        return (await okV2(v2blob32)) && (await parseKeyRing(v2blob32, MAC32)) === null && (await nullV2(v2blob32, MAC32, macKey32.slice(2)))
+          && (await nullV2(v2blob32, MAC32, macKey32.toUpperCase())) && (await nullV2(v2blob32, MAC32, 'z'.repeat(64)))
+          && (await nullV2(v2blob32, { macAad: '' })) && (await nm(null)) && (await nm(42)) && (await nm(''));
+      }));
+    /** KRM-k：keyRingBumpEpoch＝epoch+1 純函式（缺席/非法視 0、禁拋）；v2 序列化帶 bump 值。 */
+    await A('[32] KRM-k keyRingBumpEpoch：缺席視 0→1→2（純函式：輸入不變、activeKid/entries 同值；同輸入恆同輸出）＋非法 epoch（NaN／負數）同缺席視 0 不拋＋v2 序列化 epoch 欄＝bump 值、mac 隨 epoch 異值＋parse 帶回',
+      krm(async () => {
+        const bump = kr32.keyRingBumpEpoch;
+        if (typeof bump !== 'function') return false;
+        const r0 = keyRingAddEntry(ring32, rotKid32, wfNew32);
+        const r1 = bump(r0); const r1b = bump(r0); const r2 = bump(r1);
+        const s1 = await serializeKeyRing(r1, MAC32, macKey32); const s2 = await serializeKeyRing(r2, MAC32, macKey32);
+        return !('epoch' in r0) && r1.epoch === 1 && r1b.epoch === 1 && r2.epoch === 2
+          && r1.activeKid === r0.activeKid && JSON.stringify(r1.entries) === JSON.stringify(r0.entries)
+          && bump({ ...r0, epoch: Number.NaN }).epoch === 1 && bump({ ...r0, epoch: -5 }).epoch === 1
+          && blobJson32(s1).epoch === 1 && blobJson32(s2).epoch === 2 && blobJson32(s1).mac !== blobJson32(s2).mac
+          && (await parseKeyRing(s2, MAC32, macKey32))?.epoch === 2;
+      }));
+    /** KRM-l：常數時間比對形（禁 `===` 咬 hex）——不等長／末位異值皆 null 不拋＋源碼窗錨。 */
+    await A('[32] KRM-l MAC 比對常數時間形（禁 `===` 咬 hex）：mac 不等長（63／65／128 位）→ null 不拋；末位異值（前 63 位同）→ null（全長 fold 非前綴比對）；源碼窗：比對走 ringMacEqual（XOR fold）恰一處、mac/expected 無 `===`／`!==` 直咬',
+      krm(async () => {
+        const m = blobJson32(v2blob32).mac as string;
+        const nm = async (x: string): Promise<boolean> => nullV2(tamper32(v2blob32, o => { o.mac = x; }));
+        const src = await srcOf('../src/client/keyring.ts');
+        return (await okV2(v2blob32)) && (await nm(m.slice(0, 63))) && (await nm(m + '0')) && (await nm(m + m))
+          && (await nm(m.slice(0, 63) + (m[63] === '0' ? '1' : '0')))
+          && src.split('ringMacEqual(o.mac, ').length - 1 === 1 && src.includes('diff |= got.charCodeAt(i) ^ expected.charCodeAt(i)')
+          && !/(o\.mac|expected)\s*[!=]==\s*(o\.mac|expected)/.test(src);
+      }));
+    /** KRM-m：ring 變換攜帶 epoch（addEntry/retire 不丟值、不自增）；無 epoch ring 變換後仍無 epoch 鍵。 */
+    await A('[32] KRM-m ring 變換攜帶 epoch：addEntry（新 kid／同 kid 冪等覆寫）＋retire（退場／已缺席原样）保 epoch 值；無 epoch ring 經變換仍無 epoch 鍵（v1 形零漂移）——bump 由呼叫端顯式（變換不自增）',
+      krm(async () => {
+        const a = keyRingAddEntry({ ...ring32, epoch: 4 }, rotKid32, wfNew32);
+        const a2 = keyRingAddEntry(a, rotKid32, wfNew32);
+        const t = keyRingRetire(a, KEYRING_LEGACY_KID);
+        const t2 = keyRingRetire(t, KEYRING_LEGACY_KID);
+        const plainA = keyRingAddEntry(ring32, rotKid32, wfNew32);
+        return a.epoch === 4 && a2.epoch === 4 && t.epoch === 4 && t2.epoch === 4
+          && !('epoch' in plainA) && !('epoch' in keyRingRetire(plainA, KEYRING_LEGACY_KID));
+      }));
+    /** KRM-n：寫面 fail-closed——配置態 key/epoch/macAad 畸形即拋（自寫不可讀 blob 禁出廠）；未配置態不讀 epoch。
+     *  epoch arms 含 floor 反向臂（0／負數——`<1` 判準兩側皆咬）。 */
+    await A('[32] KRM-n serialize 配置態 fail-closed（寫面先擋——自寫不可讀 blob 禁出廠）：macKey 缺席／畸形 → ERR_RING_MAC_KEY_BAD；epoch 0（floor 反向臂）/負數／小數／NaN → ERR_RING_EPOCH_BAD；macAad 空 → ERR_RING_MAC_AAD_BAD；未配置態 epoch 畸形照 v1 字面（v1 不讀 epoch）',
+      krm(async () => {
+        const err = async (f: () => Promise<string>): Promise<string> => { try { await f(); return ''; } catch (x) { return (x as Error).message; } };
+        return (await err(() => serializeKeyRing(r2ep32, MAC32))) === 'ERR_RING_MAC_KEY_BAD'
+          && (await err(() => serializeKeyRing(r2ep32, MAC32, macKey32.slice(2)))) === 'ERR_RING_MAC_KEY_BAD'
+          && (await err(() => serializeKeyRing({ ...r2ep32, epoch: -1 }, MAC32, macKey32))) === 'ERR_RING_EPOCH_BAD'
+          && (await err(() => serializeKeyRing({ ...r2ep32, epoch: 1.5 }, MAC32, macKey32))) === 'ERR_RING_EPOCH_BAD'
+          && (await err(() => serializeKeyRing({ ...r2ep32, epoch: Number.NaN }, MAC32, macKey32))) === 'ERR_RING_EPOCH_BAD'
+          && (await err(() => serializeKeyRing(r2ep32, { macAad: '' }, macKey32))) === 'ERR_RING_MAC_AAD_BAD'
+          && (await err(() => serializeKeyRing({ ...r2ep32, epoch: 0 }, MAC32, macKey32))) === 'ERR_RING_EPOCH_BAD' // floor 反向臂（epoch=0 恆拋——mutant `epoch<0` 存活面封口；r2 MAJOR-1 鐵律完整形）
+          && (await serializeKeyRing({ ...r2ep32, epoch: -1 })) === (await serializeKeyRing(r2ep32));
+      }));
+    /** KRM-o：epoch floor 不變式「epoch ≥ 1 ⇔ MAC 已驗」（r2 MAJOR-1）——(a) strip-both
+     *  （mac+epoch 兩欄同摘＋entries/activeKid 回改＝降回輪替前態；mac 欄單獨回插時原 mac 對
+     *  回改後 canonical 必破、epoch 缺席時 floor/形檢攔）→ null；(b) 配置態 serialize 無 bump
+     *  → throw；(c) 真簽 epoch-0 v2 blob（gate 側以**真解密路徑同構** HKDF(info=macAad)→HMAC
+     *  重簽 `ep0:`——MAC 有效、floor 是唯一防線）→ null。載體面＝同 helper ep3 重簽照過（案非空轉）。 */
+    await A('[32] KRM-o epoch floor（r2 MAJOR-1「epoch ≥ 1 ⇔ MAC 已驗」）：(a) strip-both（mac+epoch 同摘＋entries/activeKid 回改；mac 單獨回插亦 null——原 mac 對回改 canonical 必破、epoch 缺席形檢攔）→ null；(b) 配置態 serialize 無 bump（epoch 缺席）→ ERR_RING_EPOCH_BAD；(c) 真簽 epoch-0 v2 blob（gate 側 HKDF(info=macAad)→HMAC 重簽 ep0: 認可 MAC——floor 為唯一防線）→ null；載體＝同 helper ep3 重簽照過',
+      krm(async () => {
+        // KRM-o-c 載體：gate 側真簽 helper——與 serializeKeyRing 同構（同 key/域 MAC32＝MAC 認可必真、
+        // 非 stub 非 null）——P4 毒化摘 floor 後 ep0 臂照翻紅的唯一形（MAC 與 floor 兩防線分離）。
+        const resignBlob32 = async (b: string, ep: number): Promise<string> => {
+          const o = blobJson32(b);
+          const mkRaw = new Uint8Array(32);
+          for (let i = 0; i < 32; i++) mkRaw[i] = parseInt(macKey32.slice(i * 2, i * 2 + 2), 16);
+          const kb = await crypto.subtle.importKey('raw', mkRaw as BufferSource, 'HKDF', false, ['deriveBits']);
+          const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0) as BufferSource, info: enc.encode(MAC32.macAad) as BufferSource }, kb, 256);
+          const kek = await crypto.subtle.importKey('raw', bits, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+          // canonical 與 parse 同真相：stableRing 同形（entries 排序）——blob JSON 本体的 entry 順序
+          // （插入序）不作數；MAC 認可面＝parse 端 recompose 的定長序字面。
+          const canon = JSON.stringify({ activeKid: o.activeKid, entries: Object.fromEntries(Object.keys(o.entries).sort().map(k => [k, o.entries[k]])) });
+          const sig = new Uint8Array(await crypto.subtle.sign('HMAC', kek, enc.encode('ep' + ep + ':' + canon) as BufferSource));
+          const macHex = Array.from(sig).map(x => x.toString(16).padStart(2, '0')).join('');
+          return modB64(new Uint8Array(enc.encode(JSON.stringify({ activeKid: o.activeKid, entries: Object.fromEntries(Object.keys(o.entries).sort().map(k => [k, o.entries[k]])), epoch: ep, mac: macHex }))));
+        };
+        // (a) strip-both：v2blob 摘 mac+epoch 兩欄（legacy face 字面）＋entries/activeKid 回改（rotKid entry 摘除、activeKid 回 legacy）→ MAC 無從驗（legacy face 語意）→ 照 parse epoch=0
+        //     ＝攻擊面：此形 parse「成功」＝降回輪替前態——但 KRM-o-a 的判準不是 parse null：parse 對 legacy face **恆**照讀（KRM-h 契約）。
+        //     floor 的抓法＝單調訊號：同 ring 在配置態 serialize 出的 v2 blob（epoch=3）對原 blob parse 帶回 epoch=3＞0——攻擊者兩欄同摘後 client 重放 v1 形 → parse 照過＝
+        //     epoch 回 0。floor 讓「配置態寫面」恆產 epoch≥1——兩欄同摘的 legacy face 與真 legacy blob 不可分辨（誠實面），但**配置態 reader 對 epoch-0 v2 claim 恆 null**
+        //     ＝replay 舊 v1 blob 在單調面上不再有 MAC 認可的 epoch-0 面可達（KRM-o-c 承載）。KRM-o-a 的正面案＝兩欄同摘後**加回 mac 欄認可 MAC**仍 null（僅 epoch 0 缺席）。
+        const stripBoth = tamper32(v2blob32, o => { delete o.mac; delete o.epoch; });
+        const stripBothReMac = tamper32(stripBoth, o => { o.mac = blobJson32(v2blob32).mac as string; }); // 兩欄同摘後僅回插 mac（epoch 仍缺）→ floor 前形＝null（mac 在場必驗＋epoch 形檢）
+        // (a2) 帶 entries/activeKid 回改的 strip-both（claude 案形：降回輪替前態）——回插 mac 欄（原 mac 對回改後 canonical 必破＝MAC 攔）
+        const stripBothLegacy = tamper32(stripBoth, o => { delete o.entries[rotKid32]; o.activeKid = KEYRING_LEGACY_KID; o.mac = blobJson32(v2blob32).mac as string; });
+        // (b) 配置態 serialize 無 bump → throw（KRM-n 遺漏面：epoch 缺席恆拋）
+        const errO = async (f: () => Promise<string>): Promise<string> => { try { await f(); return ''; } catch (x) { return (x as Error).message; } };
+        const noBumpRing32 = keyRingAddEntry(ring32, rotKid32, wfNew32); // 無 epoch ring
+        const noBumpMsg = await errO(() => serializeKeyRing(noBumpRing32, MAC32, macKey32));
+        // (c) 真簽 epoch-0：v2blob 對稱重簽 ep0:（MAC 認可、floor 唯一防線）→ null；同 helper ep3 重簽照過（載體非空轉）。
+        //     （epoch ≥1 的重簽降級——如 3→2 同容重簽——parse 照收＝MAC 只綁內容不測降級；該餘窗＝消費端
+        //     LS 高水 book 承載（§12 殘餘界線），floor 只殲 <1。3→0/兩欄同摘才是 floor 的齒面。）
+        const ep0Sig = await resignBlob32(v2blob32, 0);
+        const ep3Sig = await resignBlob32(v2blob32, 3);
+        return (await nullV2(stripBothReMac)) && (await nullV2(stripBothLegacy))
+          && noBumpMsg === 'ERR_RING_EPOCH_BAD'
+          && (await nullV2(ep0Sig)) // floor 唯一防線案（MAC 認可——P4 毒化摘 floor 後本臂翻紅）
+          && (await okV2(ep3Sig)); // 載體面：同 helper ep3 重簽照過（案非空轉）
+      }));
+    // ⑤ KRM 毒化（拷貝樹 in-gate，[31] 母型）：外審 #3 四向齒——P1 摘 MAC 驗證呼叫（parseKeyRing 內
+    //   `ringMacEqual(o.mac, …)` 唯一行）→ server 竄改 blob 照收＝KRM-c/d/e/f/l 翻紅、KRM-g 照綠
+    //   （形檢與 MAC 異面）；P2 摘 epoch 形檢行 → `"3"`/[3] 型別混淆（MAC 照過＝唯一防線）＝KRM-g
+    //   翻紅、KRM-c..f/l 照綠（MAC 案群不受形檢針影響＝紅面互斥）；P3 摘 serialize floor 行 →
+    //   無 bump 配置態 serialize 照產 epoch-0 blob（KRM-o-b 翻紅、讀面 floor 照綠）；P4 摘 parse
+    //   floor 行 → 真簽 epoch-0 v2 blob 照 parse（KRM-o-c 翻紅、MAC/形檢照綠）——floor 雙面齒
+    //   （寫/讀分離）。錨窗同形嚴格：needle 以「字面唯一」自證（split count ≠ 1＝
+    //   ERR_POISON_ANCHOR_DRIFT_32_P* fail-closed throw）。
+    //   內層 `--only 32`（秒級——禁全跑內層再撞 600s 帽，[16] 前例）＋POISON_GATE_INNER sentinel
+    //   自跳（毒化矩陣載體就緒案照 [31] 形在 inner 態真跑）＋byte-exact 還原（出生即棄樹零殘毒）。
+    {
+      const getBuiltin32 = (id: string): unknown =>
+        (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+      const cp32 = getBuiltin32('node:child_process') as { execFileSync?: (cmd: string, args: string[], opts: { cwd: string; encoding: string; stdio: unknown[]; env?: Record<string, string>; timeout?: number }) => string } | undefined;
+      const os32 = getBuiltin32('node:os') as { tmpdir?: () => string } | undefined;
+      const fs32 = getBuiltin32('node:fs') as {
+        rmSync?: (p: string, o?: { recursive: boolean; force: boolean }) => void;
+        cpSync?: (a: string, b: string, o?: { recursive: boolean; filter?: (src: string) => boolean }) => void;
+        readFileSync?: (p: string, e?: string) => string; writeFileSync?: (p: string, c: string, e?: string) => void;
+        mkdtempSync?: (p: string) => string;
+      } | undefined;
+      const inner32 = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.POISON_GATE_INNER === '1';
+      if (!cp32?.execFileSync || !fs32?.mkdtempSync || !fs32.cpSync || !os32?.tmpdir || inner32) {
+        await A('[32] KRM 毒化矩陣載體就緒（node 內建模組在場；內層遞迴由 sentinel 跳過＝正常；缺席＝顯性 FAIL）', inner32, 'env unavailable AND not inner');
+      } else {
+        const path32 = {
+          join: (...parts: string[]): string => parts.join('/').replace(/\/{2,}/g, '/'),
+          resolve: (...parts: string[]): string => parts.join('/').replace(/\/\.(?=\/|$)/g, '').replace(/\/{2,}/g, '/'),
+        };
+        const repoRoot32 = path32.resolve(new URL('.', import.meta.url).pathname, '..'); // repo root 錨定（禁 cwd 依賴）
+        const coreNM32 = path32.resolve(new URL('.', import.meta.url).pathname, '../node_modules');
+        const gitNMSkip32 = (src: string): boolean => src === '.git' || src.endsWith('/.git') || src.includes('/.git/') || src === 'node_modules' || src.endsWith('/node_modules') || src.includes('/node_modules/');
+        const tree32 = fs32.mkdtempSync!(path32.join(os32.tmpdir!(), 'core-poison32-'));
+        fs32.cpSync!(repoRoot32, tree32, { recursive: true, filter: (src: string) => !gitNMSkip32(src) });
+        fs32.rmSync!(path32.join(tree32, 'node_modules'), { recursive: true, force: true });
+        cp32.execFileSync('ln', ['-s', coreNM32, path32.join(tree32, 'node_modules')], { cwd: tree32, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+        const runGate32 = (only = '32'): { rc: number; out: string } => {
+          // 內層 --only 32＝本段快跑（秒級）；POISON_GATE_INNER sentinel＝[16]/[18]/[31]/[32] 遞迴防線
+          try { return { rc: 0, out: cp32.execFileSync!('node', ['--experimental-strip-types', 'scripts/verify-core-crypto.ts', '--only', only], { cwd: tree32, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...(process as unknown as { env: Record<string, string> }).env, POISON_GATE_INNER: '1' }, timeout: 600000 }) }; }
+          catch (e: unknown) { const err = e as { stdout?: string; stderr?: string; status?: number }; return { rc: err.status ?? 1, out: (err.stdout ?? '') + (err.stderr ?? '') }; }
+        };
+        const pKrm32 = path32.join(tree32, 'src/client/keyring.ts');
+        const srcKrm32 = fs32.readFileSync!(pKrm32, 'utf8');
+        const redLine32 = (out: string, tag: string): boolean => out.split('\n').some((l: string) => l.includes(tag) && l.trimStart().startsWith('✗'));
+        const greenLine32 = (out: string, tag: string): boolean => out.split('\n').some((l: string) => l.includes(tag) && l.trimStart().startsWith('✓'));
+        // P1：摘 MAC 驗證呼叫（keyring.ts parseKeyRing 內唯一一行）→ 竄改 blob MAC 攔截消失＝
+        //   KRM-c（entries 竄改）/d（activeKid/epoch 竄改）/e（key 錯→本應 null）/f（異域→本應 null）/
+        //   l（比對形案——呼叫點本體消失）翻紅；KRM-g 照綠（epoch 形檢不經 ringMacEqual＝異面）。
+        const needleP1 = "    if (!ringMacEqual(o.mac, expected)) return null; // MAC 驗證（常數時間形）\n";
+        const mutP1 = srcKrm32.split(needleP1).length - 1;
+        if (mutP1 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_32_P1: ' + mutP1);
+        fs32.writeFileSync!(pKrm32, srcKrm32.split(needleP1).join(''), 'utf8');
+        const gP1 = runGate32();
+        fs32.writeFileSync!(pKrm32, srcKrm32, 'utf8');
+        await A('[32] KRM P1 毒化（MAC 驗證呼叫摘除）→ KRM-c/d/e/f/l 翻紅（竄改攔截消失＝外審 #3 ring 回滾/竄改缺陷形復現；正碼此面全綠）＋KRM-g 照綠（epoch 形檢＝異面）',
+          mutP1 === 1 && gP1.rc === 1 && redLine32(gP1.out, '[32] KRM-c') && redLine32(gP1.out, '[32] KRM-d')
+          && redLine32(gP1.out, '[32] KRM-e') && redLine32(gP1.out, '[32] KRM-f') && redLine32(gP1.out, '[32] KRM-l')
+          && greenLine32(gP1.out, '[32] KRM-g'), 'mut=' + mutP1 + ' rc=' + gP1.rc);
+        // P2：摘 epoch 形檢行 → `"3"`/[3] 字串化同 `ep3:`、MAC 照過＝型別混淆唯一防線消失＝KRM-g 翻紅；
+        //   MAC 案群（c..f/l——全以 tamper32 改 v2 blob，epoch 值恆合法整數）照綠＝紅面互斥。
+        const needleP2 = '    if (!isRingEpoch(o.epoch)) return null; // epoch 形檢（安全非負整數——"3"/[3] 字串化同 `ep3:` 的型別混淆面唯一防線）\n';
+        const mutP2 = srcKrm32.split(needleP2).length - 1;
+        if (mutP2 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_32_P2: ' + mutP2);
+        fs32.writeFileSync!(pKrm32, srcKrm32.split(needleP2).join(''), 'utf8');
+        const gP2 = runGate32();
+        fs32.writeFileSync!(pKrm32, srcKrm32, 'utf8');
+        await A('[32] KRM P2 毒化（epoch 形檢摘除）→ KRM-g 翻紅（"3"/[3] 型別混淆唯一防線消失＝外審 #3 欺騙讀端面復現）＋KRM-c 照綠（MAC 案群不受形檢針影響——紅面互斥自證）',
+          mutP2 === 1 && gP2.rc === 1 && redLine32(gP2.out, '[32] KRM-g') && greenLine32(gP2.out, '[32] KRM-c'), 'mut=' + mutP2 + ' rc=' + gP2.rc);
+        // P3：摘 serialize floor（`epoch < 1` 判準行 elide）→ 配置態無 bump serialize 照產 epoch-0/負值 blob
+        //   ＝KRM-o-b 翻紅（throw 面消失）；KRM-o-a/c/d 照綠（讀面 floor 恆在＝異面——紅綠互斥自證：寫面齒不遮讀面齒）。
+        const needleP3 = "    if (!isRingEpoch(epoch) || epoch < 1) throw new Error('ERR_RING_EPOCH_BAD'); // epoch floor（r2 MAJOR-1：配置態 epoch 缺席/<1 恆拋——「epoch ≥ 1 ⇔ MAC 已驗」不變式，遞增只經 keyRingBumpEpoch 禁靜默代值）\n";
+        const mutP3 = srcKrm32.split(needleP3).length - 1;
+        if (mutP3 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_32_P3: ' + mutP3);
+        fs32.writeFileSync!(pKrm32, srcKrm32.split(needleP3).join(''), 'utf8');
+        const gP3 = runGate32();
+        fs32.writeFileSync!(pKrm32, srcKrm32, 'utf8');
+        await A('[32] KRM P3 毒化（serialize floor 摘除）→ KRM-o-b 翻紅（無 bump serialize 照產 epoch-0 blob＝寫面 floor 消失）＋KRM-o-a/c 照綠（讀面 floor 恆在——寫/讀齒分離互證）',
+          mutP3 === 1 && gP3.rc === 1 && redLine32(gP3.out, '[32] KRM-o') && greenLine32(gP3.out, '[32] KRM-g') && greenLine32(gP3.out, '[32] KRM-c'), 'mut=' + mutP3 + ' rc=' + gP3.rc);
+        // P4：摘 parse floor（`o.epoch < 1` 判準行 elide）→ 真簽 epoch-0 v2 blob（KRM-o-c gate 側 HKDF→HMAC 重簽、
+        //   MAC 認可）照 parse ＝r2 MAJOR-1 indistinguishable 面復現（KRM-o 翻紅）；KRM-c 照綠＋KRM-g 照綠（MAC/形檢異面）。
+        const needleP4 = '    if (o.epoch < 1) return null; // epoch floor（r2 MAJOR-1：v2 面 epoch ≥ 1 ⇔ MAC 已驗——epoch-0 恆 null，與 legacy face（恆 epoch 0）自然可分辨）\n';
+        const mutP4 = srcKrm32.split(needleP4).length - 1;
+        if (mutP4 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_32_P4: ' + mutP4);
+        fs32.writeFileSync!(pKrm32, srcKrm32.split(needleP4).join(''), 'utf8');
+        const gP4 = runGate32();
+        fs32.writeFileSync!(pKrm32, srcKrm32, 'utf8');
+        await A('[32] KRM P4 毒化（parse floor 摘除）→ KRM-o 翻紅（真簽 epoch-0 v2 blob 照 parse＝r2 MAJOR-1 indistinguishable 面復現；floor 為唯一防線——非 stub 重簽載體）＋KRM-c 照綠＋KRM-g 照綠（MAC/形檢異面——紅綠互斥自證）',
+          mutP4 === 1 && gP4.rc === 1 && redLine32(gP4.out, '[32] KRM-o') && greenLine32(gP4.out, '[32] KRM-c') && greenLine32(gP4.out, '[32] KRM-g'), 'mut=' + mutP4 + ' rc=' + gP4.rc);
+      }
+    }
+  }
   // ⑤ jr2p. pinlock2（§7.1 J3 併案）
   await A('[32] pinlock2 參數凍結（§7.1 fast 檔）：PINLOCK2_MEMORY_KIB=262144（256MiB）/t=1/p=1＝PINLOCK2_KAT 同源＋verifyPinLock2KatProd 真原語重推導＝凍結值',
     PINLOCK2_MEMORY_KIB === 262144 && PINLOCK2_KAT.memoryKib === 262144 && PINLOCK2_KAT.iterations === 1 && PINLOCK2_KAT.parallelism === 1
@@ -4712,12 +5016,12 @@ for (const nSec of secOrder) {
   // 循環吃空／段未進入＝靜默驗證流失，照舊全綠——段帳存在的全部意圖即抓這類流失。條件態豁免
   // （非 skip 態、非帳面虛報；逐段限定，非整輪）：--only 態僅 skip 段 ranN=0 合法（選中段照咬——
   // r1 整輪 `!onlyMode()` 過寬面已收）；POISON_GATE_INNER 內層跑份僅 sentinel 自我跳過段
-  // [16]/[18]/[20]/[23]/[28]/[29]/[30]/[31] 豁免（內層實跑案數＜外層全帳＝設計中的條件態）；
+  // [16]/[18]/[20]/[23]/[28]/[29]/[30]/[31]/[32] 豁免（內層實跑案數＜外層全帳＝設計中的條件態）；
   // 內層非 sentinel 段欠向照咬（U2 teeth 記錄承載；無此區分內層必 RED＝guard 必要）。
   // （sentinel 段實測面＝r2 一手實測：內層全跑 548 案，欠面＝16:1/19、18:32/39、20:37/47、
   // 23:15/18、30:20/21、31:6/7——毒化節內層跳過；28/29 內層不欠＝exemptUnder 收緊面。）
   const poisonInner = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.POISON_GATE_INNER === '1';
-  const exemptUnder = (onlyMode() && !onlySet.has(nSec)) || (poisonInner && (nSec === 16 || nSec === 18 || nSec === 20 || nSec === 23 || nSec === 28 || nSec === 29 || nSec === 30 || nSec === 31));
+  const exemptUnder = (onlyMode() && !onlySet.has(nSec)) || (poisonInner && (nSec === 16 || nSec === 18 || nSec === 20 || nSec === 23 || nSec === 28 || nSec === 29 || nSec === 30 || nSec === 31 || nSec === 32));
   if (!exemptUnder && ranN < (secCases[nSec] ?? 0)) failures.push('[' + nSec + '] 案數欠額 ranN=' + ranN + ' < 帳面 ' + (secCases[nSec] ?? 0) + '（段帳=執行帳契約——欠額也 RED，J14b）');
 }
 
