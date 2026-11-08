@@ -5,7 +5,46 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
-## [0.5.3] — 2026-11-08
+## [0.7.0] — 2026-11-08
+
+**Security** — ring 回滾面收口（外審 2026-11-07 #3：被入侵 server 對 legacy 態 `users.keyring`
+blob 可回推舊 blob（被輪替掉的舊 kid 集復活）或置 null（client 鏡像摘除））：新增
+`RingMacConfig`（`macAad`）＋`serializeKeyRing(ring, macCfg, macKeyHex)` v2 形——頂層
+`epoch`/`mac` 兩欄、`mac＝HMAC-SHA256(HKDF-SHA256(macKey, info=macAad), `ep<epoch>:<v1 形
+canonical JSON>`)`；macKey 由 host app per-account 本地持有、不進 blob 不過 server（server
+面零知識保持）。parse 配置態 fail-closed：mac 在場必驗（key 缺/錯/竄改→null）、epoch 形檢
+（`"3"`/[3] 字串化同 `ep3:` 的型別混淆唯一防線）、**epoch floor**（配置態 epoch 缺席/<1 恆拋/
+null——r2 MAJOR-1「epoch ≥ 1 ⇔ MAC 已驗」不變式：v2 面 epoch-0 恆 null＝與 legacy face（恆
+epoch 0）自然可分辨，遞增只經 `keyRingBumpEpoch`、無 bump 的配置態 serialize 恆拋＝epoch-0
+v2 blob 無出廠面）、legacy blob（無 mac 欄）讀契約保留（epoch=0，帶內兼容）。**未配置＝v1 形
+byte-identical**（opt-in 母型——姊妹 fork 零影響鐵律）。**殘餘界線**：新裝置無本地 epoch 記錄＝
+首見即信；已配置但從未寫出 v2≥1 blob 的帳（高水 book 仍 0）期窗內 strip-both/replay 仍 0≥0
+照收（write-side 接線落地即解）；sync guard、LS 高水標記與 v2 寫入端接線＝tacet 產品層
+follow-up。
+
+**Changed** — `serializeKeyRing`／`parseKeyRing` async 化（0.6.x 同步簽名→Promise；MAC 用
+WebCrypto HMAC）；`keyRingBumpEpoch` 新原語（epoch+1 純函式，缺席/非法視 0 不拋）、`KeyRing`
+選配 `epoch` 欄、ring 變換（addEntry/retire）攜帶 epoch 不自增。gate 帳 639→658：
+[32] 42→61（KRM-a..o 15 案＋毒化 P1..P4——MAC 驗證呼叫摘除→KRM-c/d/e/f/l 翻紅、epoch 形檢
+摘除→KRM-g 翻紅、serialize/parse floor 摘除→KRM-o 翻紅（真簽 epoch-0 重簽載體——floor 唯一
+防線），[31] 段拷貝樹毒化母型同形）；[25] book teeth 帳面同步。
+
+## [0.6.0] — 2026-11-07
+
+**Security** — 明文相容層 opt-out（外審 2026-11-07 #4：`decryptNote` 無前綴字串在
+`cipherGuest` 配置態原樣回傳（dist 實跑 "Forged by the server" 照收）＋`makeInboundCipher`
+收明文無關閉選項——與「server never sees plaintext」宣稱落差）：兩面新增 optional
+`allowPlaintext`（`NoteCryptoConfig`／`CipherFormats`）。**未配置／true＝現行契約零變**
+（opt-out 母型——關閉是 fork 顯式選擇；未配置態 byte-identical，姊妹 fork 零影響鐵律）；
+**false＝關閉相容層**：client——無前綴字串一律 null 不落明文（guest/bound 軌不受牽連）；
+server——落帽真明文→null、超帽真明文→null（無截斷面，明文截斷帽不折半收假密文）、
+帽內純 b64 慣例軌→null（無前綴＝不可驗證內容，與明文相容層同面）。關閉態回傳值不再含
+未驗證內容：開放態相容層回傳值＝**未驗證內容**（伺服器／傳輸層不需金鑰即可寫入此層）——
+介面標示入 README 設計節與 JSDoc。gate 帳 630→639：[32] +7（PLT-a..g）、[31] +2（毒化
+P4/P5）；相容層退場條件：0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘（fork 需顯式配置
+`allowPlaintext:true` 或接受摘除面）——README「設計」節＋「界限」節＋
+rotation-design §12 誠實面三處落條。
+## [0.5.3] — 2026-11-08（**未發布**——版本號讓位堆疊，內容合流入 0.7.0 發布面）
 
 **Added** — `rateLimitedResponse()` export：429 面帶 `Retry-After: 60`（RFC 9110 delta-seconds；字面
 60＝`AUTH_RATE.windowMs` 60_000 單窗設計窗長，多窗語意下為下限估計）。`loginRouteCore` 限流命中面改走

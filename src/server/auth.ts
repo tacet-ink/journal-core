@@ -45,6 +45,12 @@ export interface CipherFormats {
    *  零影響；opt-in 律——外審 2026-11-07 #2：雙點形入 cipherPrefixes 的 startsWith 槽辨不出
    *  ＝超帽誤落明文截斷）。 */
   cipherPrefixes2?: readonly string[];
+  /** 明文相容層 opt-out（外審 2026-11-07 #4）：未配置／true＝明文照收（現行契約零變——
+   *  舊版客戶端明文截到 cipherMax 入庫、帽內真明文照收）；false＝關閉——無前綴密文形
+   *  且非 b64 慣例軌的明文一律 null（超帽明文→null 無截斷面；b64 慣例軌同關閉態收家族
+   *  密文）。未配置態 byte-identical（opt-out 母型）；相容層退場條件 0.7.0 目標
+   *  （README「設計」節＋界限節＋rotation-design 誠實面）。 */
+  allowPlaintext?: boolean;
 }
 
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -82,9 +88,11 @@ function kidFamilyRe(bases: readonly string[] | undefined): RegExp | null {
 }
 
 /**
- * 入庫前校正：前綴密文原樣入庫；超限密文／編碼丟棄（截斷必壞）、明文截到上限照收。
- * cipherMax（UTF-16 單位）同為明文截斷帽：明文相容層無 opt-out——明文一律照收、
- * 截到 cipherMax 入庫（JSDoc 幽靈參數 plainMax 已摘除）。
+ * 入庫前校正：前綴密文原樣入庫；超限密文／編碼丟棄（截斷必壞）、明文照 allowPlaintext 語意收。
+ * cipherMax（UTF-16 單位）同為明文截斷帽：明文相容層 opt-out（allowPlaintext，0.6.0——
+ * 外審 2026-11-07 #4）——未配置／true＝明文照收、截到 cipherMax 入庫（現行契約零變）；
+ * false＝關閉——落帽真明文→null、超帽真明文→null（無截斷面）、b64 慣例軌照關閉態語意
+ * （帽內純 b64＝無前綴不可驗證內容→null）；家族密文／超帽禁截／kid 族形驗各軌零動。
  */
 export function makeInboundCipher(c: CipherFormats) {
   const RE = cipherPrefixRe(c.cipherPrefixes);
@@ -102,17 +110,22 @@ export function makeInboundCipher(c: CipherFormats) {
     if (text.length > c.cipherMax) {
       return RE.test(text) || BASE64_RE.test(text) || kidFamilyHit(text)
         ? null // 密文/編碼超限：截斷必壞，直接丟棄（kid 族任何字面在場同律——超帽禁截，絕不落明文截斷）
-        : text.slice(0, c.cipherMax); // 純明文（舊版客戶端）：截到上限照收
+        : c.allowPlaintext === false ? null : text.slice(0, c.cipherMax); // 純明文（舊版客戶端）：截到上限照收／關閉態→null（無截斷面＝不折半收假密文）
     }
     if (RE.test(text)) return text; // 前綴密文：原樣入庫
     if (kidFamilyHit(text)) { if (!RE2?.test(text)) return null; return text; } // kid 族：完整形原樣入庫；形廢 null 不落明文層
-    if (BASE64_RE.test(text) && text.length > 40) return text; // 舊客戶端 b64 慣例：照收
+    // 舊客戶端 b64 慣例軌（無前綴純 b64＝歷史慣例的密文形照收）＋b64 超帽編碼丟棄軌：
+    // allowPlaintext 會封這一軌（帽內純 b64 的「明文形」與真明文不可區分——不可驗證
+    // 內容同明文相容層面）；b64 超帽軌未配置態即 null（byte-identical——兩態零動）。
+    const pltOk = c.allowPlaintext !== false;
+    if (pltOk && BASE64_RE.test(text) && text.length > 40) return text; // 舊客戶端 b64 慣例：照收（opt-out 母型——關閉態此軌封）
+    if (!pltOk && BASE64_RE.test(text)) return null; // 關閉態：帽內純 b64（含 b64 超帽）→ null（無前綴不可驗證內容）
     if (BINARY_RE.test(text)) return null; // 控制字元垃圾：丟棄
     // 防禦面（上行 kid 族分派在場時不可達：base 字面含 '.' 在 b64 charset 外＝BASE64_RE 恆 false，
     // 任何字面命中皆已在上行分派）。上行被摘除時 junk『jr2b.0596ea50.!!!』／kid 欄形廢由此行接住
     // ＝gate [31] P2 毒化案「J2-b 照綠」的承載行。
     if (kidFamilyHit(text)) return null;
-    return text; // 真明文：照收（舊版相容）
+    return c.allowPlaintext === false ? null : text; // 真明文：照收（舊版相容）／關閉態→null（相容層摘除）
   };
 }
 

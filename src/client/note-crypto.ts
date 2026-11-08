@@ -89,6 +89,12 @@ export interface NoteCryptoConfig {
   cipherAttach2?: string;
   /** 本機 IDB「輪替後」基前綴（jr2d.，同構 §3.2；完整前綴＝cipherLocal2 + kid + '.'）。未配置 = local2 API 拒絕。 */
   cipherLocal2?: string;
+  /** 明文相容層 opt-out（外審 2026-11-07 #4）：未配置／true＝舊版明文（無前綴字串）原樣返回
+   *  （現行契約零變；回傳值＝未驗證內容——伺服器或任何傳輸層不需金鑰即可寫入此層）；
+   *  false＝關閉相容層——無前綴字串一律 null，不落明文（guest/bound 軌不受牽連）。
+   *  未配置態 byte-identical（opt-out 母型：關閉是 fork 顯式選擇）；相容層退場條件
+   *  （0.7.0 目標——README「設計」節＋界限節＋rotation-design §12 誠實面）。 */
+  allowPlaintext?: boolean;
   /** localStorage key store（品牌前綴由 keys.ts 管理）。 */
   store: KeyStore;
 }
@@ -943,9 +949,14 @@ export async function decryptNote(
     const isGuest = guestPrefix !== undefined && cipher.startsWith(guestPrefix);
     const isBound = cipher.startsWith(cfg.cipherBound);
     if (!isGuest && !isBound) {
-      // 舊版明文（相容層）原樣返回；guest 前綴未配置＝guest 家族整面拒絕（不明字串
-      // 一律 null——跨前綴鐵律「回 null 不降級」，避免他家族殘列被當明文顯示）。
-      return guestPrefix === undefined ? null : cipher;
+      // 舊版明文（相容層）：allowPlaintext 未配置／true＝原樣返回（現行契約零變——
+      // opt-out 母型；回傳值＝未驗證內容，外審 2026-11-07 #4）。false＝關閉——無前綴
+      // 字串一律 null，不落明文（guest/bound 軌不受牽連；伺服器偽造筆記面收口）。
+      // 「未配置 guest 前綴＝guest 家族整面拒絕」跨前綴鐵律照舊（allowPlaintext 只裁
+      // 相容層語意，不觸家族拒絕面）。
+      if (guestPrefix === undefined) return null;
+      if (cfg.allowPlaintext === false) return null; // 關閉態：明文相容層摘除（不拋不降級）
+      return cipher;
     }
     if (isGuest) {
       // 空 identity 拒絕（對稱面）：guest 密文在 identity 缺席時必 null
