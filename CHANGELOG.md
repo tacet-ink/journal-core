@@ -5,6 +5,38 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.5.3] — 2026-11-08
+
+**Added** — `rateLimitedResponse()` export：429 面帶 `Retry-After: 60`（RFC 9110 delta-seconds；字面
+60＝`AUTH_RATE.windowMs` 60_000 單窗設計窗長，多窗語意下為下限估計）。`loginRouteCore` 限流命中面改走
+此函式（body `ERR_RATE_LIMITED`／status 429／CORS 頭與舊形恆等，唯一增量＝Retry-After 頭）；`errResponse`
+本體與其餘呼叫面零動——兄弟 fork／pin 版 byte-identical 零影響。
+
+**Fixed** — `keyRingGet` runtime proto 面：entries 取值改 `Object.hasOwn` 檢查——kid=`__proto__`／
+`constructor` 等原型鏈鍵回 null（舊形 `?? null` 回 Object.prototype／函式物件）。序列化入口 `parseKeyRing`
+走 JSON.parse 產純 object 且 kid 形檢已拒非 legacy/8-hex 鍵，本面只封 runtime 以非自有鍵查表的攻擊面；
+自有鍵回值零變。
+
+**Changed** — verify workflow：runs-on 分流鍵 actor→PR 作者（`github.event.pull_request.user.login`——
+actor＝事件觸發者，人為 synchronize/reopen 可把 Dependabot 分支推上 self-hosted＝分流鍵偽裝面；PR 作者欄
+恆為開 PR 身分）；補 `node scripts/dts-fixture.cjs` 步（dts-fixture.cjs:2 註解宣稱的 CI 等價步落真；前置
+typescript 顯式安裝（lockfile 版釘、--no-save）＋`npm run build`——npm pack 不觸發 prepublishOnly、dist
+須先建）＋新 `scripts/ci-subpath-probe.cjs` 探針步（repo package.json exports 15 鍵逐一 `node -e import()`
+子行程 runtime import——0.5.0 漏 `./client/keyring` exports subpath 型問題的回歸網；scripts/ 不入 tarball）。
+
+**Changed** — 文檔誠實面：SECURITY.md 支援版 0.5.x（0.4.x EOL 自 0.5.0，2026-10-25）；README 輪替行誠實化
+（階段 1 設計 §9 已裁定；0.5.1 起輪替原語族已上線 npm、`rotateNoteKey` 端到端動線尚未落）、`jr2p.`
+「設計面」字面→已上線（:127 表／界限段）、PIN 強度帳 68s／1.9h／41h 加「速率外推非實測」標記（數字照留；
+PoC C 28.7s 實測底照留）、CORS `*` 預設面理由句（沙箱 demo 預設／部署面由呼叫端覆寫收口；`cors.ts` 零動）。
+
+**Changed** — gate 帳 630→650（+20）：[21] +9（J4 三齒各「契約在場／毒化錨恰 1／毒化翻 false」——runs-on
+分流鍵 actor 復原形／dts-fixture 步摘除／探針步摘除；既有 runs-on 案 regex 隨碼同步 user.login 形）、
+[23] +5（⑧ 限流第 11 發 429 帶 Retry-After 60＋CORS／前 10 發 200 零 Retry-After／直呼形＝errResponse 同面
+唯一差 Retry-After＋barrel 同一函式；⑦ 同樹二次毒化：錨恰 1＋接線復原舊形→Retry-After 翻 null）、
+[32] +6（⑦ 原型鏈鍵五形 null／自有鍵面零變＋serialize/parse 往返／parseKeyRing 入口拒 `__proto__`／
+`constructor`；src/client 拷貝樹毒化：樹在場&錨恰 1／復原 `?? null`→`__proto__` 翻 Object.prototype／
+byte-exact 還原＋樹出生即棄）；`secCases` [21] 10→19、[23] 18→23、[32] 35→41。
+
 ## [0.5.2] — 2026-11-07
 
 **Fixed** — `decryptNote` 對輪替後 kid 前綴族 miss→null（外審 2026-11-07 高優先 #1：
