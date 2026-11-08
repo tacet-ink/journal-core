@@ -9,6 +9,11 @@
  * 2026-10-09（0.2.4）：[23] loginRouteCore ladder 查表守衛段（外審 #8 幽靈帳）——真 node:sqlite
  * shim 直驅七情境（現值 hit／ladder hit 回舊帳／兩面 miss 建幽靈／未配置單查零變／fail-open）
  * ＋拷貝樹毒化 in-gate（接線摘除 → ladder hit 翻建幽靈）。POISON_GATE_INNER 內層跑份自我跳過。
+ *
+ * 2026-11-08（0.5.3 J4，t_4115dd83）：工具鏈＋文檔誠實面批——[21] CI 三齒（runs-on 分流鍵 actor→PR 作者／
+ * dts-fixture 步落真／ci-subpath-probe 探針步；workflow 字串面毒化＝錨摘除→契約 regex 翻 false）、
+ * [23] ⑧ 限流 429 帶 Retry-After（rateLimitedResponse；同樹二次毒化＝接線復原舊形→頭翻 null）、
+ * [32] ⑦ keyRingGet runtime proto 面（Object.hasOwn；src/client 拷貝樹毒化＝復原 ?? null→__proto__ 翻非 null）。
  */
 
 // 對真模組（禁鏡像重寫金鑰邏輯——鏡像驗證抓不到真模組 bug 的生產教訓）
@@ -206,6 +211,9 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 2 案＝補帳 4 案追平 main 已跑超額、其餘 9 案＝本卡新增斷言）；真執行 582→591（run-delta +9
 // ≠ book-delta +13——分寫，把 +13 加到真執行會誤得 595；新增斷言 9 案，全段 ranN==帳無超額）；
 // 0.5.0 book 591→618（t_55925c66 輪替卡：[26]+1 pinlock2_kat 對帳＋[32] 新段 26 案＝+27）；
+// 0.5.2 book 618→630（t_138d88c9：[32]+9 J1/J2＋[31]+3 P1-P3 毒化）；0.5.3 book 630→650（t_4115dd83 J4：
+// [21]+9 CI 三齒各「契約在場／錨恰 1／毒化翻 false」＋[23]+5 Retry-After 三正碼＋錨＋毒化＋[32]+6 keyRingGet
+// proto 三正碼＋拷貝樹在場&錨＋毒化＋還原；全段 ranN==帳無超額）；
 // 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」。
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
@@ -220,7 +228,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 61 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 19, 23: 23, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 67 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -2795,10 +2803,65 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
       srcVy21.includes('npm ci --ignore-scripts'));
     await A('[21] verify.yml：job-if 同 repo 保衛（C1 母型——fork／他 repo branch 不上 runner；dependabot 分支照跑不擋＝分流入 RUN 面——r1 MAJOR-1）',
       /if: github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository/.test(srcVy21));
-    await A('[21] verify.yml：runs-on dependabot 分流＝fromJSON 陣列形（actor→["ubuntu-latest"]；fallback fromJSON 兩標籤組 ["self-hosted","journal-core"]——裸逗號字串 fallback＝StringToken 單一 literal 標籤缺陷形零承載，r2 MAJOR-1）',
-      /runs-on: \$\{\{ fromJSON\(github\.event_name == 'pull_request' && github\.actor == 'dependabot\[bot\]' && '\["ubuntu-latest"\]' \|\| '\["self-hosted","journal-core"\]'\) \}\}/.test(srcVy21));
+    // 0.5.3 J4（t_4115dd83）：分流鍵 actor→PR 作者（github.event.pull_request.user.login）——regex 隨碼同步；
+    // 新/舊兩形 regex 共用於下方 J4-CHG-3 毒化（毒後新形翻 false／舊形翻 true＝designated）。
+    const reRunsOnNew21 = /runs-on: \$\{\{ fromJSON\(github\.event_name == 'pull_request' && github\.event\.pull_request\.user\.login == 'dependabot\[bot\]' && '\["ubuntu-latest"\]' \|\| '\["self-hosted","journal-core"\]'\) \}\}/;
+    const reRunsOnOld21 = /runs-on: \$\{\{ fromJSON\(github\.event_name == 'pull_request' && github\.actor == 'dependabot\[bot\]' && '\["ubuntu-latest"\]' \|\| '\["self-hosted","journal-core"\]'\) \}\}/;
+    await A('[21] verify.yml：runs-on dependabot 分流＝fromJSON 陣列形（PR 作者 user.login→["ubuntu-latest"]；fallback fromJSON 兩標籤組 ["self-hosted","journal-core"]——裸逗號字串 fallback＝StringToken 單一 literal 標籤缺陷形零承載，r2 MAJOR-1；0.5.3 J4 鍵 actor→PR 作者）',
+      reRunsOnNew21.test(srcVy21));
     await A('[21] publish.yml：npm ci --ignore-scripts（tag 驅動無 actor 面；typecheck+verify 先行＝腳本面零在場）',
       srcPy21.includes('npm ci --ignore-scripts'));
+    // ── 0.5.3 J4（t_4115dd83）CI 工具鏈三齒：字串面毒化（workflow＝宣告檔無行為可跑——「拷貝樹」＝srcVy21
+    //    字串本身，錨摘除→契約 regex 翻 false＝designated；錨 split 計數恰 1＝錯位防線，照 [23] 毒化錨母型）。
+    // J4-CHG-3：runs-on 分流鍵 actor→PR 作者。錨取 runs-on 行獨有形（含 `== 'dependabot[bot]'`——top comment
+    //   同 literal 用全形「＝」，不與錨重疊）；毒化＝復原舊形 github.actor（actor＝事件觸發者，人為 synchronize/
+    //   reopen 可把機器人分支推上 self-hosted＝分流鍵偽裝面）。
+    {
+      const needleActor21 = "github.event.pull_request.user.login == 'dependabot[bot]'";
+      const cntActor21 = srcVy21.split(needleActor21).length - 1;
+      await A('[21] J4 分流鍵毒化錨恰 1（split 計數——runs-on 單點承載；top comment 全形＝形不重疊）', cntActor21 === 1, 'cnt=' + cntActor21);
+      const poisonedActor21 = srcVy21.split(needleActor21).join("github.actor == 'dependabot[bot]'");
+      await A('[21] J4 毒化（分流鍵復原舊形 github.actor）→ 新形契約 regex 翻 false＋舊形 regex 翻 true（designated；正碼新形 true／舊形 false）',
+        cntActor21 === 1 && !reRunsOnNew21.test(poisonedActor21) && reRunsOnOld21.test(poisonedActor21) && !reRunsOnOld21.test(srcVy21));
+      await A('[21] J4 註解隨碼同步＋actor 殘留歸零：top comment「PR 作者（github.event.pull_request.user.login）＝dependabot[bot]」在場＋verify.yml 全檔 github.actor 字面零殘留',
+        srcVy21.includes('PR 作者（github.event.pull_request.user.login）＝dependabot[bot]') && !srcVy21.includes('github.actor'));
+    }
+    // J4-CHG-4：dts-fixture 步落真（dts-fixture.cjs:2 註解宣稱「CI 等價步在 verify workflow」——補真步）。
+    //   契約＝步在場（name＋run 形）＋序：npm ci --ignore-scripts → typescript 前置（lockfile 版釘）→ typecheck
+    //   → build（npm pack 不觸發 prepublishOnly＝dist 須先建）→ dts-fixture → verify。
+    {
+      const idx21 = (needle: string): number => srcVy21.indexOf(needle);
+      const reDts21 = /- name: dts-fixture \(\.d\.ts consumers, both moduleResolution\)\n\s+run: node scripts\/dts-fixture\.cjs/;
+      const needleDts21 = 'node scripts/dts-fixture.cjs';
+      const cntDts21 = srcVy21.split(needleDts21).length - 1;
+      const tsStep21 = 'npm install --no-save --no-audit --no-fund "typescript@';
+      const orderDts21 = idx21('run: npm ci --ignore-scripts') >= 0 && idx21('run: npm ci --ignore-scripts') < idx21(tsStep21)
+        && idx21(tsStep21) < idx21('run: npm run typecheck') && idx21('run: npm run typecheck') < idx21('run: npm run build')
+        && idx21('run: npm run build') < idx21(needleDts21) && idx21(needleDts21) < idx21('run: npm run verify');
+      await A('[21] J4 dts-fixture 步落真：步在場（name＋run 形）＋序 npm ci → typescript 前置（lockfile 版釘）→ typecheck → build → dts-fixture → verify',
+        reDts21.test(srcVy21) && orderDts21);
+      await A('[21] J4 dts-fixture 毒化錨恰 1（split 計數——步單點承載）', cntDts21 === 1, 'cnt=' + cntDts21);
+      await A('[21] J4 毒化（dts-fixture 步 run 字面摘除→占位 # REMOVED）→ 補步契約 regex 翻 false（designated；正碼 true）',
+        cntDts21 === 1 && reDts21.test(srcVy21) && !reDts21.test(srcVy21.split(needleDts21).join('# REMOVED')));
+    }
+    // J4-CHG-5：子路徑 runtime import 探針步（scripts/ci-subpath-probe.cjs——0.5.0 漏 ./client/keyring exports
+    //   subpath 型回歸網：dts-fixture 只證 types 條件，探針證 default 條件 runtime 解析）。檔在場＋不入 tarball
+    //  （package.json files 白名單零 scripts——dist-only 母型保線）＋exports 鍵數 15（帳齒：exports 增減即咬）。
+    {
+      const reProbe21 = /- name: Subpath import probe \(package\.json exports, runtime ESM\)\n\s+run: node scripts\/ci-subpath-probe\.cjs/;
+      const needleProbe21 = 'ci-subpath-probe';
+      const cntProbe21 = srcVy21.split(needleProbe21).length - 1;
+      const probeFile21 = !!fs21?.existsSync && fs21.existsSync(new URL('../scripts/ci-subpath-probe.cjs', import.meta.url));
+      const pkg21 = JSON.parse(await srcOf('../package.json')) as { files?: string[]; exports?: Record<string, unknown> };
+      await A('[21] J4 子路徑探針步落真：workflow 步在場（dts-fixture 之後、verify 之前）＋scripts/ci-subpath-probe.cjs 檔在場＋scripts 不入 files 白名單（dist-only 母型）＋exports 鍵數 15',
+        reProbe21.test(srcVy21)
+        && srcVy21.indexOf('node scripts/dts-fixture.cjs') < srcVy21.indexOf('node scripts/ci-subpath-probe.cjs')
+        && srcVy21.indexOf('node scripts/ci-subpath-probe.cjs') < srcVy21.indexOf('run: npm run verify')
+        && probeFile21 && Array.isArray(pkg21.files) && !pkg21.files.includes('scripts') && Object.keys(pkg21.exports ?? {}).length === 15);
+      await A('[21] J4 探針毒化錨恰 1（split 計數——probe 檔名字面 workflow 內單點承載）', cntProbe21 === 1, 'cnt=' + cntProbe21);
+      await A('[21] J4 毒化（探針步檔名字面摘除）→ 探針契約 regex 翻 false（designated；正碼 true）',
+        cntProbe21 === 1 && reProbe21.test(srcVy21) && !reProbe21.test(srcVy21.split(needleProbe21).join('REMOVED')));
+    }
   } else {
     // F-1（t_0eb70367）：僵字面帳數摘除——舊形寫死『消費端計數帳 503』每版必過期；執行期插值
     // 不可行（tarball 全帳含 secCases 體系外段，secCases 求和≠帳總——插值即印錯數，比僵字面更糟）。
@@ -2996,6 +3059,39 @@ secOpen(23, '[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳——
     await A('[23] ladder hit（現值已旋轉異值欄）→ userKey=舊帳、status=ready（user?.ph2 在場分流本體契約）', j23.userKey === 'acct-23old' && j23.status === 'ready');
   }
 
+  // ⑧ J4-CHG-1（0.5.3 t_4115dd83）：限流 429 帶 Retry-After——rateLimitedResponse 接線面（真 node:sqlite
+  //    login_rate 直驅：同 ip 連發 11 次，AUTH_RATE 10/min 第 11 發 429）。毒前值 '60' 留給 ⑦ J4 毒化對照。
+  let retryAfterReal23: string | null = null;
+  {
+    const { rateLimitedResponse, errResponse } = await import('../src/server/auth.ts');
+    const t = mkDb23();
+    const store23 = {
+      findByIdentityQuery: async (ph2: string) => (t.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+      createUser: async () => 'acct-ghost-23',
+      getByUserKey: async () => null,
+      revokeAllSessions: async () => {},
+      insertSession: async () => {},
+    };
+    t.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-23a', ?, 's23', 'wr23')").run(rowA23);
+    const resps23: Response[] = [];
+    for (let i = 0; i < 11; i++) resps23.push(await loginRouteCore(t.env23 as never, store23 as never, 'ip-23-rl', ph1a23));
+    const last23 = resps23[10]!;
+    retryAfterReal23 = last23.headers.get('Retry-After');
+    await A('[23] J4 限流命中（AUTH_RATE 10/min 第 11 發）→ 429 ERR_RATE_LIMITED 帶 Retry-After: 60（＝windowMs 60_000 單窗設計窗長）＋CORS 頭在場（corsResponse 包裹面同 errResponse）',
+      last23.status === 429 && retryAfterReal23 === '60' && (await last23.text()) === 'ERR_RATE_LIMITED' && last23.headers.get('Access-Control-Allow-Origin') === '*',
+      'status=' + last23.status + ' retry=' + retryAfterReal23);
+    await A('[23] J4 限流窗內前 10 發正常 200 登入照綠且零 Retry-After（未命中面零變——Retry-After 只隨 429 出現）',
+      resps23.slice(0, 10).every((r) => r.status === 200 && r.headers.get('Retry-After') === null));
+    const direct23 = rateLimitedResponse();
+    const plain23 = errResponse('ERR_RATE_LIMITED', 429);
+    const barrel23 = (await import('../src/index.ts')) as unknown as { rateLimitedResponse?: unknown };
+    await A('[23] J4 rateLimitedResponse 直呼形＝errResponse(\'ERR_RATE_LIMITED\', 429) 同 status/body/CORS 面、唯一差＝Retry-After 頭（errResponse 本體零動）＋barrel 同一函式（單一真相）',
+      direct23.status === plain23.status && (await direct23.text()) === (await plain23.text())
+      && direct23.headers.get('Access-Control-Allow-Origin') === plain23.headers.get('Access-Control-Allow-Origin')
+      && direct23.headers.get('Retry-After') === '60' && plain23.headers.get('Retry-After') === null
+      && barrel23.rateLimitedResponse === rateLimitedResponse);
+  }
+
   // ⑦ 毒化（拷貝樹 in-gate，t_0ab6e760 母型）：ladderGuard 接線摘除 → ladder hit 案翻建幽靈。
   // 毒化跑在 /tmp 拷貝樹＝本 repo 樹 byte 不動；還原 byte-exact＋樹出生即棄。
   // POISON_GATE_INNER sentinel（[16]/[18]/[20] 遞迴防線母型）：內層跑份自我跳過毒化節。
@@ -3057,6 +3153,36 @@ secOpen(23, '[23] loginRouteCore ladder 查表守衛（外審 #8 幽靈帳——
             await A('[23] 毒化重演（行為面真翻）', false, 'crash: ' + String((e as Error).message).slice(0, 160));
           }
           fs23.writeFileSync!(path23x.join(tree23, 'src/server/auth.ts'), srcAuth23, 'utf8');
+          // J4-CHG-1 齒（0.5.3 t_4115dd83）：同樹二次毒化（ladder 毒化已 byte-exact 還原後再動）——錨
+          // `return rateLimitedResponse();` 摘除→復原舊形 errResponse('ERR_RATE_LIMITED', 429) → 第 11 發
+          // status 照 429 但 Retry-After 翻 null（毒前 ⑧ 實測 '60'）＝恰頭面翻、status/body 零變。
+          const needle23b = 'return rateLimitedResponse();';
+          const cnt23b = srcAuth23.split(needle23b).length - 1;
+          await A('[23] J4 Retry-After 毒化錨恰 1（split 計數——loginRouteCore 限流分支單點承載）', cnt23b === 1, 'cnt=' + cnt23b);
+          if (cnt23b === 1) {
+            fs23.writeFileSync!(path23x.join(tree23, 'src/server/auth.ts'), srcAuth23.split(needle23b).join("return errResponse('ERR_RATE_LIMITED', 429);"), 'utf8');
+            try {
+              const modP2 = (await import(url23.pathToFileURL(path23x.join(tree23, 'src/server/auth.ts')).href + '?poison23b=1')) as unknown as { loginRouteCore: typeof loginRouteCore };
+              const tP2 = mkDb23();
+              const storeP2 = {
+                findByIdentityQuery: async (ph2: string) => (tP2.db.prepare(`SELECT ${USER_COLS23} FROM users WHERE ph2 = ?`).get(ph2) as unknown) || null,
+                createUser: async () => 'acct-ghost-23',
+                getByUserKey: async () => null,
+                revokeAllSessions: async () => {},
+                insertSession: async () => {},
+              };
+              tP2.db.prepare("INSERT INTO users (account_id, ph2, salt, wrapped_key) VALUES ('acct-23a', ?, 's23', 'wr23')").run(rowA23);
+              let lastP2: Response | null = null;
+              for (let i = 0; i < 11; i++) lastP2 = await modP2.loginRouteCore(tP2.env23 as never, storeP2 as never, 'ip-23-P2', ph1a23);
+              const lp2 = lastP2 as Response | null;
+              await A('[23] J4 毒化（rateLimitedResponse 接線復原舊形）→ 第 11 發 429 照舊但 Retry-After 翻 null（毒前 \'60\'——designated；status/body 零變＝恰頭面翻）',
+                lp2 !== null && lp2.status === 429 && lp2.headers.get('Retry-After') === null && (await lp2.text()) === 'ERR_RATE_LIMITED' && retryAfterReal23 === '60',
+                'status=' + lp2?.status + ' retry=' + lp2?.headers.get('Retry-After') + ' real=' + retryAfterReal23);
+            } catch (e) {
+              await A('[23] J4 毒化重演（Retry-After 頭面真翻）', false, 'crash: ' + String((e as Error).message).slice(0, 160));
+            }
+            fs23.writeFileSync!(path23x.join(tree23, 'src/server/auth.ts'), srcAuth23, 'utf8');
+          }
           const restored23 = fs23.readFileSync!(path23x.join(tree23, 'src/server/auth.ts'), 'utf8') === srcAuth23;
           fs23.rmSync!(tree23, { recursive: true, force: true });
           await A('[23] 毒化還原 byte-exact＋樹出生即棄（本 repo 樹零接觸——零殘毒面）', restored23);
@@ -4950,6 +5076,72 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       return e === 'ERR_PINLOCK2_NOT_CONFIGURED' && u1.key !== null && u1.upgraded === false
         && isPinLockWrap2(p2blob, bare) === false && isPinLockWrap2(p2blob, PINLOCK) === true;
     })());
+  // ⑦ J4-CHG-2（0.5.3 t_4115dd83）：keyRingGet runtime proto 面（Object.hasOwn 取值）——正碼 3 案＋拷貝樹毒化 3 案
+  //    （[23] 母型：mkdtemp＋src/client 全樹 cpSync（keyring.ts 依賴鏈 note-crypto.ts→argon2.ts→vendor/）＋byte-exact
+  //    還原＋樹出生即棄；本 repo 樹零接觸。無 gate 再執行＝無遞迴面，不需 POISON_GATE_INNER sentinel）。
+  {
+    const ringJ4 = keyRingAddEntry(initKeyRing(wrapped, salt), rotKid32, { wrapped, salt, wrappedRec });
+    const otherKid32 = rotKid32 === '00000000' ? '00000001' : '00000000';
+    await A('[32] J4 keyRingGet runtime proto 面：__proto__／constructor／toString／hasOwnProperty／valueOf 皆 null（非 ring 自有鍵不回原型鏈值——舊形 ?? null 回 Object.prototype／函式物件）',
+      ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf'].every((k) => keyRingGet(ringJ4, k) === null));
+    await A('[32] J4 keyRingGet 自有鍵面零變：legacy／kid 命中＝同參照 entry、缺席 kid＝null；parseKeyRing(serializeKeyRing) 往返後同判（純 object 入口）',
+      keyRingGet(ringJ4, KEYRING_LEGACY_KID) === ringJ4.entries[KEYRING_LEGACY_KID] && keyRingGet(ringJ4, rotKid32) === ringJ4.entries[rotKid32]
+      && keyRingGet(ringJ4, otherKid32) === null
+      && (async () => { const rt = await parseKeyRing(await serializeKeyRing(ringJ4)); return rt !== null && keyRingGet(rt, rotKid32)?.wrappedForms.salt === salt && keyRingGet(rt, '__proto__') === null && keyRingGet(rt, otherKid32) === null; })());
+    await A('[32] J4 序列化入口已拒原型鏈鍵（parseKeyRing fail-closed：entries 鍵 __proto__／constructor 非 legacy/8-hex＝null）——runtime 面與入口面兩層各自收口',
+      (async () => {
+        const mk = (k: string): string => btoa(JSON.stringify({ activeKid: KEYRING_LEGACY_KID, entries: { [KEYRING_LEGACY_KID]: { wrappedForms: { wrapped, salt } }, [k]: { wrappedForms: { wrapped, salt } } } }));
+        return (await parseKeyRing(mk('__proto__'))) === null && (await parseKeyRing(mk('constructor'))) === null;
+      })());
+    const getBuiltin32 = (id: string): unknown =>
+      (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+    const fs32 = getBuiltin32('node:fs') as {
+      mkdtempSync?: (p: string) => string;
+      cpSync?: (a: string | URL, b: string, o?: { recursive: boolean }) => void;
+      existsSync?: (p: string) => boolean;
+      readFileSync?: (p: string | URL, e: string) => string;
+      writeFileSync?: (p: string, s: string, e: string) => void;
+      rmSync?: (p: string, o?: unknown) => void;
+    } | undefined;
+    const path32 = getBuiltin32('node:path') as { join?: (...p: string[]) => string } | undefined;
+    const os32 = getBuiltin32('node:os') as { tmpdir?: () => string } | undefined;
+    const url32 = getBuiltin32('node:url') as { pathToFileURL?: (p: string) => { href: string } } | undefined;
+    if (!fs32?.mkdtempSync || !fs32.cpSync || !fs32.existsSync || !fs32.readFileSync || !fs32.writeFileSync || !fs32.rmSync || !path32?.join || !os32?.tmpdir || !url32?.pathToFileURL) {
+      // 原語缺席環境＝顯性 FAIL 行（非 silent true——[23] 母型；repo 樹常態不見此行）
+      await A('[32] J4 毒化面（原語缺席環境）＝顯性 FAIL 行，毒化證據缺席顯形非 silent true', false, 'node fs/path/os/url 原語缺席');
+    } else {
+      const pkgRootUrl32 = new URL('../', import.meta.url);
+      const tree32 = fs32.mkdtempSync(path32.join(os32.tmpdir(), 't32-keyring-'));
+      fs32.cpSync(new URL('src/client/', pkgRootUrl32), path32.join(tree32, 'src/client'), { recursive: true });
+      const pKr32 = path32.join(tree32, 'src/client/keyring.ts');
+      const srcKr32 = fs32.readFileSync(new URL('src/client/keyring.ts', pkgRootUrl32), 'utf8');
+      const needle32 = 'Object.hasOwn(ring.entries, kid) ? ring.entries[kid] : null';
+      const cnt32 = srcKr32.split(needle32).length - 1;
+      await A('[32] J4 毒化樹拷貝：src/client 全樹在場（keyring.ts＋依賴鏈 note-crypto.ts／vendor）byte-exact＋毒化錨恰 1（split 計數——Object.hasOwn 取值單點承載）',
+        fs32.existsSync(pKr32) && fs32.existsSync(path32.join(tree32, 'src/client/note-crypto.ts')) && fs32.existsSync(path32.join(tree32, 'src/client/vendor/hash-wasm-argon2.ts'))
+        && fs32.readFileSync(pKr32, 'utf8') === srcKr32 && cnt32 === 1, 'cnt=' + cnt32);
+      if (cnt32 === 1) {
+        fs32.writeFileSync(pKr32, srcKr32.split(needle32).join('ring.entries[kid] ?? null'), 'utf8');
+        try {
+          const modP32 = (await import(url32.pathToFileURL(pKr32).href + '?poison32=1')) as unknown as { keyRingGet: typeof keyRingGet };
+          const hitProto = modP32.keyRingGet(ringJ4, '__proto__') as unknown;
+          const hitCtor = modP32.keyRingGet(ringJ4, 'constructor') as unknown;
+          await A('[32] J4 毒化（Object.hasOwn 取值復原舊形 ?? null）→ keyRingGet(ring, \'__proto__\') 翻非 null（＝Object.prototype）＋\'constructor\' 翻函式（designated；正碼兩面 null；自有鍵面毒後仍同＝恰原型鏈面翻）',
+            hitProto !== null && hitProto === Object.prototype && typeof hitCtor === 'function'
+            && modP32.keyRingGet(ringJ4, rotKid32) === ringJ4.entries[rotKid32] && modP32.keyRingGet(ringJ4, otherKid32) === null,
+            'proto=' + String(hitProto !== null) + ' ctor=' + typeof hitCtor);
+        } catch (e) {
+          await A('[32] J4 毒化重演（proto 面真翻）', false, 'crash: ' + String((e as Error).message).slice(0, 160));
+        }
+        fs32.writeFileSync(pKr32, srcKr32, 'utf8');
+        const restored32 = fs32.readFileSync(pKr32, 'utf8') === srcKr32;
+        fs32.rmSync(tree32, { recursive: true, force: true });
+        await A('[32] J4 毒化還原 byte-exact＋樹出生即棄（本 repo 樹零接觸——零殘毒面）', restored32 && !fs32.existsSync(tree32));
+      } else {
+        fs32.rmSync(tree32, { recursive: true, force: true });
+      }
+    }
+  }
   await A('[32] barrel 面：keyring/pinlock2/2 族原語公開匯出（＝子路徑同一函式——單一真相；kid 契約 keyring re-export＝note-crypto 同源）',
     (async () => {
       const m = await import('../src/index.ts');

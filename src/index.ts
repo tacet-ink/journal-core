@@ -116,6 +116,7 @@ export {
   pickKeyPackage,
   loginRouteCore,
   errResponse,
+  rateLimitedResponse,
   AUTH_RATE,
   AUTH_RATE_COARSE,
   recHashStoredOf,
