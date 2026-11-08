@@ -24,7 +24,7 @@ follow-up。
 
 **Changed** — `serializeKeyRing`／`parseKeyRing` async 化（0.6.x 同步簽名→Promise；MAC 用
 WebCrypto HMAC）；`keyRingBumpEpoch` 新原語（epoch+1 純函式，缺席/非法視 0 不拋）、`KeyRing`
-選配 `epoch` 欄、ring 變換（addEntry/retire）攜帶 epoch 不自增。gate 帳 639→658：
+選配 `epoch` 欄、ring 變換（addEntry/retire）攜帶 epoch 不自增。gate 帳 639→664（批尾合流推進：[32] 段帳 61→67＝J4 毒齒案帳面接軌；0.5.3 未發布節內容併入）：
 [32] 42→61（KRM-a..o 15 案＋毒化 P1..P4——MAC 驗證呼叫摘除→KRM-c/d/e/f/l 翻紅、epoch 形檢
 摘除→KRM-g 翻紅、serialize/parse floor 摘除→KRM-o 翻紅（真簽 epoch-0 重簽載體——floor 唯一
 防線），[31] 段拷貝樹毒化母型同形）；[25] book teeth 帳面同步。

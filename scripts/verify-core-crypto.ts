@@ -228,7 +228,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 61 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 10, 23: 18, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 67 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -5087,11 +5087,11 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
     await A('[32] J4 keyRingGet 自有鍵面零變：legacy／kid 命中＝同參照 entry、缺席 kid＝null；parseKeyRing(serializeKeyRing) 往返後同判（純 object 入口）',
       keyRingGet(ringJ4, KEYRING_LEGACY_KID) === ringJ4.entries[KEYRING_LEGACY_KID] && keyRingGet(ringJ4, rotKid32) === ringJ4.entries[rotKid32]
       && keyRingGet(ringJ4, otherKid32) === null
-      && (() => { const rt = parseKeyRing(serializeKeyRing(ringJ4)); return rt !== null && keyRingGet(rt, rotKid32)?.wrappedForms.salt === salt && keyRingGet(rt, '__proto__') === null && keyRingGet(rt, otherKid32) === null; })());
+      && (async () => { const rt = await parseKeyRing(await serializeKeyRing(ringJ4)); return rt !== null && keyRingGet(rt, rotKid32)?.wrappedForms.salt === salt && keyRingGet(rt, '__proto__') === null && keyRingGet(rt, otherKid32) === null; })());
     await A('[32] J4 序列化入口已拒原型鏈鍵（parseKeyRing fail-closed：entries 鍵 __proto__／constructor 非 legacy/8-hex＝null）——runtime 面與入口面兩層各自收口',
-      (() => {
+      (async () => {
         const mk = (k: string): string => btoa(JSON.stringify({ activeKid: KEYRING_LEGACY_KID, entries: { [KEYRING_LEGACY_KID]: { wrappedForms: { wrapped, salt } }, [k]: { wrappedForms: { wrapped, salt } } } }));
-        return parseKeyRing(mk('__proto__')) === null && parseKeyRing(mk('constructor')) === null;
+        return (await parseKeyRing(mk('__proto__'))) === null && (await parseKeyRing(mk('constructor'))) === null;
       })());
     const getBuiltin32 = (id: string): unknown =>
       (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
