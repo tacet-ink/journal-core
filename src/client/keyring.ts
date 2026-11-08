@@ -72,9 +72,13 @@ export function initKeyRing(wrapped: string, salt: string, wrappedRec?: string):
   return { activeKid: KEYRING_LEGACY_KID, entries: { [KEYRING_LEGACY_KID]: { wrappedForms: wf } } };
 }
 
-/** 取 entry；缺席＝null（呼叫端 fail-closed——解鑰路由「缺席＝null，不盲試」§3.2）。 */
+/** 取 entry；缺席＝null（呼叫端 fail-closed——解鑰路由「缺席＝null，不盲試」§3.2）。
+ *  runtime proto-pollution 面（0.5.3 J4）：取值走 `Object.hasOwn`——kid='__proto__'／'constructor'
+ *  等原型鏈鍵不回 entry（舊形 `?? null` 會回 Object.prototype／函式物件）。序列化入口
+ *  `parseKeyRing` 走 JSON.parse 產純 object 且 kid 形檢已拒非 legacy/8-hex 鍵，本面只防 runtime
+ *  以非 ring 自有鍵查表的攻擊面；自有鍵回值零變。 */
 export function keyRingGet(ring: KeyRing, kid: string): KeyEntry | null {
-  return ring.entries[kid] ?? null;
+  return Object.hasOwn(ring.entries, kid) ? ring.entries[kid] : null;
 }
 
 /** ring 是否已輪替（activeKid 為 8 位 hex）——決定寫入面走 `jr2b.<kid>.` 或裸 `jr1b.`（§3.2）。 */

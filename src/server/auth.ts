@@ -245,6 +245,18 @@ export function errResponse(code: string, status: number): Response {
   return corsResponse(new Response(code, { status }));
 }
 
+/**
+ * 429 限流回應（0.5.3 J4 重試窗口誠實面，t_4115dd83）：body/status/CORS 面與
+ * `errResponse('ERR_RATE_LIMITED', 429)` 恆等，唯一增量＝`Retry-After: 60`（RFC 9110 §10.2.3
+ * delta-seconds）。字面 60＝AUTH_RATE.windowMs 60_000 的**單窗設計窗長**（細窗滑動期滿即放行）；
+ * 未來多窗語意（粗桶 AUTH_RATE_COARSE 同 60_000；更長窗若加入）下本值為**下限估計**——client
+ * 以之為最早重試點、非保證放行點。errResponse 本體與其餘呼叫面零動（兄弟 fork／pin 版
+ * byte-identical 零影響；本函式 additive export）。
+ */
+export function rateLimitedResponse(): Response {
+  return corsResponse(new Response('ERR_RATE_LIMITED', { status: 429, headers: { 'Retry-After': '60' } }));
+}
+
 // ── /auth/login：PH1 進站 → PH2 查詢（UNIQUE）→ session ─────────────────────
 
 /**
@@ -285,7 +297,8 @@ export async function loginRouteCore(env: Env & Record<string, unknown>, store: 
   const rateOk = coarseRate
     ? await checkRateLadder(env, AUTH_RATE, coarseRate, ip, { fallbackInMemory: true })
     : await checkRate(env, AUTH_RATE, ip, { fallbackInMemory: true });
-  if (!rateOk) return errResponse('ERR_RATE_LIMITED', 429);
+  // 0.5.3 J4 重試窗口誠實面——429 帶 Retry-After（rateLimitedResponse；body/status/CORS 面與舊形恆等）
+  if (!rateOk) return rateLimitedResponse();
   const ph1 = validHash64(ph1In);
   if (!ph1) return errResponse('ERR_BAD_REQUEST', 400);
   // 0.4.0 J2b pepper 收口（t_41d5bb18）：ph2Of 注入點。ph2＝現行 sha256(PH1) 舊形
