@@ -69,7 +69,7 @@ run: `npm install @tacet-ink/journal-core && node example.mts`（0.3.4 起；Nod
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 639 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
+npm run verify   # 655 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
 ```
 
 上例為高階 Vault API；錯誤碼見[例外契約](#例外契約錯誤碼語意)（`VaultError` 表）。低階原語範例（note-crypto 兩時代加解密、前綴自配）與完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
@@ -161,7 +161,7 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 
 ```sh
 npm ci --ignore-scripts
-npm run verify   # 639 帳對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 655 帳對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -173,7 +173,7 @@ npm run verify   # 639 帳對真模組（禁鏡像；限流單句 UPSERT…RETUR
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   639 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
+                 #   655 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
                  # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
                  # ＋高階 Vault API [27]（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）
@@ -391,6 +391,7 @@ Node ≥ 24.7 走內建 `node:crypto` 免注入。
 - 分享面金鑰範圍：v0.3.6 起 `createShareEnvelope` 用**一次性** `shareKey`（單篇分享建檔、不可傳入帳戶主鑰）；此前分享面＝帳戶歷史主鑰（J1 收口前的舊形，舊 blob 照解）。
 - `jr1l.` 本機包裹（`storeLocalWrap`／`loadLocalWrap`，`wrapLocal` 選配）是混淆級非 e2e（KEK 由 identity 派生、passphrase-free——與 guest 同級）：已 deprecated，用途由「開啟時鎖定」（`jr1p.`／設計面 `jr2p.`）取代；讀面照走（舊 blob 可解承諾不破），新整合不配置 `wrapLocal`（寫面自然退場）。
 - 主鑰輪替（`rotateNoteKey`）設計面在 [docs/rotation-design.md](./docs/rotation-design.md)（2026-10 階段 1 doc-only，待裁定；階段 2 實作另開卡）：現行 `changePassphrase`／`upgrade` 是同一 noteKey 重包（資料零換鑰），主鑰外流無輪替補救＝輪替收口前的誠實界線；輪替是**前止**（輪替後新寫對舊金鑰副本失效），不回收已外流的密文副本。
+- ring 回滾面（`RingMacConfig`＋單調 epoch，0.7.0 起；外審 2026-11-07 #3）：未配置 MAC 的 ring blob（legacy 態）被入侵 server 仍可回推舊 blob（輪替復活）或置 null（鏡像摘除）——收口面＝blob 內 MAC（client-side HMAC-SHA256，macKey 由 host app per-account 持有、不進 blob 不過 server）＋parse fail-closed（驗證聲明後無 key／mac 不符＝null）＋legacy blob 讀契約保留（epoch=0）；**殘餘界線＝新裝置無本地 epoch 記錄首見即信**（單調 epoch 本質界線）——`users.keyring:null` 拒絕接線、LS 高水標記與 v2 寫入端接線＝tacet 產品層 follow-up（本層只交付原語＋形面）。
 - Argon2id（m=64MiB t=3 p=1）對 PBKDF2-SHA256 600k 的 GPU 離線成本倍數 ≈10-20 倍（記憶體頻寬受限；PoC B CPU 面 SHA-256d vs Argon2id ≈5×10⁴）——**僅覆蓋 Argon 派生的密語指紋面**；legacy PH1 的 wire 層 `SHA-256(pass)`（`ph1Of`，已 `@deprecated`、帶內版本化不可原地摘除）不受它保護。tacet 產品層 login 已轉 v3-first（S3 t_510bbac3 收案：Argon2id 派生 PH1 首發＋legacy 命中計數＋ladder 舊列 DELETE），core 層 `loginRouteCore` 對 legacy PH1 hex64 的相容面照留（兄弟 fork／舊平台帶內版本化）。
 - PH1 派生方式由各產品自定義（快雜湊或 Argon2id 派生皆可），本層只驗 hex64 形。
 - 本 repo 不含產品層：路由/配額/訂閱/GC/webhook 在各產品 fork。
@@ -499,7 +500,7 @@ prefix family (`families.json`), known-answer vectors (RFC 9106 Argon2id, the ga
 `scripts/generate-vectors.ts` against the real primitives and committed as frozen evidence; the
 verify gate checks their presence and shape (section [26]) and does not regenerate them.
 
-**Verification.** `npm run verify` runs 639 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
+**Verification.** `npm run verify` runs 655 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
 login ladder-guard behavior suite (external audit #8), and presence/shape checks for the format
@@ -513,10 +514,15 @@ built-in `node:crypto`. The Quickstart opens with a runnable Vault walkthrough (
 unlock → recover → PH1); the low-level primitive samples are in the 使用 section.
 
 **Honest limits.** The guest era is obfuscation-grade, not E2E. PH1 derivation is defined by each
-product (fast hash or Argon2id); this layer only validates its hex64 form. Product concerns
-(routing, quotas, subscriptions, GC, webhooks) live in the product forks. No third-party audit
-yet. A lost passphrase is unrecoverable by design — that is the price of server-side zero
-knowledge.
+product (fast hash or Argon2id); this layer only validates its hex64 form. Key-ring rollback
+(external review #3, 0.7.0) is closed at the primitive face only: without `RingMacConfig` a
+compromised server can still resurrect an old ring blob or null it — the blob-carried MAC
+(client-side key that never reaches the server) plus fail-closed parsing is the core-side
+remedy, but a fresh device with no local epoch record trusts on first sight (inherent to
+monotonic epochs); the sync guard, high-water-mark book and v2 write-side wiring are product-layer
+follow-up. Product concerns (routing, quotas, subscriptions, GC, webhooks) live in the product
+forks. No third-party audit yet. A lost passphrase is unrecoverable by design — that is the
+price of server-side zero knowledge.
 
 ## License
 

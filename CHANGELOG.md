@@ -5,6 +5,25 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.7.0] — 2026-11-08
+
+**Security** — ring 回滾面收口（外審 2026-11-07 #3：被入侵 server 對 legacy 態 `users.keyring`
+blob 可回推舊 blob（被輪替掉的舊 kid 集復活）或置 null（client 鏡像摘除））：新增
+`RingMacConfig`（`macAad`）＋`serializeKeyRing(ring, macCfg, macKeyHex)` v2 形——頂層
+`epoch`/`mac` 兩欄、`mac＝HMAC-SHA256(HKDF-SHA256(macKey, info=macAad), `ep<epoch>:<v1 形
+canonical JSON>`)`；macKey 由 host app per-account 本地持有、不進 blob 不過 server（server
+面零知識保持）。parse 配置態 fail-closed：mac 在場必驗（key 缺/錯/竄改→null）、epoch 形檢
+（`"3"`/[3] 字串化同 `ep3:` 的型別混淆唯一防線）、legacy blob（無 mac 欄）讀契約保留
+（epoch=0，帶內兼容）。**未配置＝v1 形 byte-identical**（opt-in 母型——姊妹 fork 零影響
+鐵律）。**殘餘界線**：新裝置無本地 epoch 記錄＝首見即信（單調 epoch 本質界線）；sync guard、
+LS 高水標記與 v2 寫入端接線＝tacet 產品層 follow-up。
+
+**Changed** — `serializeKeyRing`／`parseKeyRing` async 化（0.6.x 同步簽名→Promise；MAC 用
+WebCrypto HMAC）；`keyRingBumpEpoch` 新原語（epoch+1 純函式，缺席/非法視 0 不拋）、`KeyRing`
+選配 `epoch` 欄、ring 變換（addEntry/retire）攜帶 epoch 不自增。gate 帳 639→655：
+[32] 42→58（KRM-a..n 14 案＋毒化 P1/P2——MAC 驗證呼叫摘除→KRM-c/d/e/f/l 翻紅、epoch 形檢
+摘除→KRM-g 翻紅，[31] 段拷貝樹毒化母型同形）；[25] book teeth 帳面同步。
+
 ## [0.6.0] — 2026-11-07
 
 **Security** — 明文相容層 opt-out（外審 2026-11-07 #4：`decryptNote` 無前綴字串在
