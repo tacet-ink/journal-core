@@ -5,6 +5,22 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.6.0] — 2026-11-07
+
+**Security** — 明文相容層 opt-out（外審 2026-11-07 #4：`decryptNote` 無前綴字串在
+`cipherGuest` 配置態原樣回傳（dist 實跑 "Forged by the server" 照收）＋`makeInboundCipher`
+收明文無關閉選項——與「server never sees plaintext」宣稱落差）：兩面新增 optional
+`allowPlaintext`（`NoteCryptoConfig`／`CipherFormats`）。**未配置／true＝現行契約零變**
+（opt-out 母型——關閉是 fork 顯式選擇；未配置態 byte-identical，姊妹 fork 零影響鐵律）；
+**false＝關閉相容層**：client——無前綴字串一律 null 不落明文（guest/bound 軌不受牽連）；
+server——落帽真明文→null、超帽真明文→null（無截斷面，明文截斷帽不折半收假密文）、
+帽內純 b64 慣例軌→null（無前綴＝不可驗證內容，與明文相容層同面）。關閉態回傳值不再含
+未驗證內容：開放態相容層回傳值＝**未驗證內容**（伺服器／傳輸層不需金鑰即可寫入此層）——
+介面標示入 README 設計節與 JSDoc。gate 帳 630→639：[32] +7（PLT-a..g）、[31] +2（毒化
+P4/P5）；相容層退場條件：0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘（fork 需顯式配置
+`allowPlaintext:true` 或接受摘除面）——README「設計」節＋「界限」節＋
+rotation-design §12 誠實面三處落條。
+
 ## [0.5.2] — 2026-11-07
 
 **Fixed** — `decryptNote` 對輪替後 kid 前綴族 miss→null（外審 2026-11-07 高優先 #1：
