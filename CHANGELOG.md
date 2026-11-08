@@ -13,16 +13,21 @@ blob 可回推舊 blob（被輪替掉的舊 kid 集復活）或置 null（client
 `epoch`/`mac` 兩欄、`mac＝HMAC-SHA256(HKDF-SHA256(macKey, info=macAad), `ep<epoch>:<v1 形
 canonical JSON>`)`；macKey 由 host app per-account 本地持有、不進 blob 不過 server（server
 面零知識保持）。parse 配置態 fail-closed：mac 在場必驗（key 缺/錯/竄改→null）、epoch 形檢
-（`"3"`/[3] 字串化同 `ep3:` 的型別混淆唯一防線）、legacy blob（無 mac 欄）讀契約保留
-（epoch=0，帶內兼容）。**未配置＝v1 形 byte-identical**（opt-in 母型——姊妹 fork 零影響
-鐵律）。**殘餘界線**：新裝置無本地 epoch 記錄＝首見即信（單調 epoch 本質界線）；sync guard、
-LS 高水標記與 v2 寫入端接線＝tacet 產品層 follow-up。
+（`"3"`/[3] 字串化同 `ep3:` 的型別混淆唯一防線）、**epoch floor**（配置態 epoch 缺席/<1 恆拋/
+null——r2 MAJOR-1「epoch ≥ 1 ⇔ MAC 已驗」不變式：v2 面 epoch-0 恆 null＝與 legacy face（恆
+epoch 0）自然可分辨，遞增只經 `keyRingBumpEpoch`、無 bump 的配置態 serialize 恆拋＝epoch-0
+v2 blob 無出廠面）、legacy blob（無 mac 欄）讀契約保留（epoch=0，帶內兼容）。**未配置＝v1 形
+byte-identical**（opt-in 母型——姊妹 fork 零影響鐵律）。**殘餘界線**：新裝置無本地 epoch 記錄＝
+首見即信；已配置但從未寫出 v2≥1 blob 的帳（高水 book 仍 0）期窗內 strip-both/replay 仍 0≥0
+照收（write-side 接線落地即解）；sync guard、LS 高水標記與 v2 寫入端接線＝tacet 產品層
+follow-up。
 
 **Changed** — `serializeKeyRing`／`parseKeyRing` async 化（0.6.x 同步簽名→Promise；MAC 用
 WebCrypto HMAC）；`keyRingBumpEpoch` 新原語（epoch+1 純函式，缺席/非法視 0 不拋）、`KeyRing`
-選配 `epoch` 欄、ring 變換（addEntry/retire）攜帶 epoch 不自增。gate 帳 639→655：
-[32] 42→58（KRM-a..n 14 案＋毒化 P1/P2——MAC 驗證呼叫摘除→KRM-c/d/e/f/l 翻紅、epoch 形檢
-摘除→KRM-g 翻紅，[31] 段拷貝樹毒化母型同形）；[25] book teeth 帳面同步。
+選配 `epoch` 欄、ring 變換（addEntry/retire）攜帶 epoch 不自增。gate 帳 639→658：
+[32] 42→61（KRM-a..o 15 案＋毒化 P1..P4——MAC 驗證呼叫摘除→KRM-c/d/e/f/l 翻紅、epoch 形檢
+摘除→KRM-g 翻紅、serialize/parse floor 摘除→KRM-o 翻紅（真簽 epoch-0 重簽載體——floor 唯一
+防線），[31] 段拷貝樹毒化母型同形）；[25] book teeth 帳面同步。
 
 ## [0.6.0] — 2026-11-07
 

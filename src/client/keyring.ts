@@ -66,8 +66,10 @@ export interface KeyRing {
   activeKid: string;
   /** kid → entry；kid ∈ 'legacy' ∪ [0-9a-f]{8}；恆 ≤2 entries。 */
   entries: Record<string, KeyEntry>;
-  /** 單調 epoch（0.7.0；安全非負整數）：缺席＝0。v2 blob 必帶（入 MAC 輸入）；v1 blob 不寫不讀。
-   *  遞增只經 `keyRingBumpEpoch`（呼叫端顯式——addEntry/retire 攜帶不自增）。 */
+  /** 單調 epoch（0.7.0；安全非負整數）：v2 blob 必帶且 **≥ 1**（`ep<epoch>:` 入 MAC 輸入；
+   *  floor＝配置態寫/讀面 epoch 缺席或 <1 恆拋/null——「epoch ≥ 1 ⇔ MAC 已驗」不變式）；
+   *  v1 blob 不寫不讀（legacy face parse 恆回 epoch=0）。遞增只經 `keyRingBumpEpoch`
+   *  （呼叫端顯式——addEntry/retire 攜帶不自增）。 */
   epoch?: number;
 }
 
@@ -207,17 +209,18 @@ function ringMacEqual(got: string, expected: string): boolean {
 /** ring 序列化（server blob 形）：JSON 定長序（activeKid＋entries 按 key 排序）→ base64。
  *  定長序＝同 ring 恆同字面（冪等覆寫「同值」面；server 端字面覆寫零漂移）。
  *  - 未配置 `macCfg`＝v1 形 **byte-identical**（0.6.x 現行字面；`ring.epoch`／`macKeyHex` 不讀）。
- *  - 配置＝v2 形：v1 兩欄原樣＋頂層 `epoch`（＝`ring.epoch ?? 0`）＋`mac`（hex64，見 `ringMacHex`）；
- *    HMAC 確定性＝同 ring/key/epoch 恆同字面（定長序契約延伸）。`macKeyHex` 不入輸出。
- *  @throws ERR_RING_EPOCH_BAD（配置態 epoch 非安全非負整數——自寫不可讀 blob 禁出廠）／
- *    ERR_RING_MAC_KEY_BAD／ERR_RING_MAC_AAD_BAD（配置態 key/域畸形） */
+ *  - 配置＝v2 形：v1 兩欄原樣＋頂層 `epoch`（安全非負整數且 **≥ 1**——缺席/<1 恆拋）＋`mac`
+ *    （hex64，見 `ringMacHex`）；HMAC 確定性＝同 ring/key/epoch 恆同字面（定長序契約延伸）。
+ *    `macKeyHex` 不入輸出。遞增寫入前顯式 `keyRingBumpEpoch`（無 bump 的配置態序列化恆拋）。
+ *  @throws ERR_RING_EPOCH_BAD（配置態 epoch 非安全非負整數或缺席/<1——floor 不變式「epoch ≥ 1 ⇔
+ *    MAC 已驗」；自寫不可讀 blob 禁出廠）／ERR_RING_MAC_KEY_BAD／ERR_RING_MAC_AAD_BAD（配置態 key/域畸形） */
 export async function serializeKeyRing(ring: KeyRing, macCfg?: RingMacConfig, macKeyHex?: string): Promise<string> {
   const stable = stableRing(ring.activeKid, ring.entries);
   const canonical = JSON.stringify(stable);
   let json = canonical;
   if (macCfg) {
-    const epoch = ring.epoch ?? 0;
-    if (!isRingEpoch(epoch)) throw new Error('ERR_RING_EPOCH_BAD');
+    const epoch = ring.epoch;
+    if (!isRingEpoch(epoch) || epoch < 1) throw new Error('ERR_RING_EPOCH_BAD'); // epoch floor（r2 MAJOR-1：配置態 epoch 缺席/<1 恆拋——「epoch ≥ 1 ⇔ MAC 已驗」不變式，遞增只經 keyRingBumpEpoch 禁靜默代值）
     const mac = await ringMacHex(macCfg, macKeyHex, epoch, canonical);
     json = JSON.stringify({ ...stable, epoch, mac }); // v2：v1 兩欄逐字在前（v1 reader 照 parse、欄位不審）
   }
@@ -240,7 +243,9 @@ export async function serializeKeyRing(ring: KeyRing, macCfg?: RingMacConfig, ma
  *    未升級 reader 照 parse；拒多餘欄＝鏡像清空事故），回傳無 epoch 鍵。
  *  - 配置＋mac 欄缺席＝legacy（v1）blob：照 parse、epoch=0；epoch 單欄在場（無 mac）→ null
  *   （未認證 epoch 禁採信——剝 mac 抬 epoch＝單調面繞道）。
- *  - 配置＋mac 欄在場＝v2 claim：epoch 必在場且安全非負整數；mac 必字串；key/域可用；HMAC 必符——
+ *  - 配置＋mac 欄在場＝v2 claim：epoch 必在場且安全非負整數且 **≥ 1**（floor——epoch-0 恆 null：
+ *    不給「真 v2 epoch-0 blob」與「legacy face 兩欄同摘/replay 舊 v1」indistinguishable 面＝
+ *    單調 downgrade/replay 訊號，r2 MAJOR-1）；mac 必字串；key/域可用；HMAC 必符——
  *    任一不過 → null（聲明了驗證就禁跳過：key 缺≠降級 legacy 讀）。 */
 export async function parseKeyRing(b64: string, macCfg?: RingMacConfig, macKeyHex?: string): Promise<KeyRing | null> {
   try {
@@ -281,6 +286,7 @@ export async function parseKeyRing(b64: string, macCfg?: RingMacConfig, macKeyHe
     }
     if (o.epoch === undefined) return null; // v2 形必帶 epoch
     if (!isRingEpoch(o.epoch)) return null; // epoch 形檢（安全非負整數——"3"/[3] 字串化同 `ep3:` 的型別混淆面唯一防線）
+    if (o.epoch < 1) return null; // epoch floor（r2 MAJOR-1：v2 面 epoch ≥ 1 ⇔ MAC 已驗——epoch-0 恆 null，與 legacy face（恆 epoch 0）自然可分辨）
     if (typeof o.mac !== 'string') return null;
     const expected = await ringMacHex(macCfg, macKeyHex, o.epoch, JSON.stringify(stableRing(o.activeKid, entries))); // key/域畸形＝拋→null
     if (!ringMacEqual(o.mac, expected)) return null; // MAC 驗證（常數時間形）

@@ -312,9 +312,14 @@ RotationProgress = {
   層帶 `epoch`/`mac` 兩欄，`mac＝HMAC-SHA256(HKDF-SHA256(macKey, info=macAad), `ep<epoch>:<v1 形
   canonical JSON>`)`——macKey 由 host app per-account 本地持有（`tacet_keyring_mac:<acc>` 慣例）、
   不進 blob 不過 server＝server 面零知識保持；parse 配置態 fail-closed（驗證聲明後 key 缺/錯/竄改
-  ＝null、epoch 形檢是 `"3"`/[3] 字串化同 `ep3:` 型別混淆的唯一防線）、legacy blob（無 mac 欄）
-  讀契約保留（epoch=0，帶內兼容）；gate [32] KRM-a..n＋毒化 P1/P2（MAC 驗證呼叫摘除→案群翻紅、
-  epoch 形檢摘除→KRM-g 翻紅——[31] 段拷貝樹母型同形）。**殘餘界線（誠實面）**：新裝置無本地
-  epoch 記錄＝首見即信——單調 epoch 的本質界線；`users.keyring:null` 拒絕接線（sync echo 位
+  ＝null、epoch 形檢是 `"3"`/[3] 字串化同 `ep3:` 型別混淆的唯一防線、**epoch floor**（r2 MAJOR-1：
+  配置態 epoch 缺席/<1 恆拋/null——「epoch ≥ 1 ⇔ MAC 已驗」不變式，v2 面 epoch-0 恆 null＝與
+  legacy face（恆 epoch 0）自然可分辨，epoch-0 v2 blob 無出廠面））、legacy blob（無 mac 欄）
+  讀契約保留（epoch=0，帶內兼容）；gate [32] KRM-a..o＋毒化 P1..P4（MAC 驗證呼叫摘除→案群翻紅、
+  epoch 形檢摘除→KRM-g 翻紅、serialize/parse floor 摘除→KRM-o 翻紅——[31] 段拷貝樹母型同形）。
+  **殘餘界線（誠實面）**：新裝置無本地
+  epoch 記錄＝首見即信——單調 epoch 的本質界線；**已配置但從未寫出 v2≥1 blob 的帳（高水 book
+  仍 0）期窗內，strip-both/replay 落地仍是 0≥0 照收**（floor 只殲 <1 訊號，首個 v2 blob 前無
+  單調歷史可比——write-side 接線落地即解）；`users.keyring:null` 拒絕接線（sync echo 位
   guard）、LS 高水標記 book（per-account 最高已見 epoch 持久化）與 v2 blob 寫入端（rotateStart/
   rotateFinish serialize(v2) 接線）＝tacet 半 follow-up 卡（本卡 core 半只交付原語＋形面）。
