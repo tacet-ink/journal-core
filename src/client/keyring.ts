@@ -29,6 +29,9 @@
  *   雙包承載（`RingMacConfig.macKeyWrapped`，WrappedForms 同構）內嵌 blob `mk` 欄隨 server 儲存、
  *   受 MAC 覆蓋＝server 零知識不變（server 見密文）；第二裝置由 `mk` 欄解包（`keyRingWrappedMacKey`
  *   → 呼叫端既有包裹族 unwrap → `ringMacKeyHexOf`）完成 MAC 驗證（寫出即全裝置可驗）。
+ *   換密語＝重包不重簽；凡不走 `keyRingAddEntry`/`keyRingRetire` 的 re-emission（換密語重包、復原
+ *   套件重出）必先 `keyRingBumpEpoch` 再 serialize——重包改 MAC 覆蓋字面＝同 epoch 新 mac，
+ *   次裝置高水紀錄恆拒＝鎖死（R1 MAJOR-1）。
  *   MAC 只證「blob 出自持 key 的 client」，**不證新鮮度**——回推舊合法 blob 由單調 epoch
  *  （變換即推進＋呼叫端高水 epoch+mac 紀錄 `keyRingMeetsHighWater`）承載；本機紀錄缺席
  *  （新裝置）＝首見即信（§12 殘餘界線）。
@@ -96,7 +99,9 @@ export interface RingMacConfig {
   macAad: string;
   /** 帳號域（0.8.0）：MAC 輸入必帶——`ep<epoch>:<accountId>:<canonical>`；可共享 macKey 後
    *  server 端對調兩帳 ring 面收口（同 key 異帳恆異 MAC）。形：非空字串、禁 `':'`、≤256 字元；
-   *  違例＝serialize 拋 ERR_RING_MAC_ACC_BAD／parse 經 MAC 計算路徑 throw→null。 */
+   *  違例＝serialize 拋 ERR_RING_MAC_ACC_BAD／parse 經 MAC 計算路徑 throw→null。
+   *  來源（R1 MINOR-4）：由 client 本地 identity 承載（identity-derived）、**禁 server echo**——對調面
+   *  收口前提＝帳域不信任 server。 */
   accountId: string;
   /** legacy blob 恆拒（0.8.0 選配）：無 mac 欄 blob → parse null（殲 K1e 剝欄回滾面）。未設/false
    *  ＝0.7.0 行為（legacy 照讀 epoch 0）。開啟時機＝消費端遷移完成裁定（權不在本模組）。 */
@@ -136,6 +141,7 @@ export function keyRingIsRotated(ring: KeyRing): boolean {
  * 輪替階段 A（rotate_start 後 client 側 ring 形）：新 kid entry 加入、active 切換、legacy 保留。
  * 冪等（§4.2 階段 A）：同 kid 重發＝同值覆寫（同 input 恆同輸出，無副作用）。
  * 超限（已有 2 entry 且新 kid 缺席）＝throw `ERR_RING_FULL`（server 側同形 `ERR_ROTATION_IN_PROGRESS`）。
+ * 變換即推進（0.8.0 N2）：帶 epoch ring 的變換自動 +1——serialize 恆出推進後 epoch（0.7.0 攜帶不自增舊形已汰）。
  * @throws ERR_KID_BAD（kid 形非 8 位 hex）/ ERR_RING_FULL
  *   （ring 滿＋新 kid 缺席——正常動線是「先退場舊鑰再加新鑰」，未退場即加＝並行輪替/漂移態，fail-closed）
  */
@@ -158,6 +164,7 @@ export function keyRingAddEntry(ring: KeyRing, kid: string, wrappedForms: Wrappe
 /**
  * 輪替階段 B（rotate_finish）：退場指定 entry（首輪＝legacy）、ring 收斂。
  * 冪等：kid 已缺席＝原样回傳（finish 重發零副作用）。
+ * 變換即推進（0.8.0 N2）：帶 epoch ring 的變換自動 +1（冪等原样返回面零推進）。
  * 多輪參數化：退場 kid 集＝ring 內非 active 位（形＝`jr2?.<退場kid集>.` 拒收面對齊 §4.2）。
  * @throws ERR_KID_BAD（kid 形非 8 位 hex）/ ERR_RING_EMPTY（退場後無 entry——正常動線不觸發）
  */
@@ -185,14 +192,17 @@ function isRingEpoch(x: unknown): x is number {
  *  （0.6.x byte-identical 契約不變）。冪等已缺席面（retire 原样返回）不經本函式＝零推進。 */
 function withEpochOf(src: KeyRing, out: KeyRing): KeyRing {
   if (src.epoch === undefined) return out; // v1 形零漂移（epoch 缺席變換後仍無 epoch 鍵）
-  out.epoch = (isRingEpoch(src.epoch) ? src.epoch : 0) + 1; // 變換即推進（0.8.0 N2）：K2a/K2c 同 epoch serialize 殲；keyRingBumpEpoch 顯式保留相容
+  out.epoch = isRingEpoch(src.epoch) ? src.epoch + 1 : src.epoch; // 變換即推進（0.8.0 N2）：K2a/K2c 同 epoch serialize 殲；腐敗 epoch 攜原值＝serialize floor 恆拋（R1 MINOR-2——「禁靜默代值」）
   return out;
 }
 
 /** epoch +1（純函式；禁 throw）：缺席／非法 epoch（非安全非負整數）視 0。activeKid/entries 原值帶出。
  *  0.8.0 起變換即推進——本原語保留相容：v1 緣起 ring（epoch 缺席）首配置態首寫仍以本函式遞增；
- *  v2 緣起 ring 變換恆自推進、顯式 bump 為冗餘正確操作（多推進只進帳——單調面：client 本機記錄最高
- *  已見 epoch＋mac，拒低版／同 epoch 異 mac，見 `keyRingMeetsHighWater`）。 */
+ *  v2 緣起 ring 的變換（addEntry/retire）恆自推進、彼面顯式 bump 為冗餘。**不走變換的 re-emission
+ *  （換密語重包、復原套件重出）必先走本函式再 serialize**（R1 MAJOR-1）：重包改 MAC 覆蓋字面
+ *  （mk/包裹面）＝同 epoch 新 mac blob，次裝置高水紀錄（同 epoch 異 mac→拒）會恆拒→鎖死；bump 後
+ *  推進才推得動 book。多推進只進帳——單調面：client 本機記錄最高已見 epoch＋mac，拒低版／
+ *  同 epoch 異 mac，見 `keyRingMeetsHighWater`。 */
 export function keyRingBumpEpoch(ring: KeyRing): KeyRing {
   const cur = isRingEpoch(ring.epoch) ? ring.epoch : 0;
   return { activeKid: ring.activeKid, entries: ring.entries, epoch: cur + 1 };
@@ -284,7 +294,8 @@ function unb64Ring(b64: string): Uint8Array {
  *    恆同字面（定長序契約延伸）。`macKeyHex` 不入輸出；`ring.mac` 不消（恆重算）。
  *  - epoch floor：v1 緣起（epoch 缺席）首配置態 serialize 恆拋（ERR_RING_EPOCH_BAD——首寫前顯式
  *    `keyRingBumpEpoch`）；v2 緣起（epoch 帶位）serialize 恆可出恆帶推進後 epoch——變換即推進
- *    （0.8.0 N2），`keyRingBumpEpoch` 為相容保留的顯式遞增。
+ *    （0.8.0 N2），`keyRingBumpEpoch` 為相容保留的顯式遞增。不走變換的 re-emission（換密語重包、
+ *    復原套件重出）serialize 前必先 `keyRingBumpEpoch`（同 epoch 新 mac＝高水恆拒，R1 MAJOR-1）。
  *  @throws ERR_RING_EPOCH_BAD（配置態 epoch 非安全非負整數或缺席/<1——floor 不變式「epoch ≥ 1 ⇔
  *    MAC 已驗」；自寫不可讀 blob 禁出廠）／ERR_RING_MAC_KEY_BAD／ERR_RING_MAC_AAD_BAD／
  *    ERR_RING_MAC_ACC_BAD（配置態 key/域/帳域畸形）／ERR_RING_MAC_KEY_WRAP_BAD（macKeyWrapped 形廢） */
@@ -294,7 +305,7 @@ export async function serializeKeyRing(ring: KeyRing, macCfg?: RingMacConfig, ma
   let json = canonical;
   if (macCfg) {
     const epoch = ring.epoch;
-    if (!isRingEpoch(epoch) || epoch < 1) throw new Error('ERR_RING_EPOCH_BAD'); // epoch floor（r2 MAJOR-1：配置態 epoch 缺席/<1 恆拋——「epoch ≥ 1 ⇔ MAC 已驗」不變式，遞增只經 keyRingBumpEpoch 禁靜默代值）
+    if (!isRingEpoch(epoch) || epoch < 1) throw new Error('ERR_RING_EPOCH_BAD'); // epoch floor（r2 MAJOR-1：配置態 epoch 缺席/<1 恆拋——「epoch ≥ 1 ⇔ MAC 已驗」不變式；遞增＝變換即推進/keyRingBumpEpoch、腐敗值攜原值恆拋＝禁靜默代值，R1 NIT）
     let mkObj: WrappedForms | undefined;
     if (macCfg.macKeyWrapped !== undefined) mkObj = macKeyWrapChecked(macCfg.macKeyWrapped); // mk 欄形檢（寫面 fail-closed——自寫不可讀 blob 禁出廠）
     const mac = await ringMacHex(macCfg, macKeyHex, epoch, mkObj ? JSON.stringify({ ...stable, mk: mkObj }) : canonical);
@@ -422,12 +433,12 @@ export interface RingHighWater {
 
 /** 高水比對 helper（0.8.0 N2）：呼叫端以本機最高已見 {epoch, mac} 對候選 blob 判準——
  *  - incoming null（parse 失敗）→ false（fail-closed）；
- *  - seen null → true（首見即信——§12 殘餘界線：新裝置無本地紀錄＝單調 epoch 本質界線）；
+ *  - seen null/undefined → true（首見即信——§12 殘餘界線：新裝置無本地紀錄＝單調 epoch 本質界線；undefined 同義〔strict book[accountId] 型別非 undefined、runtime 首見恰 undefined，R1 MINOR-3〕）；
  *  - epoch 較低 → false（回推舊版）；epoch 相同但 mac 不同 → false（同 epoch 改寫/對調面）；
  *  - epoch 形廢（非安全非負整數）→ false；其餘（較高、同 epoch 同 mac 冪等重見）→ true。 */
 export function keyRingMeetsHighWater(seen: RingHighWater | null, incoming: RingHighWater | null): boolean {
   if (!incoming || !isRingEpoch(incoming.epoch)) return false;
-  if (seen === null) return true; // 首見即信（§12 殘餘界線誠實面——非驗證面）
+  if (seen == null) return true; // 首見即信（undefined 同義——strict 帳書型別非 undefined、runtime 首見恰 undefined；§12 殘餘界線誠實面——非驗證面，R1 MINOR-3）
   if (!isRingEpoch(seen.epoch)) return false; // seen 形廢＝帳面腐敗恆拒（fail-closed）
   if (incoming.epoch < seen.epoch) return false; // 回推舊版＝拒
   if (incoming.epoch === seen.epoch && incoming.mac !== seen.mac) return false; // 同 epoch 異 mac＝分叉/改寫（K2b 殲——高水紀錄需同存 mac）
