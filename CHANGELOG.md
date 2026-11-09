@@ -13,7 +13,10 @@
 （`RingMacConfig.macKeyWrapped`，`WrappedForms` 同構）內嵌 v2 blob 頂層 `mk` 尾欄、**受 MAC 覆蓋**（canonical
 附 mk 嚴格三欄子集——包裹面竄改恆攔）、隨 blob 走 server（零新欄）＝server 零知識不變（見密文）；第二裝置僅憑
 密語（`keyRingWrappedMacKey` 讀 mk → 既有 `unwrapNoteKey`／`unwrapNoteKeyWithRecToken` 解包 →
-`ringMacKeyHexOf` → `parseKeyRing`）完成 MAC 驗證＝寫出即全裝置可驗；換密語＝重包不重簽。MAC 輸入擴欄帶帳號域
+`ringMacKeyHexOf` → `parseKeyRing`）完成 MAC 驗證＝寫出即全裝置可驗；換密語＝重包不重簽（macKey 本體與既有 ring
+MAC 不變），凡不走 `keyRingAddEntry`／`keyRingRetire` 的 re-emission（換密語重包、復原套件重出）**必先
+`keyRingBumpEpoch` 再 serialize**——重包改受 MAC 覆蓋字面＝同 epoch 新 MAC，次裝置高水紀錄恆拒（R1 MAJOR-1）。
+MAC 輸入擴欄帶帳號域
 `ep<epoch>:<accountId>:<canonical>`（`RingMacConfig.accountId` 必需；形：非空、禁 `:`、≤256——違例 serialize
 `ERR_RING_MAC_ACC_BAD`／parse null）：可共享 macKey 後 server 對調兩帳 ring 面收口（同 key 異帳恆異 MAC）。
 `requireMac?: boolean` 選配：true ⇒ 無 mac 欄 blob（legacy face）parse 恆 null（K1e 剝欄回滾殲；開啟時機＝
@@ -28,11 +31,12 @@ v1 形零漂移；`keyRingBumpEpoch` 保留相容（顯式 +1——v1 緣起 rin
 `keyRingMeetsHighWater(seen, incoming)`（`RingHighWater {epoch, mac?}`）：incoming null／epoch 形廢→false；
 seen null→首見即信 true；epoch 較低→拒；同 epoch 異 mac→拒；`parseKeyRing` v2 成功面帶回 `KeyRing.mac`＝
 呼叫端高水紀錄 epoch+mac 同存承載。**Breaking**：`RingMacConfig` 配置態現在必需 `accountId`；0.7.0 產出
-（無帳號域）的 v2 blob MAC 在 0.8.0 配置態恆 null（發布前零消費者接線——無遷移面）。gate 帳 678→689：
-[32] 67→78（KRM-p 變換即推進／KRM-q 高水 helper／KRM-r requireMac／KRM-s 帳號域／KRM-t mk 欄／KRM-u 裝置 B
-解包／KRM-v macKey 原語形 7 案＋毒化 P5 變換即推進摘除→KRM-p/m 翻紅、P6 帳號域摘除→KRM-s 翻紅、P7 requireMac
-臂摘除→KRM-r 翻紅、P8 高水 mac 比對臂摘除→KRM-q 翻紅 4 案；既有 KRM-m 改變換即推進語意、KRM-o 重簽載體帶
-帳號域）。
+（無帳號域）的 v2 blob MAC 在 0.8.0 配置態恆 null（發布前零消費者接線——無遷移面）。gate 帳 678→691：
+[32] 67→80（KRM-p 變換即推進／KRM-q 高水 helper／KRM-r requireMac／KRM-s 帳號域／KRM-t mk 欄／KRM-u 裝置 B
+解包／KRM-v macKey 原語形／KRM-w 換密語 re-emission 必先 bump（R1 MAJOR-1）8 案＋毒化 P5 變換即推進摘除→KRM-p/m
+翻紅、P6 帳號域摘除→KRM-s 翻紅、P7 requireMac 臂摘除→KRM-r 翻紅、P8 高水 mac 比對臂摘除→KRM-q 翻紅 4 案＋毒化樹
+try/finally 還原案（R1 MINOR-5）1 案；既有 KRM-m 改變換即推進語意、KRM-o 重簽載體帶帳號域；R1 修正輪 +2
+（KRM-w＋毒化樹還原））。
 
 ## [0.7.0] — 2026-11-08
 
@@ -45,8 +49,8 @@ canonical JSON>`)`；macKey 由 host app per-account 本地持有、不進 blob 
 （`"3"`/[3] 字串化同 `ep3:` 的型別混淆唯一防線）、**epoch floor**（配置態 epoch 缺席/<1 恆拋/
 null——r2 MAJOR-1「epoch ≥ 1 ⇔ MAC 已驗」不變式：v2 面 epoch-0 恆 null＝與 legacy face（恆
 epoch 0）自然可分辨，遞增只經 `keyRingBumpEpoch`、epoch 缺席（v1 緣起首配置態）的 serialize 恆拋＝epoch-0
-v2 blob 無出廠面——**0.8.0 校正**：帶 epoch ring 的變換後無 bump serialize 實際可出（同 epoch 改寫面——N2，0.8.0
-變換即推進收口；原句過寬））、legacy blob（無 mac 欄）讀契約保留（epoch=0，帶內兼容）。**未配置＝v1 形
+v2 blob 無出廠面——**0.8.0 校正**：帶 epoch ring 的變換後無 bump serialize 實際可出——同 epoch 改寫面，N2，0.8.0
+變換即推進收口；原句過寬）、legacy blob（無 mac 欄）讀契約保留（epoch=0，帶內兼容）。**未配置＝v1 形
 byte-identical**（opt-in 母型——姊妹 fork 零影響鐵律）。**殘餘界線**：新裝置無本地 epoch 記錄＝
 首見即信；已配置但從未寫出 v2≥1 blob 的帳（高水 book 仍 0）期窗內 strip-both/replay 仍 0≥0
 照收（write-side 接線落地即解）；sync guard、LS 高水標記與 v2 寫入端接線＝tacet 產品層

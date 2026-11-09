@@ -317,23 +317,26 @@ RotationProgress = {
   包裹＋復原 KEK 包裹雙包**（`RingMacConfig.macKeyWrapped`，`WrappedForms` 同構）內嵌 blob `mk` 欄隨 server、
   受 MAC 覆蓋——server 零知識不變（見密文）；第二裝置僅憑密語（`keyRingWrappedMacKey` 讀 mk → 呼叫端既有包裹族
   `unwrapNoteKey`／`unwrapNoteKeyWithRecToken` → `ringMacKeyHexOf` → `parseKeyRing`）完成驗證＝**寫出即全裝置
-  可驗**；換密語＝重包不重簽（呼叫端以既有 wrap 族重包 `macKeyWrapped`、serialize 重出）；PIN 解鎖裝置 macKey
-  隨 noteKey 入 PIN 鎖面（pinlock 家族——tacet 接線卡，本層零碼動）。
+  可驗**；換密語＝重包不重簽（呼叫端以既有 wrap 族重包 `macKeyWrapped`；不走變換的 re-emission——換密語重包、復原
+  套件重出——必先 `keyRingBumpEpoch` 再 serialize：重包改 MAC 覆蓋字面、同 epoch 新 mac＝次裝置高水紀錄恆拒，R1 MAJOR-1）；
+  PIN 解鎖裝置 macKey 隨 noteKey 入 PIN 鎖面（pinlock 家族——tacet 接線卡，本層零碼動）。
 - **parse 配置態 fail-closed 面**：key 缺/錯/竄改→null、epoch 形檢（`"3"`/[3] 字串化同 `ep3:` 型別混淆的唯一
   防線）、**epoch floor**（r2 MAJOR-1：配置態 epoch 缺席/<1 恆拋/null——「epoch ≥ 1 ⇔ MAC 已驗」不變式，v2 面
   epoch-0 恆 null＝與 legacy face（恆 epoch 0）自然可分辨）、帳號域形檢（`accountId` 非空、禁 `:`、≤256；
-  同 key 異帳恆 null＝server 對調兩帳 ring 面收口）、mk 欄形檢（形廢＝MAC 前 null）、`requireMac` 選配（true
+  同 key 異帳恆 null＝server 對調兩帳 ring 面收口；accountId 由 client 本地 identity 承載、禁 server echo——收口前提
+  （R1 MINOR-4））、mk 欄形檢（形廢＝MAC 前 null）、`requireMac` 選配（true
   ⇒ legacy blob 恆 null——K1e 剝欄回滾殲；開啟時機＝消費端遷移完成裁定）；v1 face 照讀 epoch=0（帶內兼容；
   requireMac 開啟恆拒）。
 - **變換即推進（0.8.0 N2）＋高水比對**：帶 epoch ring 的 addEntry/retire 自動 +1（serialize 恆可出恆帶推進後
   epoch——「同 epoch 改寫」面殲；retire 已缺席冪等原样零推進；v1 形零漂移）；`keyRingBumpEpoch` 保留相容（v1
   緣起 ring 首配置態首寫仍以其遞增）。`keyRingMeetsHighWater(seen, incoming)`：epoch 低→拒；同 epoch 異 mac
   →拒；呼叫端高水紀錄需**同存 epoch+mac**——`parseKeyRing` v2 成功面帶回 `KeyRing.mac` 承載。
-- **gate [32] KRM-a..v＋毒化 P1..P8**：KRM-p 變換即推進／KRM-q 高水 helper／KRM-r requireMac／KRM-s 帳號域／
-  KRM-t mk 欄／KRM-u 裝置 B 零本地態解包／KRM-v macKey 原語形（0.8.0 新案群）；毒化 P5 變換即推進摘除→KRM-p/m
-  翻紅、P6 MAC 輸入帳號域摘除→KRM-s 翻紅、P7 requireMac 臂摘除→KRM-r 翻紅、P8 高水 mac 比對臂摘除→KRM-q 翻紅
-  （P1..P4＝0.7.0 四齒：MAC 驗證呼叫摘除→案群翻紅、epoch 形檢摘除→KRM-g 翻紅、serialize/parse floor 摘除→
-  KRM-o 翻紅；[31] 段拷貝樹母型同形）。
+- **gate [32] KRM-a..w＋毒化 P1..P8**：KRM-p 變換即推進／KRM-q 高水 helper／KRM-r requireMac／KRM-s 帳號域／
+  KRM-t mk 欄／KRM-u 裝置 B 零本地態解包／KRM-v macKey 原語形／KRM-w 換密語 re-emission 必先 bump（R1 修正輪新案，
+  0.8.0 新案群）；毒化 P5 變換即推進摘除→KRM-p/m 翻紅、P6 MAC 輸入帳號域摘除→KRM-s 翻紅、P7 requireMac 臂摘除
+  →KRM-r 翻紅、P8 高水 mac 比對臂摘除→KRM-q 翻紅、毒化樹 try/finally 還原案（R1 MINOR-5 映 J4 形）（P1..P4＝
+  0.7.0 四齒：MAC 驗證呼叫摘除→案群翻紅、epoch 形檢摘除→KRM-g 翻紅、serialize/parse floor 摘除→KRM-o 翻紅；
+  [31] 段拷貝樹母型同形）。
 - **殘餘界線（誠實面）**：新裝置無本地高水紀錄＝首見即信——單調 epoch 的本質界線；**無 mk 欄的 v2 blob（host
   未提供 `macKeyWrapped`）第二裝置讀不到＝fail-closed**（部署面非攻擊面）；**已配置但從未寫出 v2≥1 blob 的帳
   （高水 book 仍 0）期窗內，strip-both/replay 落地仍是 0≥0 照收**（floor 只殲 <1 訊號，首個 v2 blob 前無單調
