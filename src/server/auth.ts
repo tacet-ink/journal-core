@@ -58,6 +58,15 @@ const BINARY_RE = /[\x00-\x08\x0e-\x1f]/;
 const HASH64_RE = /^[0-9a-f]{64}$/;
 const SALT32_RE = /^[0-9a-f]{32}$/;
 
+/** N3 保留命名空間安全網 regex（外審 2026-11-10 N3 修法 2；core 預設開啟——非 config 面常數）：
+ *  外型像 core 命名空間的字串（jr<1 位數字><1 小寫字母>.）一律不當明文（null，不落明文相容層／
+ *  明文軌）——未知/未配置的新家族字串不得被收成明文（修前 jr3b./jr1c./jr1d. 明文照收、超帽族字面
+ *  截斷收下＝覆寫型缺陷形）。已知家族完整形在本函式前段分派（RE/kid 命中即返）＝既有家族零變。
+ *  同源帳：src/client/note-crypto.ts 同名常數須同字面（兩面漂移即咬——gate 靜態錨）。
+ *  範圍界線：D1e 前導空白面（" jr2b.…"）不在本網——起始錨 regex 不咬 leading-whitespace raw
+ *  （client 相容層對 cipher 未 trim）；根治＝allowPlaintext:false（歸 tacet 消費端卡 t_abe80c24）。 */
+const CORE_NS_RE = /^jr\d[a-z]\./;
+
 /** regex 用字面跳脫：全字元掃描（.replace('.',) 只跳第一個點——前綴含第二個 . 即壞）。 */
 function escapeReLiteral(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -89,7 +98,7 @@ function kidFamilyRe(bases: readonly string[] | undefined): RegExp | null {
 
 /**
  * 入庫前校正：前綴密文原樣入庫；超限密文／編碼丟棄（截斷必壞）、明文照 allowPlaintext 語意收。
- * cipherMax（UTF-16 單位）同為明文截斷帽：明文相容層 opt-out（allowPlaintext，0.6.0——
+ * cipherMax（UTF-16 單位）同為明文截斷帽：明文相容層 opt-out（allowPlaintext，0.7.0——
  * 外審 2026-11-07 #4）——未配置／true＝明文照收、截到 cipherMax 入庫（現行契約零變）；
  * false＝關閉——落帽真明文→null、超帽真明文→null（無截斷面）、b64 慣例軌照關閉態語意
  * （帽內純 b64＝無前綴不可驗證內容→null）；家族密文／超帽禁截／kid 族形驗各軌零動。
@@ -103,11 +112,16 @@ export function makeInboundCipher(c: CipherFormats) {
   const kidFamilyHit = (text: string): boolean =>
     (RE2?.test(text) ?? false) ||
     (c.cipherPrefixes2 ?? []).some(p => typeof p === 'string' && p.length > 0 && text.startsWith(p));
+  // S1（外審 2026-11-10）已知 v1 前綴家族 literal 腿——與 kid 族同律（字面在場即族 claim；
+  // 非完整 b64 形不落明文軌）。isCipherFor 分類面零動（分類≠入庫閘，fix 後 junk 分類照 true）。
+  const v1FamilyHit = (text: string): boolean =>
+    c.cipherPrefixes.some(p => typeof p === 'string' && p.length > 0 && text.startsWith(p));
   return function inboundCipher(raw: unknown): string | null {
     if (typeof raw !== 'string') return null;
     const text = raw.trim();
     if (!text) return null;
     if (text.length > c.cipherMax) {
+      if (v1FamilyHit(text) || CORE_NS_RE.test(text)) return null; // S1＋N3：已知/保留命名空間面超帽禁截（不落明文截斷軌）
       return RE.test(text) || BASE64_RE.test(text) || kidFamilyHit(text)
         ? null // 密文/編碼超限：截斷必壞，直接丟棄（kid 族任何字面在場同律——超帽禁截，絕不落明文截斷）
         : c.allowPlaintext === false ? null : text.slice(0, c.cipherMax); // 純明文（舊版客戶端）：截到上限照收／關閉態→null（無截斷面＝不折半收假密文）
@@ -125,6 +139,12 @@ export function makeInboundCipher(c: CipherFormats) {
     // 任何字面命中皆已在上行分派）。上行被摘除時 junk『jr2b.0596ea50.!!!』／kid 欄形廢由此行接住
     // ＝gate [31] P2 毒化案「J2-b 照綠」的承載行。
     if (kidFamilyHit(text)) return null;
+    // S1（外審 2026-11-10）：已知 v1 族字面在場、非完整形 → null（kid 族同律——:127 防禦行延伸；
+    // 修前 jr1b.!!! 由下行 fallback 照收）。isCipherFor 分類面零動。
+    if (v1FamilyHit(text)) return null;
+    // N3 保留命名空間安全網（外審 2026-11-10 N3 修法 2；core 預設開啟）：命名空間形一律不當明文
+    //（未配置 jr2b./家族外的 jr1c./jr1d./未來 jr3b.——D1b/c/d 收口）；closed 態同 null＝零動。
+    if (CORE_NS_RE.test(text)) return null;
     return c.allowPlaintext === false ? null : text; // 真明文：照收（舊版相容）／關閉態→null（相容層摘除）
   };
 }

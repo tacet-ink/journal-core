@@ -25,6 +25,13 @@ MAC 輸入擴欄帶帳號域
 `macKeyWrapped`）第二裝置讀不到＝fail-closed（部署面非攻擊面）；已配置但從未寫出 v2≥1 blob 的帳期窗
 strip-both/replay 照收（write-side 接線落地即解）。
 
+**Security** — 保留命名空間安全網（外審 2026-11-10 N3 修法 2；core 預設開啟）：`decryptNote` 相容層＋
+`makeInboundCipher` 明文軌兩面——命名空間形（`^jr\d[a-z]\.`）一律 null（D1b/c/d 收口；修前原樣回傳／截斷收
+入庫）；既有家族零變（jr1b./jr1u. 完整形照解照收、kid 配置態零動、`allowPlaintext:false` 零動）；JSDoc 界線＝
+D1e 前導空白面不在本網（根治＝`allowPlaintext:false`，消費端接線另卡）。S1 v1 族收齊：已知前綴字面在場、非完整
+b64 形→null（帽內 `jr1b.!!!` 照收、超帽 junk 截斷收→null 收口；kid 族同律）；`isCipherFor` 分類面零動；無前綴
+真明文對照組照 `allowPlaintext` 語意。
+
 **Changed** — 變換即推進（外審 N2 同 epoch 改寫收口）：帶 epoch ring 的 `keyRingAddEntry`／`keyRingRetire`
 自動 +1（serialize 恆可出恆帶推進後 epoch——「同 epoch 改寫」面殲；retire 已缺席冪等原样零推進）；epoch 缺席的
 v1 形零漂移；`keyRingBumpEpoch` 保留相容（顯式 +1——v1 緣起 ring 首配置態首寫仍以本函式遞增）。新 export
@@ -37,6 +44,17 @@ seen null→首見即信 true；epoch 較低→拒；同 epoch 異 mac→拒；`
 翻紅、P6 帳號域摘除→KRM-s 翻紅、P7 requireMac 臂摘除→KRM-r 翻紅、P8 高水 mac 比對臂摘除→KRM-q 翻紅 4 案＋毒化樹
 try/finally 還原案（R1 MINOR-5）1 案；既有 KRM-m 改變換即推進語意、KRM-o 重簽載體帶帳號域；R1 修正輪 +2
 （KRM-w＋毒化樹還原））。
+
+**Changed** — K5 根入口匯出收齊：`src/index.ts` keyring 區塊補 `keyRingBumpEpoch`＋`RingMacConfig`（外審
+2026-11-10 K5——根入口無法產生 v2 blob）＋0.7.0/0.8.0 新 API root 滯後同類（`keyRingMeetsHighWater`／
+`RingHighWater`／`generateRingMacKey`／`ringMacKeyHexOf`／`keyRingWrappedMacKey`）；ci-subpath-probe root
+具名 import 斷言（值腿靜態具名 import link 期即紅＋型腿安裝樹 .d.ts 字面）。文檔版次修正：0.6.0 起→0.7.0 起
+（README×3＋rotation-design.md §12＋auth.ts 註解——npm 序列 0.5.2→0.7.0 無 0.6.0）＋退場條件句幻影起點收正
+（四處）＋SECURITY.md 支援表。CI：verify.yml「Install typescript」步補 `--ignore-scripts`（in-file D4 保險面
+保留——旗標即防禦面同向）＋gate [21] 靜態齒。gate 帳 691→702：[32] 80→87（PLT-h..m 六案＋兩面 CORE_NS_RE
+同源靜態帳）＋[21] 19→21（Install typescript --ignore-scripts 齒＋探針 root 具名 import 齒）＋[31] 12→14
+（P6 安全網摘除／P7 S1 分派摘除毒化兩向＋P1/P3 針源同步）；R1 CORS Access-Control-Expose-Headers 不改（tacet
+同源不受影響——記錄即可）。
 
 ## [0.7.0] — 2026-11-08
 
@@ -75,7 +93,7 @@ server——落帽真明文→null、超帽真明文→null（無截斷面，明
 帽內純 b64 慣例軌→null（無前綴＝不可驗證內容，與明文相容層同面）。關閉態回傳值不再含
 未驗證內容：開放態相容層回傳值＝**未驗證內容**（伺服器／傳輸層不需金鑰即可寫入此層）——
 介面標示入 README 設計節與 JSDoc。gate 帳 630→639：[32] +7（PLT-a..g）、[31] +2（毒化
-P4/P5）；相容層退場條件：0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘（fork 需顯式配置
+P4/P5）；相容層退場條件：0.7.0 後兩個 minor 週期內遷移完即摘（原式以未發行的 0.6.0 為起點——npm 版本序列 0.5.2→0.7.0，外審 2026-11-10 校正；fork 需顯式配置
 `allowPlaintext:true` 或接受摘除面）——README「設計」節＋「界限」節＋
 rotation-design §12 誠實面三處落條。
 ## [0.5.3] — 2026-11-08（**未發布**——版本號讓位堆疊，內容合流入 0.7.0 發布面）

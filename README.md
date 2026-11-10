@@ -91,13 +91,13 @@ npm run verify   # 691 assertions, all green, run against the real modules (no m
   解密面 guest 家族整面拒絕、不明字串與畸形空字串配置不當明文顯示）。wrapLocal 為選配：
   未配置＝寫面功能退場——v1 可用者（借用期部署）升級後需配置 wrapLocal 才保留本機包裹寫入
   （讀取面照走舊形回落，零資料損失面）。
-- **明文相容層 opt-out（`allowPlaintext`，0.6.0 起）**：反 opt-in——**未配置／true＝現行
+- **明文相容層 opt-out（`allowPlaintext`，0.7.0 起）**：反 opt-in——**未配置／true＝現行
   契約零變**（opt-out 母型：關閉是 fork 顯式選擇，未配置態 byte-identical）；`false`＝關閉：
   client `decryptNote` 無前綴字串一律 null 不落明文；server `makeInboundCipher` 落帽真明文
   →null、超帽真明文→null（明文截斷帽不折半收假密文，截斷必壞同律）、帽內純 b64 慣例軌
   →null（無前綴＝不可驗證內容）。**相容層回傳值＝未驗證內容**——伺服器或傳輸層不需金鑰
   即可寫入此層（舊版客戶端明文筆記的唯一通道）；關閉態回傳值不再含未驗證內容。退場條件：
-  0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘（屆時 fork 需顯式配置 `allowPlaintext:true`
+  0.7.0 後兩個 minor 週期內遷移完即摘（屆時 fork 需顯式配置 `allowPlaintext:true`
   或接受摘除面；詳「界限」節＋rotation-design §12 誠實面）。
 
 ## 模組（Modules）
@@ -380,11 +380,11 @@ Node ≥ 24.7 走內建 `node:crypto` 免注入。
 ## 界限（誠實面）
 
 - guest 時代是混淆級不是 e2e（K_u 由 identity 可派生）；e2e 承諾從綁定（隨機 noteKey）起。
-- **明文相容層**（`allowPlaintext`，0.6.0 起）：未配置／true 時 `decryptNote` 對無前綴舊版
+- **明文相容層**（`allowPlaintext`，0.7.0 起）：未配置／true 時 `decryptNote` 對無前綴舊版
   明文原樣返回、`makeInboundCipher` 對明文照收截帽入庫——該面回傳值／入庫值＝**未驗證內容**
   （伺服器或傳輸層不需金鑰即可寫入此層；舊版客戶端明文筆記的唯一通道）；`false`＝關閉
   （無前綴明文一律 null、截斷面同步關閉、帽內 b64 慣例軌同面 null）。**退場條件（誠實面
-  落條）**：0.6.x→0.7.0 後兩個 minor 週期內遷移完即摘——屆時 fork 需顯式
+  落條）**：0.7.0 後兩個 minor 週期內遷移完即摘——屆時 fork 需顯式
   `allowPlaintext:true`（接受未驗證內容面）或接受相容層摘除（舊明文讀 null）；未遷移
   fork 摘除面零通知（相容層靜默消失＝舊明文筆記不可讀），升級前先盤點 own 明文存量。
 - PIN 類保護（本機鎖定／雙因子 PIN 腿）是 PBKDF2-SHA256 600k：6 位純數字在 RTX 4090 公開基準（≈8.8e9 iter/s；**速率外推非實測**）≈68 秒（外推）、8 位數字 ≈1.9 小時（外推）、6 碼小寫英數 ≈41 小時（外推）（PoC C 實證底：4 位 16 核 CPU 28.7s 命中）＝**門檻不是牆**——鎖定閘取即時性、非登入 oracle 戰場，強度取捨見設計。
@@ -428,7 +428,7 @@ deliberately share one code, since telling them apart would create an oracle.
   passphrase (KEK) and with a recovery package (KEK_rec) — before upload. From that point the
   passphrase never crosses the wire: only PH1 (a client-side hash form) is transmitted, and the
   server stores only `PH2 = SHA-256(PH1)`.
-- **Plaintext compat rail (`allowPlaintext`, 0.6.0).** Legacy unprefixed plaintext notes are
+- **Plaintext compat rail (`allowPlaintext`, 0.7.0).** Legacy unprefixed plaintext notes are
   still accepted by default (`decryptNote` passes them through; `makeInboundCipher` stores them
   up to `cipherMax`) — that rail carries **unverified content** the server (or any transport layer)
   can write without any key. Opting out (`allowPlaintext: false` on client config and server

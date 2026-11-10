@@ -52,10 +52,17 @@ export {
   keyRingAddEntry,
   keyRingRetire,
   keyRingRetiredKids,
+  keyRingBumpEpoch,
+  keyRingMeetsHighWater,
+  generateRingMacKey,
+  ringMacKeyHexOf,
+  keyRingWrappedMacKey,
   serializeKeyRing,
   parseKeyRing,
   type KeyRing,
   type KeyEntry,
+  type RingMacConfig,
+  type RingHighWater,
   type WrappedForms,
 } from './client/keyring.ts';
 export {

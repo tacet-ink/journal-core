@@ -220,6 +220,9 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // [21]+9 CI 三齒各「契約在場／錨恰 1／毒化翻 false」＋[23]+5 Retry-After 三正碼＋錨＋毒化＋[32]+6 keyRingGet
 // proto 三正碼＋拷貝樹在場&錨＋毒化＋還原；全段 ranN==帳無超額）；
 // 0.8.0 book 678→691（ring macKey 承載＋N2：[32] 67→78＝KRM-p..v 新案群 7＋KRM 毒化 P5-P8 4——MAC 帳號域＋mk 欄＋requireMac＋變換即推進＋高水 helper；R1 修正輪 +2：KRM-w 換密語 re-emission 案＋毒化樹還原案——[32] 67→80）
+// 0.8.0 低優先批 book 691→702（t_eb3cd413 外審 2026-11-10：[32] 80→87＝PLT-h..m 六案（N3 保留命名空間安全網 client/server
+// 兩面＋S1 v1 族收齊＋fixture 家族／負向控制）＋CORE_NS_RE 兩面同源靜態帳 1；[21] 19→21＝Install typescript --ignore-scripts
+// 齒＋探針 root 具名 import 齒；[31] 12→14＝P6 安全網三用點摘除／P7 S1 兩用點摘除毒化兩向；P1/P3 針源同步（安全網在場時舊針單摘不翻面））
 // 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」。
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
@@ -234,7 +237,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 19, 23: 23, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 12, 32: 80 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 21, 23: 23, 24: 5, 25: 5, 26: 9, 27: 23, 28: 11, 29: 8, 30: 21, 31: 14, 32: 87 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -776,8 +779,11 @@ await A('本機密文非附件/筆記前綴',
   !localCt.startsWith('jr1c.') && !localCt.startsWith('jr1b.') && !localCt.startsWith('jr1u.'));
 await A('decryptAttach 拒收 jr1d.', (await decryptAttach(TACET_ATTACH, noteKey, localCt, localAad)) === null);
 await A('decryptLocal 拒收 jr1c.', (await decryptLocal(TACET_LOCAL, noteKey, attachCt, attachAad)) === null);
-await A('decryptNote 對未配置的 jr1d.＝未知前綴相容層原樣（不誤判不誤解）',
-  (await decryptNote({ ...TACET }, makeHeldKey(), localCt, localAad, { current: () => identityA })) === localCt);
+// t_eb3cd413（外審 2026-11-10 N3 修法 2）：舊語意「未知前綴相容層原樣（不誤判不誤解）」＝命名空間形被當明文回傳
+//   的缺陷形（未配置 jr1d. 密文被舊客戶端當明文覆寫本地副本）——N3 保留命名空間安全網接管：^jr\d[a-z]\. 形一律 null
+//   不落相容層（不誤解面保留：不盲試他族鑰；不誤判面改為 fail-closed）。[32] PLT-h 同面 jr3b./jr1c./jr1d. 三族帳。
+await A('decryptNote 對未配置的 jr1d.＝命名空間形 → null（N3 安全網接管；修前相容層原樣回傳＝缺陷形）',
+  (await decryptNote({ ...TACET }, makeHeldKey(), localCt, localAad, { current: () => identityA })) === null);
 
 // payload 竄改 → GCM 驗證失敗 → null（iv 區 byte 3／ct 尾最後一位元組；索引以解碼後
 // 位元組面計——b64 字串索引會越界靜默 no-op＝假紅，閘毒化同族教訓）
@@ -2840,7 +2846,7 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
       const reDts21 = /- name: dts-fixture \(\.d\.ts consumers, both moduleResolution\)\n\s+run: node scripts\/dts-fixture\.cjs/;
       const needleDts21 = 'node scripts/dts-fixture.cjs';
       const cntDts21 = srcVy21.split(needleDts21).length - 1;
-      const tsStep21 = 'npm install --no-save --no-audit --no-fund "typescript@';
+      const tsStep21 = 'npm install --no-save --no-audit --no-fund --ignore-scripts "typescript@'; // t_eb3cd413：旗標在場後字面同步（與下方 --ignore-scripts 齒同源）
       const orderDts21 = idx21('run: npm ci --ignore-scripts') >= 0 && idx21('run: npm ci --ignore-scripts') < idx21(tsStep21)
         && idx21(tsStep21) < idx21('run: npm run typecheck') && idx21('run: npm run typecheck') < idx21('run: npm run build')
         && idx21('run: npm run build') < idx21(needleDts21) && idx21(needleDts21) < idx21('run: npm run verify');
@@ -2867,6 +2873,19 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
       await A('[21] J4 探針毒化錨恰 1（split 計數——probe 檔名字面 workflow 內單點承載）', cntProbe21 === 1, 'cnt=' + cntProbe21);
       await A('[21] J4 毒化（探針步檔名字面摘除）→ 探針契約 regex 翻 false（designated；正碼 true）',
         cntProbe21 === 1 && reProbe21.test(srcVy21) && !reProbe21.test(srcVy21.split(needleProbe21).join('REMOVED')));
+    }
+    // t_eb3cd413（外審 2026-11-10）：Install typescript 步 --ignore-scripts 旗標在場（in-file D4 保險面步保留——旗標＝
+    //   「禁恢復 scripts」裁定同向；typescript 本無 install 腳本，旗標令此步腳本面防禦永不例外）＋舊「不帶 --ignore-scripts」
+    //   註解字面摘除（註解同步帳）。字面與 J4-CHG-4 tsStep21 needle 同源（旗標摘除＝兩案同咬）。
+    //   探針 root 具名 import 齒：動態 import 只證模組可解析、缺具名匯出不咬（K5 根入口滯後盲區）——靜態具名 import 清單
+    //   （link 期即紅）＋型腿 .d.ts 字面在場為契約。
+    {
+      await A('[21] verify.yml：Install typescript 步 --ignore-scripts 在場（in-file D4 保險面保留——旗標禁恢復 scripts 同向）＋舊「不帶 --ignore-scripts」註解摘除（註解同步帳）',
+        srcVy21.includes('npm install --no-save --no-audit --no-fund --ignore-scripts "typescript@') && !srcVy21.includes('不帶 --ignore-scripts'));
+      const probeSrc21 = await srcOf('../scripts/ci-subpath-probe.cjs');
+      await A('[21] J4 子路徑探針 root 具名 import 斷言在場（匯出缺口咬面——靜態具名 import 形字面＋keyRingBumpEpoch 值腿＋RingMacConfig/RingHighWater 型腿）',
+        probeSrc21.includes('import { ${ROOT_NAMED.join(') && probeSrc21.includes("'keyRingBumpEpoch'") && probeSrc21.includes("'RingMacConfig'") && probeSrc21.includes("'RingHighWater'")
+        && probeSrc21.includes('ROOT-NAMED-OK') && probeSrc21.includes("exports['.'].types"));
     }
   } else {
     // F-1（t_0eb70367）：僵字面帳數摘除——舊形寫死『消費端計數帳 503』每版必過期；執行期插值
@@ -4438,14 +4457,19 @@ await A('[31] bind4 salt 面＝pass 段隨機鹽（hex32；rec 腿定值鹽不�
     const redLine31 = (out: string, tag: string): boolean => out.split('\n').some((l: string) => l.includes(tag) && l.trimStart().startsWith('✗'));
     const greenLine31 = (out: string, tag: string): boolean => out.split('\n').some((l: string) => l.includes(tag) && l.trimStart().startsWith('✓'));
     // P1：摘 decryptNote 三族判定（note-crypto.ts）→ jr2b. 字串落相容層原樣回傳＝[32] J1-a 翻紅
+    //   t_eb3cd413 針源同步：N3 安全網（CORE_NS_RE 相容層臂行）在場時三族判定摘除被安全網接住＝舊針單摘不翻面；
+    //   本毒化同樹連摘安全網整行為第二針（原兩行針字面零動；needleP1b 與 P6 client 針同字面）。
     const needleP1 = "    const bound2s = [cfg.cipherBound2, cfg.cipherAttach2, cfg.cipherLocal2];\n    if (bound2s.some(b => !!b && cipher.startsWith(b))) return null;\n";
     const mutP1 = src31.split(needleP1).length - 1;
     if (mutP1 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P1: ' + mutP1);
-    fs31.writeFileSync!(p31, src31.split(needleP1).join(''), 'utf8');
+    const needleP1b = "      if (CORE_NS_RE.test(cipher)) return null;\n";
+    const mutP1b = src31.split(needleP1b).length - 1;
+    if (mutP1b !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P1b: ' + mutP1b);
+    fs31.writeFileSync!(p31, src31.split(needleP1).join('').split(needleP1b).join(''), 'utf8');
     const gP1 = runGate31('31,32');
     fs31.writeFileSync!(p31, src31, 'utf8');
-    await A('[31] P1 毒化（decryptNote 三族判定摘除）→ [32] J1-a 翻紅（jr2b. 落相容層原樣回傳＝外審 #1 缺陷形復現；正碼此面全綠）',
-      mutP1 === 1 && gP1.rc === 1 && redLine31(gP1.out, '[32] J1-a'), 'mut=' + mutP1 + ' rc=' + gP1.rc);
+    await A('[31] P1 毒化（decryptNote 三族判定＋N3 安全網摘除）→ [32] J1-a 翻紅（jr2b. 落相容層原樣回傳＝外審 #1 缺陷形復現；正碼此面全綠）',
+      mutP1 === 1 && mutP1b === 1 && gP1.rc === 1 && redLine31(gP1.out, '[32] J1-a'), 'mut=' + mutP1 + '/' + mutP1b + ' rc=' + gP1.rc);
     // P2：摘帽內 kidFamilyHit 分派行（auth.ts）→ 帽內完整形落尾段防禦行 null＝[32] J2-a 翻紅；
     //   junk/kid 欄形廢由尾段 `if (kidFamilyHit(text)) return null;` 承載＝J2-b 照綠（尾段承載案例之齒面證）。
     const pAuth31 = path31.join(tree31, 'src/server/auth.ts');
@@ -4459,14 +4483,19 @@ await A('[31] bind4 salt 面＝pass 段隨機鹽（hex32；rec 腿定值鹽不�
     await A('[31] P2 毒化（帽內 kidFamilyHit 分派摘除）→ [32] J2-a 翻紅（完整形落尾段防禦 null＝原樣入庫面失）＋J2-b 照綠（junk 由尾段防禦行承載）',
       mutP2 === 1 && gP2.rc === 1 && redLine31(gP2.out, '[32] J2-a') && greenLine31(gP2.out, '[32] J2-b'), 'mut=' + mutP2 + ' rc=' + gP2.rc);
     // P3：摘超帽腿 `|| kidFamilyHit(text)` 子句（auth.ts）→ 超帽 kid 族回截斷＝[32] J2-c 翻紅（外審 #2 截斷面復現）
+    //   t_eb3cd413 針源同步：N3 安全網超帽子句（` || CORE_NS_RE.test(text)`，ternary 前一行）在場時 jr2b. 超帽形被
+    //   安全網接住＝舊針單摘不翻面；本毒化同樹連摘該子句為第二針（原針字面零動；needleNsOver 與 P6 同源）。
+    const needleNsOver = ' || CORE_NS_RE.test(text)';
+    const mutNsOver = srcAuth31.split(needleNsOver).length - 1;
+    if (mutNsOver !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_NSOVER: ' + mutNsOver);
     const needleP3 = ' || kidFamilyHit(text)\n        ? null';
     const mutP3 = srcAuth31.split(needleP3).length - 1;
     if (mutP3 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P3: ' + mutP3);
-    fs31.writeFileSync!(pAuth31, srcAuth31.split(needleP3).join('\n        ? null'), 'utf8');
+    fs31.writeFileSync!(pAuth31, srcAuth31.split(needleP3).join('\n        ? null').split(needleNsOver).join(''), 'utf8');
     const gP3 = runGate31('31,32');
     fs31.writeFileSync!(pAuth31, srcAuth31, 'utf8');
-    await A('[31] P3 毒化（超帽腿 kidFamilyHit 子句摘除）→ [32] J2-c 翻紅（超帽 kid 族回截斷＝40054→20480 截斷面復現；正碼此面 null）',
-      mutP3 === 1 && gP3.rc === 1 && redLine31(gP3.out, '[32] J2-c'), 'mut=' + mutP3 + ' rc=' + gP3.rc);
+    await A('[31] P3 毒化（超帽腿 kidFamilyHit 子句＋N3 安全網超帽子句同樹摘除）→ [32] J2-c 翻紅（超帽 kid 族回截斷＝40054→20480 截斷面復現；正碼此面 null）',
+      mutP3 === 1 && mutNsOver === 1 && gP3.rc === 1 && redLine31(gP3.out, '[32] J2-c'), 'mut=' + mutP3 + '/' + mutNsOver + ' rc=' + gP3.rc);
     // P4/P5：明文相容層 opt-out 閘齒（t_a54d080c；外審 #4）。P4＝client 閘行；P5＝server 三面。
     //   錨行缺席/多重＝ERR_POISON_ANCHOR_DRIFT_31_P* fail-closed throw（P1-P3 母型同形）。
     // P4：摘 client 關閉態返回閘（note-crypto.ts decryptNote 相容層）→ 關閉態無前綴字串落相容層
@@ -4501,7 +4530,41 @@ await A('[31] bind4 salt 面＝pass 段隨機鹽（hex32；rec 腿定值鹽不�
       mutP5a === 1 && mutP5b === 1 && mutP5c === 1 && gP5.rc === 1
       && redLine31(gP5.out, '[32] PLT-d') && redLine31(gP5.out, '[32] PLT-f')
       && greenLine31(gP5.out, '[32] PLT-e'), 'mut=' + mutP5a + '/' + mutP5b + '/' + mutP5c + ' rc=' + gP5.rc);
-    const g32 = runGate31('31,32'); // 還原回綠連 [32]（P1-P5 毒化檔 note-crypto.ts/auth.ts 的消費段）
+    // P6/P7（t_eb3cd413；外審 2026-11-10 N3 修法 2＋S1）：保留命名空間安全網／S1 v1 族分派毒化兩向——紅綠互斥自證
+    //   （P6 摘安全網：S1 腿自接 jr1b.!!!／aa1a. junk＝PLT-k/l 照綠；P7 摘 S1：安全網恆在＝PLT-h/k/m 照綠、唯非 jr 形
+    //   PLT-l 翻紅）。錨缺席/多重＝ERR_POISON_ANCHOR_DRIFT_31_P6*/P7* fail-closed throw（P1-P5 母型同形）。
+    // P6：摘 CORE_NS_RE 三用點（auth.ts 超帽子句 needleNsOver＋帽內行；note-crypto.ts 相容層臂行 needleP1b）→
+    //   [32] PLT-h/i/j/m 翻紅（client 相容層原樣回傳／server 帽內照收／超帽截斷收＝修前缺陷形復現）＋PLT-k/l 照綠。
+    //   超帽面只摘 ` || CORE_NS_RE.test(text)` 子句——S1 超帽腿保留（全行摘除會連 S1 腿一起走＝PLT-k/l 非 b64 超帽
+    //   junk 翻紅，與「v1FamilyHit 未動」designated 矛盾；子句形與 P7 對稱）。
+    const needleP6b = "    if (CORE_NS_RE.test(text)) return null;\n";
+    const mutP6b = srcAuth31.split(needleP6b).length - 1;
+    if (mutP6b !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P6b: ' + mutP6b);
+    fs31.writeFileSync!(pAuth31, srcAuth31.split(needleNsOver).join('').split(needleP6b).join(''), 'utf8');
+    fs31.writeFileSync!(p31, src31.split(needleP1b).join(''), 'utf8');
+    const gP6 = runGate31('31,32');
+    fs31.writeFileSync!(pAuth31, srcAuth31, 'utf8');
+    fs31.writeFileSync!(p31, src31, 'utf8');
+    await A('[31] P6 毒化（N3 安全網三用點摘除——auth.ts 超帽子句＋帽內行／note-crypto.ts 相容層臂）→ [32] PLT-h/i/j/m 翻紅（相容層原樣回傳／帽內照收／超帽截斷收＝修前缺陷形復現）＋PLT-k/l 照綠（S1 腿自接 jr1b.!!!／aa1a. junk＝紅綠互斥自證）',
+      mutNsOver === 1 && mutP6b === 1 && mutP1b === 1 && gP6.rc === 1
+      && redLine31(gP6.out, '[32] PLT-h') && redLine31(gP6.out, '[32] PLT-i') && redLine31(gP6.out, '[32] PLT-j') && redLine31(gP6.out, '[32] PLT-m')
+      && greenLine31(gP6.out, '[32] PLT-k') && greenLine31(gP6.out, '[32] PLT-l'), 'mut=' + mutNsOver + '/' + mutP6b + '/' + mutP1b + ' rc=' + gP6.rc);
+    // P7：摘 S1 v1FamilyHit 兩用點（auth.ts 超帽 `v1FamilyHit(text) || ` 子句＋帽內行）→ [32] PLT-l 翻紅（aa1a. 非 jr 形
+    //   junk 帽內照收／超帽截斷＝S1 缺陷形復現；安全網不接非 jr 形＝S1 唯一承載）＋PLT-h/k/m 照綠（jr 命名空間形由
+    //   安全網承載——S1 摘除不影響）。
+    const needleP7a = 'v1FamilyHit(text) || ';
+    const mutP7a = srcAuth31.split(needleP7a).length - 1;
+    if (mutP7a !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P7a: ' + mutP7a);
+    const needleP7b = "    if (v1FamilyHit(text)) return null;\n";
+    const mutP7b = srcAuth31.split(needleP7b).length - 1;
+    if (mutP7b !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_31_P7b: ' + mutP7b);
+    fs31.writeFileSync!(pAuth31, srcAuth31.split(needleP7a).join('').split(needleP7b).join(''), 'utf8');
+    const gP7 = runGate31('31,32');
+    fs31.writeFileSync!(pAuth31, srcAuth31, 'utf8');
+    await A('[31] P7 毒化（S1 v1FamilyHit 兩用點摘除——超帽子句＋帽內行）→ [32] PLT-l 翻紅（aa1a. junk 帽內照收／超帽截斷＝S1 缺陷形復現；非 jr 形安全網不接＝S1 唯一承載）＋PLT-h/k/m 照綠（jr 命名空間形由安全網承載——紅綠互斥自證）',
+      mutP7a === 1 && mutP7b === 1 && gP7.rc === 1 && redLine31(gP7.out, '[32] PLT-l')
+      && greenLine31(gP7.out, '[32] PLT-h') && greenLine31(gP7.out, '[32] PLT-k') && greenLine31(gP7.out, '[32] PLT-m'), 'mut=' + mutP7a + '/' + mutP7b + ' rc=' + gP7.rc);
+    const g32 = runGate31('31,32'); // 還原回綠連 [32]（P1-P7 毒化檔 note-crypto.ts/auth.ts 的消費段）
     fs31.rmSync!(tree31, { recursive: true, force: true });
     await A('[31] 毒化還原回綠＋樹出生即棄（byte-exact 還原；本 repo 樹零接觸）', g32.rc === 0, 'rc=' + g32.rc);
   }
@@ -4619,9 +4682,9 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       (await decryptNote(CFG32, heldOf(rotKey32), 'jr2b.' + 'g'.repeat(8) + '.' + body2, aad32, idp32)) === null
       && (await decryptNote(CFG32, heldOf(rotKey32), 'jr2b.' + rotKid32.toUpperCase() + '.' + body2, aad32, idp32)) === null
       && (await decryptNote(CFG32, heldOf(rotKey32), 'jr2b.' + rotKid32.slice(0, 7) + '.' + body2, aad32, idp32)) === null);
-    await A('[32] J1-d opt-in 零變：TACET 裸形（無 cipherX2 配置）decryptNote(jr2b. 字串) → 相容層原樣回傳（0.5.1 現行 byte-identical；與 J1-a 配對＝配置即封）',
-      (await decryptNote(TACET, heldOf(rotKey32), ct2, aad32, idp32)) === ct2
-      && (await decryptNote(TACET, makeHeldKey(), forgedKid, aad32, idp32)) === forgedKid);
+    await A('[32] J1-d opt-in 零變→N3 安全網接管（0.5.1 缺陷形終結；t_eb3cd413）：TACET 裸形（無 cipherX2 配置）decryptNote(jr2b. 字串) → null（修前相容層原樣回傳＝伺服器不需金鑰即可毀本地副本；cipherX2 配置態同值 J1-a）',
+      (await decryptNote(TACET, heldOf(rotKey32), ct2, aad32, idp32)) === null
+      && (await decryptNote(TACET, makeHeldKey(), forgedKid, aad32, idp32)) === null);
     // server 面（帳算：b64(N bytes)=⌈N/3⌉×4 字符——b64(16B)=24、b64(600B)=800；'jr2b.0596ea50.'=14）
     const kid2 = '0596ea50';
     const b16 = modB64(new Uint8Array(16));
@@ -4642,8 +4705,8 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       in2(junkIn) === null && in2(badKidIn) === null);
     await A('[32] J2-c 超帽 kid 族絕不截斷：超帽 junk（614）／超帽 kid 欄形廢（814）／超帽完整形（814）全 null（修前三者皆截 500）',
       in2(junkOver) === null && in2(badKidOver) === null && in2(fullOver) === null);
-    await A('[32] J2-d 未配置面 zero-delta：無 cipherPrefixes2 之 formats 對 jr2b.* 三樣（完整形→明文照收／形廢→明文照收／超帽→截 500）＝0.5.1 現行 byte-identical（opt-in 律）',
-      in1(fullIn) === fullIn && in1(junkIn) === junkIn && in1(fullOver) === fullOver.slice(0, 500));
+    await A('[32] J2-d 未配置面→N3 安全網接管（t_eb3cd413）：無 cipherPrefixes2 之 formats 對 jr2b.* 三樣（完整形／形廢／超帽）全 null（修前明文照收／照收／截 500＝缺陷帳；超帽非 truncation 以 null 承載）',
+      in1(fullIn) === null && in1(junkIn) === null && in1(fullOver) === null);
     await A('[32] J2-e isCipherFor kid 族：真形 true（帽外同 true＝分類器非帽）／junk false／kid 欄形廢 false／未配置 false；既存 formats（無 2 欄）jr1b.abc 維持 true＋2 欄在場 jr1b. 面零誤傷',
       isCipherFor(fullIn, f2) && isCipherFor(fullOver, f2) && !isCipherFor(junkIn, f2) && !isCipherFor(badKidIn, f2) && !isCipherFor(fullIn, f1)
       && isCipherFor('jr1b.abc', f1) && isCipherFor('jr1b.abc', f2));
@@ -4680,6 +4743,49 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
         in2c(b64In) === null && in2c(b64Over) === null);
       await A('[32] PLT-g server 未配置 byte-identical：真明文照收／超帽明文截 500／帽內 b64 照收／超帽 b64 null＝現行契約零變（與 J2-d 對配）',
         in1(pltIn) === pltIn && in1(pltOver) === pltOver.slice(0, 500) && in1(b64In) === b64In && in1(b64Over) === null);
+      // t_eb3cd413（外審 2026-11-10 N3 修法 2＋S1）：保留命名空間安全網（core 預設開啟——^jr\d[a-z]\. 形一律不當明文；
+      //   client 相容層＋server 明文軌兩面）＋S1 v1 族字面在場非完整形 → null（kid 族同律）。
+      //   D1e 界線（前導空白 " jr2b.…"）不在本網——界線案照舊值（毒化不動此值）。非 jr 形負向控制＝網是命名空間限定非 dot 限定。
+      const nsBody4 = modB64(new Uint8Array(4)); // 帽內 body（8 字符）
+      const nsBody600 = modB64(new Uint8Array(600)); // 超帽 body（800 字符）
+      const nsNull = async (cfg: NoteCryptoConfig, str: string): Promise<boolean> => (await decryptNote(cfg, makeHeldKey(), str, aad32, idp32)) === null;
+      await A('[32] PLT-h client 安全網（CFG32 allowPlaintext 未配置）：jr3b./jr1c./jr1d. 命名空間形（帽內 body／超帽 body）→ null 不落相容層（修前原樣回傳＝未配置/家族外密文被舊客戶端當明文覆寫本地副本）＋allowPlaintext:false 同輸入 null（零動）',
+        await nsNull(CFG32, 'jr3b.' + nsBody4) && await nsNull(CFG32, 'jr1c.' + nsBody4) && await nsNull(CFG32, 'jr1d.' + nsBody4)
+        && await nsNull(CFG32, 'jr3b.' + nsBody600) && await nsNull(CFG32, 'jr1c.' + nsBody600) && await nsNull(CFG32, 'jr1d.' + nsBody600)
+        && await nsNull(CFG32plt, 'jr3b.' + nsBody4) && await nsNull(CFG32plt, 'jr1c.' + nsBody600));
+      const nsLead = ' jr2b.' + kid2 + '.' + b16; // D1e 前導空白面（raw 未 trim、起始錨不咬）
+      await A('[32] PLT-i client 安全網 kid 未配置面（TACET 裸形）＋D1e 界線：jr2b.0596ea50.<b64>／jr2b.0596ea50.!!! → null（修前原樣回傳——安全網接管 J1-d 缺陷形）；前導空白 " jr2b.0596ea50.<b64>" === 原串（D1e 界線案照舊——起始錨不咬未 trim raw；根治＝allowPlaintext:false，消費端接線另卡）',
+        await nsNull(TACET, 'jr2b.' + kid2 + '.' + b16) && await nsNull(TACET, 'jr2b.' + kid2 + '.!!!')
+        && (await decryptNote(TACET, makeHeldKey(), nsLead, aad32, idp32)) === nsLead
+        && (await decryptNote(CFG32, makeHeldKey(), nsLead, aad32, idp32)) === nsLead);
+      await A('[32] PLT-j server 安全網：in1/in2 帽內 jr3b.!!!／jr1c.junk → null（修前 fallback 照收）；超帽 jr3b.+x×600 → null（修前截 500 收下）；in2c 同輸入全 null（closed 零動）',
+        in1('jr3b.!!!') === null && in2('jr3b.!!!') === null && in1('jr1c.junk') === null && in2('jr1c.junk') === null
+        && in1('jr3b.' + 'x'.repeat(600)) === null && in2('jr3b.' + 'x'.repeat(600)) === null
+        && in2c('jr3b.!!!') === null && in2c('jr1c.junk') === null && in2c('jr3b.' + 'x'.repeat(600)) === null);
+      const jr1bFull = 'jr1b.' + b16; // 完整 b64 形（29 ≤ 500）
+      await A('[32] PLT-k S1 v1 族收齊（kid 族同律）：in1/in2 jr1b.!!!／jr1u.!!! → null（修前 fallback 照收）；超帽 jr1b.+x×600／jr1b.+!×600 → null 非 truncation（修前 !×600 截 500）；pristine 完整形 jr1b.<b64> in1/in2 原樣（零誤傷）；in2c(jr1b.!!!) null（closed 零動）；無前綴真明文對照組 in1(pltTxt) 照收',
+        in1('jr1b.!!!') === null && in2('jr1b.!!!') === null && in1('jr1u.!!!') === null && in2('jr1u.!!!') === null
+        && in1('jr1b.' + 'x'.repeat(600)) === null && in1('jr1b.' + '!'.repeat(600)) === null
+        && in1(jr1bFull) === jr1bFull && in2(jr1bFull) === jr1bFull
+        && in2c('jr1b.!!!') === null && in1(pltTxt) === pltTxt);
+      const f3: CipherFormats = { cipherPrefixes: ['aa1a.', 'bb1b.'], wrapPrefix: 'jr1w.', cipherMax: 500 };
+      const in3 = makeInboundCipher(f3);
+      const aaFull = 'aa1a.' + b16;
+      await A('[32] PLT-l S1 fixture 家族（非 jr 形＝安全網不接、v1FamilyHit 唯一承載——毒化 P7 designated）：in3(aa1a.!!!／bb1b.!!!) → null（修前 fallback 照收）；超帽 aa1a.+x×600／aa1a.+!×600 → null 禁截（修前 !×600 截 500）；完整形 aa1a.<b64> 原樣（零誤傷）；isCipherFor(aa1a.!!!, f3) === true（分類面零動帳——分類≠入庫閘）',
+        in3('aa1a.!!!') === null && in3('bb1b.!!!') === null
+        && in3('aa1a.' + 'x'.repeat(600)) === null && in3('aa1a.' + '!'.repeat(600)) === null
+        && in3(aaFull) === aaFull && isCipherFor('aa1a.!!!', f3) === true && isCipherFor(aaFull, f3) === true);
+      await A('[32] PLT-m 安全網 config 獨立＋非 jr 負向控制：in3(jr3b.<b64>／jr3b.+x×600) → null（f3 無 jr 族配置仍攔＝網是命名空間限定不依 config；修前完整形照收／超帽截 500）；in3(xx1b.junk) === 原串＋in3(xx1b.+x×600) 截 500（非 jr 形不在此網＝網非 dot 限定——明文軌照 allowPlaintext 語意）',
+        in3('jr3b.' + b16) === null && in3('jr3b.' + 'x'.repeat(600)) === null
+        && in3('xx1b.junk') === 'xx1b.junk' && in3('xx1b.' + 'x'.repeat(600)) === ('xx1b.' + 'x'.repeat(600)).slice(0, 500));
+      // 兩面同源靜態帳：auth.ts／note-crypto.ts 的 CORE_NS_RE 常數同字面各恰 1（regex 字面 split 計數——兩面漂移即咬）
+      const nsConstLine = 'const CORE_NS_RE = /^jr\\d[a-z]\\./;';
+      const authSrcNs = await srcOf('../src/server/auth.ts');
+      const ncSrcNs = await srcOf('../src/client/note-crypto.ts');
+      const cntAuthNs = authSrcNs.split('/^jr\\d[a-z]\\./').length - 1;
+      const cntNcNs = ncSrcNs.split('/^jr\\d[a-z]\\./').length - 1;
+      await A('[32] N3 兩面同源靜態帳：auth.ts／note-crypto.ts 各恰 1 個 regex 字面 /^jr\\d[a-z]\\./ 且同一 const CORE_NS_RE 宣告行（兩面漂移即咬）',
+        cntAuthNs === 1 && cntNcNs === 1 && authSrcNs.includes(nsConstLine) && ncSrcNs.includes(nsConstLine), 'auth=' + cntAuthNs + ' nc=' + cntNcNs);
     }
   }
   // ④ KeyRing 資料模型（§3.3）
@@ -5360,13 +5466,16 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       }
     }
   }
-  await A('[32] barrel 面：keyring/pinlock2/2 族原語公開匯出（＝子路徑同一函式——單一真相；kid 契約 keyring re-export＝note-crypto 同源）',
+  await A('[32] barrel 面：keyring/pinlock2/2 族原語公開匯出（＝子路徑同一函式——單一真相；kid 契約 keyring re-export＝note-crypto 同源）＋K5 root 匯出收齊（keyRingBumpEpoch／keyRingMeetsHighWater／generateRingMacKey／ringMacKeyHexOf／keyRingWrappedMacKey——type 匯出 RingMacConfig/RingHighWater 由 ci-subpath-probe 型腿承載）',
     (async () => {
       const m = await import('../src/index.ts');
       const kr = await import('../src/client/keyring.ts');
       const pl = await import('../src/client/pinlock.ts');
       const nc = await import('../src/client/note-crypto.ts');
       return typeof m.serializeKeyRing === 'function' && typeof m.parseKeyRing === 'function' && typeof m.keyRingAddEntry === 'function'
+        && typeof m.keyRingBumpEpoch === 'function' && typeof m.keyRingMeetsHighWater === 'function' && typeof m.generateRingMacKey === 'function'
+        && typeof m.ringMacKeyHexOf === 'function' && typeof m.keyRingWrappedMacKey === 'function'
+        && m.keyRingBumpEpoch === kr.keyRingBumpEpoch && m.keyRingMeetsHighWater === kr.keyRingMeetsHighWater
         && typeof m.encryptNote2 === 'function' && typeof m.decryptNote2 === 'function'
         && typeof m.wrapNoteKeyPinLock2 === 'function' && typeof m.unwrapNoteKeyPinLock2 === 'function'
         && m.KEYRING_LEGACY_KID === KEYRING_LEGACY_KID && m.KEYRING_MAX_ENTRIES === 2

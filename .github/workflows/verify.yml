@@ -45,10 +45,11 @@ jobs:
         # ＝Typecheck 同一前提）；本步為前置顯式保證——lockfile 日後若移除 typescript devDep，
         # dts-fixture 仍有 tsc 可用。版本釘 lockfile 解析值（裸 `typescript` 走 latest tag＝
         # 可能高於 lockfile＝typecheck 用上非鎖定 tsc）；--no-save：package.json／lockfile 零動；
-        # 不帶 --ignore-scripts（typescript 純 JS、無 install 腳本，無腳本可跑）。
+        # --ignore-scripts 在場＝「禁恢復 scripts」裁定同向（typescript 本無 install 腳本；旗標令此步在
+        # 腳本面防禦上永不例外——未來 dependency 變化零腳本執行面）。
         run: |
           TS_VER="$(node -p "require('./package-lock.json').packages['node_modules/typescript'].version")"
-          npm install --no-save --no-audit --no-fund "typescript@${TS_VER}"
+          npm install --no-save --no-audit --no-fund --ignore-scripts "typescript@${TS_VER}"
 
       - name: Typecheck
         run: npm run typecheck
