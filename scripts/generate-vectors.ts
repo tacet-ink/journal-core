@@ -28,7 +28,7 @@ import {
   ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_PARALLELISM, ARGON_TAG_LEN, PH1_V2_SALT, PH1_V3_SALT,
   type Argon3Config,
 } from '../src/client/argon2.ts';
-import { wrapNoteKeyPinLock, unwrapNoteKeyPinLock, wrapNoteKeyPinLock2, unwrapNoteKeyPinLock2, PINLOCK_ITERATIONS, PINLOCK2_KAT, PINLOCK2_KAT_EXPECTED, verifyPinLock2KatProd, type PinLockConfig } from '../src/client/pinlock.ts';
+import { wrapNoteKeyPinLock, unwrapNoteKeyPinLock, wrapNoteKeyPinLock2, unwrapNoteKeyPinLock2, PINLOCK_ITERATIONS, PINLOCK2_KAT, PINLOCK2_KAT_EXPECTED, verifyPinLock2KatProd, PINLOCKPRF_KAT, PINLOCKPRF_KAT_EXPECTED, verifyPinLockPrfKatProd, type PinLockConfig } from '../src/client/pinlock.ts';
 import { PBKDF2_ITERATIONS, PIN_PBKDF2_ITERATIONS } from '../src/client/note-crypto.ts';
 import type { KeyStore } from '../src/client/keys.ts';
 import * as bip from '../src/client/bip39.ts';
@@ -367,6 +367,15 @@ write('kat.json', {
     password: PINLOCK2_KAT.password, salt: PINLOCK2_KAT.salt,
     expected_kek_hex: PINLOCK2_KAT_EXPECTED,
     verify_ok: await verifyPinLock2KatProd(),
+  },
+  pinlockprf_kat: { // jr2q. HKDF 合成凍結 KAT（rotation-design §7.3；R7a 併案；僅 node 閘面跑）
+    algorithm: 'HKDF-SHA256(ikm=prfOutput‖Argon2id)', memory_kib: PINLOCKPRF_KAT.memoryKib, iterations: PINLOCKPRF_KAT.iterations,
+    parallelism: PINLOCKPRF_KAT.parallelism,
+    password: PINLOCKPRF_KAT.password, prf_output_hex: PINLOCKPRF_KAT.prfOutput,
+    pin_salt_prefix: PINLOCKPRF_KAT.pinSaltPrefix, pin_salt_hex: PINLOCKPRF_KAT.pinSaltHex,
+    info_prefix: PINLOCKPRF_KAT.infoPrefix, prefix: PINLOCKPRF_KAT.prefix,
+    expected_kek_hex: PINLOCKPRF_KAT_EXPECTED,
+    verify_ok: await verifyPinLockPrfKatProd(),
   },
   frozen_blobs: frozen,
   credentials,

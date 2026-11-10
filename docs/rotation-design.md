@@ -246,7 +246,7 @@ RotationProgress = {
 - **定位**：把本機鎖綁到**不可匯出的裝置秘密**（J3 根本面）——無硬體則無法離線爆破（PIN 仍落 LS，但 KEK 需要 PRF 輸出＝攻擊者拿到 LS（含 ring 快照）＋IDB 也組不出 KEK；**jr2p. PIN 形只存本機 LS、PIN 形欄不進 server blob**（M-D）——本句僅對**本機持有 PRF 形（jr2q.）的裝置**成立：該裝置 KEK 需要 PRF 輸出；ring 快照（server `users.keyring`）只含 passphrase 形包裹，不構成對 PIN 形的離線爆破面）。
 - **KEK 深案**（報告建議形，本設計採納為建議案）：`KEK = HKDF-SHA256( ikm = prfOutput[32] ‖ Argon2id(pinNorm, pinLockSaltPrefix + hex(pinSalt))[32], salt = pinSalt, info = 'journal-pinlock-prf-v1:' + <prefix> )`
   - Argon2id 腿**承襲 jr2p. 檔位**（§7.1 同參數 m/t/p；**兩鹽分標（NIT-6）**：Argon2id 腿 salt＝`pinLockSaltPrefix + hex(pinSalt)`（pinSalt＝jr2p./jr2q. payload 內嵌 16B 鹽）、HKDF salt＝**裸 pinSalt**（hex 串）——兩處 salt 用途不同，字面不同非矛盾）。
-  - `prfOutput`＝WebAuthn PRF extension 的 `prfResults.first`（assertion 時 `extensions: { prf: { eval: true } }`；create 時 `prf: { }`）。
+  - `prfOutput`＝WebAuthn PRF extension 的 `prfResults.first`（assertion 時 `extensions: { prf: { eval: { first: <salt> } } }`——2026-11-10 四平台探針實證：裸 BufferSource／eval:true 形恆 TypeError（"Required member is undefined"）；create 時 `prf: { }`）。
   - **PIN 不從 PRF 路徑省略**：PRF 是裝置綁定因子，PIN 是知識因子——兩因子合成（同 jr4d. 合鑰母型），**禁**「PRF 替代 PIN」（報告/J6 否決面：授權釋放 PIN 快取＝raw key 落地鐵律違例）。
   - **fallback 鐵律**：PRF 不可用（`prfResults` 缺席/裝置不支援）＝**回落純 PIN 形（jr2p.）**，絕非「PRF-only 無 PIN」；PRF 面是**加速/加固層非取代層**。
   - **前綴**：`jr2q.`（PRF 形；與 jr2p. 並列，同 PinLockConfig 新欄 `pinLockPrf` 選配）。
@@ -254,6 +254,7 @@ RotationProgress = {
   - **lost authenticator 回落（M-D 收口）**：passphrase 包裹（ring 快照 `users.keyring` 的 legacy/newkid entry 包裹面，§3.3）或復原套件（依 R9 裁定）——passkey 丟失不鎖死帳戶。**jr2p. PIN 形只存本機 LS**（ring 快照 server blob 不設 PIN 形欄，§3.3 KeyEntry 僅 passphrase 形——PIN 包裹上 server＝把只受 PIN 保護（GPU 分鐘-小時級可爆）的欄位交給零知識面＝零知識承諾破壞）；常駐 jr2p. 回落的 min 面併計見下條（並存 min）。
   - **零知識相容**：PRF assertion 只在 client↔platform authenticator 之間；server 零參與（探針卡否決案「伺服器端 credential 註冊」照守）。
   - **前置**：t_59239934 真機探針（iOS Safari/iOS PWA/macOS Chrome/Android Chrome 四格 PRF 支援矩陣）結果回收後才定實作排程——**本設計不預設支援面**。
+  - **狀態（2026-11-10）**：四格矩陣 11-10 收齊（PRF 4/4 綠；largeBlob Android 缺位——本設計零依賴 largeBlob，禁作跨平台面）。
 
 ## 8. J8 收尾面現值（S2-S6 後）
 
