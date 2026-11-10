@@ -34,6 +34,12 @@ import type { KeyStore } from './keys.js';
 // 閘 [31] 行為面真模組直載即載體，禁鏡像）。
 import { wrapNoteKey4, type Argon3Config } from './argon2.ts';
 
+/** N3 保留命名空間安全網 regex（外審 2026-11-10 N3 修法 2；core 預設開啟）：命名空間形一律不當
+ *  明文（null）——同源帳＝src/server/auth.ts CORE_NS_RE 同字面（gate 靜態錨咬兩檔各恰 1）。
+ *  範圍界線：D1e 前導空白面（" jr2b.…"）不在本網（起始錨不咬 raw 前導空白——相容層根治＝
+ *  allowPlaintext:false，歸 tacet 消費端接線卡）。 */
+const CORE_NS_RE = /^jr\d[a-z]\./;
+
 export interface NoteCryptoConfig {
   /** guest 時代 KDF 前綴，如 'journal-note-u1'。 */
   guestKdfPrefix: string;
@@ -920,7 +926,9 @@ export async function encryptNote(
  *  不明字串一律 null＝guest 家族整面拒絕，跨前綴鐵律不降級）；失敗回 null。
  *  輪替後 kid 前綴族（cfg.cipherBound2/cipherAttach2/cipherLocal2 配置時之 jr2b./jr2c./jr2d.<kid>.）
  *  本面恆 null——解密走 decryptNote2/decryptAttach2/decryptLocal2（rotation-design §3.2 路由序
- *  「jr2b.<kid>. 族 → jr1b. → guest → 舊明文相容層」的 miss 面＝null 不降級）。 */
+ *  「jr2b.<kid>. 族 → jr1b. → guest → 舊明文相容層」的 miss 面＝null 不降級）。
+ *  N3 保留命名空間安全網（0.8.0，外審 2026-11-10）：命名空間形（^jr\d[a-z]\.）一律不當明文（null）
+ *  ——預設開啟；D1e 前導空白面不在本網（根治＝allowPlaintext:false）。 */
 export async function decryptNote(
   cfg: NoteCryptoConfig,
   held: HeldKey,
@@ -949,6 +957,12 @@ export async function decryptNote(
     const isGuest = guestPrefix !== undefined && cipher.startsWith(guestPrefix);
     const isBound = cipher.startsWith(cfg.cipherBound);
     if (!isGuest && !isBound) {
+      // N3 保留命名空間安全網（外審 2026-11-10 N3 修法 2；core 預設開啟）：外型像 core 命名空間的
+      // 字串（^jr\d[a-z]\.）一律不當明文——null 不落相容層（未配置/未知家族密文不被舊客戶端當
+      // 明文覆寫本地副本，D1b/c/d 收口；已配置 kid 族在上方 bound2s 已攔＝既有面零動）。
+      // 範圍界線：D1e 前導空白面（" jr2b.…"）不在本網——本面 cipher 未 trim、起始錨不咬；根治＝
+      // allowPlaintext:false。allowPlaintext:false 態同 null＝零動。
+      if (CORE_NS_RE.test(cipher)) return null;
       // 舊版明文（相容層）：allowPlaintext 未配置／true＝原樣返回（現行契約零變——
       // opt-out 母型；回傳值＝未驗證內容，外審 2026-11-07 #4）。false＝關閉——無前綴
       // 字串一律 null，不落明文（guest/bound 軌不受牽連；伺服器偽造筆記面收口）。
