@@ -89,6 +89,8 @@ export interface PinLockConfig {
   pinLockAad?: string;
   /** jr2p.（Argon2id pinlock）前綴，如 'jr2p.'. 未配置 = jr2p. API 拒絕，jr1p. 面零變。 */
   pinLock2?: string;
+  /** jr2q.（WebAuthn PRF 合成 pinlock）前綴，如 'jr2q.'. 未配置 = jr2q. API 拒絕（整面退場），jr1p./jr2p. 面零變（cfg 選配律）。 */
+  pinLockPrf?: string;
 }
 
 /** KEK = PBKDF2-SHA256(pinNorm, pinLockSaltPrefix + hex(pinSalt), 600k) → AES-GCM key（nonextractable）。 */
@@ -249,4 +251,134 @@ export async function unwrapNoteKeyPinLock2(
 /** jr2p. 前綴判定（lock-store 分流/形狀面用；cfg 未配置恆 false）。 */
 export function isPinLockWrap2(wrapped: string, cfg: PinLockConfig): boolean {
   return !!cfg.pinLock2 && wrapped.startsWith(cfg.pinLock2);
+}
+
+// ── jr2q.（WebAuthn PRF 形 pinlock，rotation-design §7.3 定稿；PRF 4/4 真機矩陣 2026-11-10 收齊） ──
+//
+// KEK 合成（§7.3 :247 定稿——禁重新辯論）：
+//   KEK = HKDF-SHA256(ikm = prfOutput[32] ‖ Argon2id(pinNorm, pinLockSaltPrefix + hex(pinSalt))[32],
+//                      salt = hex(pinSalt)（裸——NIT-6 兩鹽分標：HKDF salt 無 prefix）,
+//                      info = 'journal-pinlock-prf-v1:' + <prefix>)
+// Argon2id 腿承襲 jr2p. 檔位（PINLOCK2_* 常數同源——改檔位＝換新前綴，帶內版本化）；
+// 兩因子合成（PIN＝知識因子、PRF＝裝置綁定因子——§7.3 :250 禁「PRF 替代 PIN」；fallback 鐵律 :251＝
+// prfResults 缺席／裝置不支援＝回落純 PIN 形 jr2p.，PRF 是加速/加固層非取代層）。
+// payload 同 jr2p.（鹽內嵌族 108B）；本機 LS 存（M-D：PIN/PRF 形禁入 server blob/ring 快照）。
+// WebAuthn glue 歸接線卡（R7b）——PRF eval 輸入鹽面＝pinSalt 16B（payload 內嵌鹽）：呼叫端以同一
+// pinSalt 餵 PRF eval（「同帳恆同 PRF 輸入」穩定性契約＝unwrap 恆同鑰的根，JSDoc 同此面）。
+export const PINLOCKPRF_KAT = Object.freeze({
+  password: '2580ab',
+  prfOutput: '11'.repeat(32),
+  pinSaltPrefix: 'tacet-pinlock-v1:',
+  pinSaltHex: '00'.repeat(16),
+  infoPrefix: 'journal-pinlock-prf-v1:',
+  prefix: 'jr2q.',
+  memoryKib: PINLOCK2_MEMORY_KIB,
+  iterations: PINLOCK2_ITERATIONS,
+  parallelism: PINLOCK2_PARALLELISM,
+} as const);
+
+/** 凍結值（docs/vectors/kat.json `pinlockprf_kat.expected_kek_hex` 同源；node 真原語產生）。 */
+export const PINLOCKPRF_KAT_EXPECTED =
+  '29f9adf26f5cdda5c0c505c096d7c4f7a760fd7b4496b4b4c12434806ab59647';
+
+/**
+ * jr2q. 合成 KEK（HKDF 合成面；KAT 釘此面）。pinLockPrf／pinLockSaltPrefix 以獨立參數入面
+ * （wrap/unwrap 守衛窄化後傳入——本函式不自帶 cfg 守衛：opt-in 判準單點承載於前綴守衛）。
+ * Argon2id 腿承襲 jr2p. 檔位（PINLOCK2_* 常數同源；改檔位＝換新前綴，帶內版本化）。
+ */
+async function deriveLockKekPrfComposite(pinNorm: string, prfOutput: Uint8Array, pinSalt: Uint8Array, pinLockPrf: string, pinLockSaltPrefix: string): Promise<Uint8Array> {
+  if (prfOutput.length !== 32) throw new Error('ERR_PINLOCKPRF_OUTPUT_BAD');
+  const argonRaw = await deriveArgon2id(pinNorm, new TextEncoder().encode(pinLockSaltPrefix + toHex(pinSalt)), PINLOCK2_MEMORY_KIB, PINLOCK2_ITERATIONS, PINLOCK2_PARALLELISM);
+  const ikm = new Uint8Array(64);
+  ikm.set(prfOutput, 0);
+  ikm.set(argonRaw, 32);
+  const hkdfKey = await crypto.subtle.importKey('raw', ikm as BufferSource, 'HKDF', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: new TextEncoder().encode(toHex(pinSalt)) as BufferSource,
+      info: new TextEncoder().encode('journal-pinlock-prf-v1:' + pinLockPrf) as BufferSource,
+    },
+    hkdfKey,
+    256,
+  ));
+}
+
+/** KEK key 形薄殼（AES-GCM、nonextractable——deriveLockKekArgon 對偶面；鐵律 1 對偶）。 */
+async function deriveLockKekPrf(pinNorm: string, prfOutput: Uint8Array, pinSalt: Uint8Array, pinLockPrf: string, pinLockSaltPrefix: string): Promise<CryptoKey> {
+  const bits = await deriveLockKekPrfComposite(pinNorm, prfOutput, pinSalt, pinLockPrf, pinLockSaltPrefix);
+  return crypto.subtle.importKey('raw', bits as BufferSource, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+/** jr2q. fast 檔 KAT（verifyPinLock2KatProd 同形）：以真原語重推導凍結值——HKDF 合成面
+ *  （ikm 兩腿＋裸鹽面＋info 域）行為承載；改合成公式／鹽面／info 域＝換新前綴，帶內版本化。 */
+export async function verifyPinLockPrfKatProd(): Promise<boolean> {
+  const k = PINLOCKPRF_KAT;
+  try {
+    const bits = await deriveLockKekPrfComposite(
+      k.password,
+      hexToBytes(k.prfOutput),
+      hexToBytes(k.pinSaltHex),
+      k.prefix,
+      k.pinSaltPrefix,
+    );
+    return toHex(bits) === PINLOCKPRF_KAT_EXPECTED;
+  } catch {
+    return false;
+  }
+}
+
+/** jr2q. 包裹：payload 同 jr2p.（pinSalt[16] ‖ iv[12] ‖ GCM(KEK, hex(noteKey), aad)），KEK 升合成面。
+ *  ⚠️ **opt-in 鐵律**（§7.3 :252）：pinLockPrf 未配置＝整面退場
+ * （拋 ERR_PINLOCKPRF_NOT_CONFIGURED；未配置也拒收 jr2q. blob——帶內版本化律同源，禁靜默落純 PIN 形）。
+ *  ⚠️ prfOutput 非 32B＝拋 ERR_PINLOCKPRF_OUTPUT_BAD（形檢前置——合成面只吃 32B 裝置輸出）。
+ *  pinSalt 16B 隨機產生並內嵌 payload——R7b glue 以同一 pinSalt 餵 PRF eval，同帳恆同 PRF 輸入。 */
+export async function wrapNoteKeyPinLockPrf(cfg: PinLockConfig, prfOutput: Uint8Array, noteKey: CryptoKey, pin: string): Promise<string> {
+  if (!cfg.pinLockPrf || !cfg.pinLockSaltPrefix || !cfg.pinLockAad) throw new Error('ERR_PINLOCKPRF_NOT_CONFIGURED');
+  if (prfOutput.length !== 32) throw new Error('ERR_PINLOCKPRF_OUTPUT_BAD');
+  const pinNorm = normalizePin(pin);
+  if (!pinNorm) throw new Error('ERR_PINLOCK_EMPTY');
+  const pinSalt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
+  const kek = await deriveLockKekPrf(pinNorm, prfOutput, pinSalt, cfg.pinLockPrf, cfg.pinLockSaltPrefix);
+  const rawHex = toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(cfg.pinLockAad) as BufferSource },
+    kek,
+    new TextEncoder().encode(rawHex) as BufferSource,
+  ));
+  const payload = new Uint8Array(PAYLOAD_LEN);
+  payload.set(pinSalt, 0);
+  payload.set(iv, SALT_LEN);
+  payload.set(ct, SALT_LEN + IV_LEN);
+  return cfg.pinLockPrf + b64(payload);
+}
+
+/** jr2q. 解包（blob 直解，無前綴 fallback——回落純 PIN 形的鐵律在 glue 層按 prfResults 缺席分流實現，
+ *  不在本原語）。嚴格 108B＋rawHex hex 形（與 unwrapNoteKeyPinLock 同嚴格度）；任何不符
+ * （前綴/長度/prfOutput/PIN 空/GCM/AAD）回 null 不拋。成功 → noteKey extractable=true（鐵律 1）。 */
+export async function unwrapNoteKeyPinLockPrf(cfg: PinLockConfig, wrapped: string, prfOutput: Uint8Array, pin: string): Promise<CryptoKey | null> {
+  try {
+    if (!cfg.pinLockPrf || !cfg.pinLockSaltPrefix || !cfg.pinLockAad) return null;
+    if (!wrapped.startsWith(cfg.pinLockPrf)) return null;
+    if (prfOutput.length !== 32) return null;
+    const payload = unb64(wrapped.slice(cfg.pinLockPrf.length));
+    if (payload.length !== PAYLOAD_LEN) return null;
+    const pinSalt = payload.slice(0, SALT_LEN);
+    const ivPrefixedCt = payload.slice(SALT_LEN); // 鹽內嵌家族：payload = pinSalt[16] ‖ iv[12] ‖ ct
+    const pinNorm = normalizePin(pin);
+    if (!pinNorm) return null;
+    const kek = await deriveLockKekPrf(pinNorm, prfOutput, pinSalt, cfg.pinLockPrf, cfg.pinLockSaltPrefix);
+    const rawHex = await decryptWithKey(kek, ivPrefixedCt, cfg.pinLockAad);
+    if (!rawHex || rawHex.length !== 64 || !/^[0-9a-f]+$/.test(rawHex)) return null;
+    return importAesGcm(hexToBytes(rawHex), true);
+  } catch {
+    return null;
+  }
+}
+
+/** jr2q. 前綴判定（lock-store 分流/形狀面用；cfg 未配置恆 false）。 */
+export function isPinLockWrapPrf(wrapped: string, cfg: PinLockConfig): boolean {
+  return !!cfg.pinLockPrf && wrapped.startsWith(cfg.pinLockPrf);
 }

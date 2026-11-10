@@ -39,6 +39,20 @@
     "expected_kek_hex": "aa6eacc6e786b3e7464afd7db13d17a5a1f9a20d9ba19cdf6d763c37ffe77137",
     "verify_ok": true
   },
+  "pinlockprf_kat": {
+    "algorithm": "HKDF-SHA256(ikm=prfOutput‖Argon2id)",
+    "memory_kib": 262144,
+    "iterations": 1,
+    "parallelism": 1,
+    "password": "2580ab",
+    "prf_output_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "pin_salt_prefix": "tacet-pinlock-v1:",
+    "pin_salt_hex": "00000000000000000000000000000000",
+    "info_prefix": "journal-pinlock-prf-v1:",
+    "prefix": "jr2q.",
+    "expected_kek_hex": "29f9adf26f5cdda5c0c505c096d7c4f7a760fd7b4496b4b4c12434806ab59647",
+    "verify_ok": true
+  },
   "frozen_blobs": [
     {
       "source": "verify [14] KAT14",

@@ -33,8 +33,9 @@ if (keys.length === 0) {
 }
 // root 具名匯出清單（值腿）＋ type-only 匯出清單（型腿）——0.7.0/0.8.0 keyring 新 API root 滯後面的回歸網
 const ROOT_NAMED = ['keyRingBumpEpoch', 'keyRingMeetsHighWater', 'generateRingMacKey', 'ringMacKeyHexOf', 'keyRingWrappedMacKey',
-  'serializeKeyRing', 'parseKeyRing', 'initKeyRing', 'keyRingAddEntry', 'keyRingRetire'];
-const ROOT_TYPES = ['RingMacConfig', 'RingHighWater'];
+  'serializeKeyRing', 'parseKeyRing', 'initKeyRing', 'keyRingAddEntry', 'keyRingRetire',
+  'wrapNoteKeyPinLockPrf', 'unwrapNoteKeyPinLockPrf', 'isPinLockWrapPrf'];
+const ROOT_TYPES = ['RingMacConfig', 'RingHighWater', 'PinLockConfig'];
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'subpath-probe-'));
 const failed = [];
 try {

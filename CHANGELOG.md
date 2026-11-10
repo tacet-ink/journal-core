@@ -5,6 +5,27 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.9.0] — 2026-11-10
+
+**Feature** — `jr2q.` WebAuthn PRF 形本機鎖定前綴（rotation-design §7.3 R7a 定稿；PRF 4/4 真機矩陣
+2026-11-10 收齊＝前置滿）：**兩因子合成**——`KEK = HKDF-SHA256(ikm = prfOutput[32] ‖ Argon2id(pinNorm,
+pinLockSaltPrefix + hex(pinSalt))[32], salt = 裸 pinSalt（hex 串）， info = 'journal-pinlock-prf-v1:' +
+<prefix>)`（兩鹽分標：Argon 腿 salt 帶 prefix、HKDF salt 不帶）——PIN 是知識因子、PRF（platform
+authenticator 不可匯出輸出）是裝置綁定因子，禁「PRF 替代 PIN」；PRF 不可用＝回落純 PIN 形 `jr2p.`
+（PRF 是加速/加固層非取代層）。新原語 `wrapNoteKeyPinLockPrf`／`unwrapNoteKeyPinLockPrf`（pinSalt 16B
+內嵌 payload，同 jr2p. 108B 鹽內嵌形；AAD 同 cfg.pinLockAad）＋`isPinLockWrapPrf`；**opt-in 鐵律**：
+`PinLockConfig.pinLockPrf` 未配置＝整面退場（wrap 拋 `ERR_PINLOCKPRF_NOT_CONFIGURED`、未配置也拒收
+jr2q. blob）；payload 禁入 server blob/ring（M-D，本機 LS 存）。合成 KAT：原語簽名吃 `prfOutput` 參數
+（WebAuthn glue 歸接線卡，不進 node 閘）——`PINLOCKPRF_KAT` 以注入凍結 prfOutput 向量釘 HKDF 合成面
+（docs/vectors/kat.json `pinlockprf_kat` 同源對帳），Argon2id 腿承襲 pinlock2 檔位（262144/1/1）。
+閘帳 702→712（[26]+1 `pinlockprf_kat` 對帳；[32]+9＝jr2q. 合成/包裹/fail-closed/未配置 4＋毒化三向
+Q1 HKDF 鹽面／Q2 Argon 腿／Q3 pinLockPrf 判準（含拷貝＋pristine 基準與還原 byte-exact——直載形））；
+root 匯出＋CI 具名探針同步（K5 教訓）。
+
+**Docs** — `docs/rotation-design.md` §7.3：assertion 端 `extensions: { prf: { eval: true } }` 勘誤為
+`extensions: { prf: { eval: { first: <salt> } } }`（2026-11-10 四平台探針實證：裸 BufferSource／eval:true
+形恆 TypeError）；§7.3 尾補狀態句（四格矩陣 11-10 收齊；largeBlob Android 缺位——零依賴面）。
+
 ## [0.8.0] — 2026-11-10
 
 **Security** — ring MAC 多裝置承載（外審 2026-11-10 N1：0.7.0 macKey 只在首寫裝置本地，第二裝置無 key
