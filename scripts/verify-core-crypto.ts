@@ -244,6 +244,11 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // 未配置面 4＋毒化三向直載形（拷貝樹＋pristine 照綠基準 1＋S1 solo HKDF 鹽面/S2 info 域/S3 pinLockPrfSolo
 // 判準 3＋還原 byte-exact 1——直載形無 gate 再執行）；[26] 欄位名對規格擴 pinlockprfsolo_kat 群；
 // families.json 不動＝jr2r. 無 wire 家族向量（KAT 向量面）；既有 jr1p./jr2p./jr2q. 原語零字動（卡禁））
+// 0.10.0 book 722→723（t_18ab77de 清掃 G：[32] 105→106＝jr2r. change-pin-under-solo 行為案 1——
+// solo wrap 態 changePin 零觸守衛：isPinLockWrapPrfSolo 恆真（守衛入口）／isPinLockWrapPrf 不咬
+// （composite rewrap 不目標）／composite unwrap（新 PIN・空 PIN）null 不拋（不重封）／模式 byte
+// 不變＋零 rewrap side-effect（solo unwrap 同 prfOutput 解回同鑰）；純測試面零 API 動——registry
+// 0.10.0 恆任／tag 不動／不 publish）
 // 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」。
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
@@ -258,7 +263,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 21, 23: 23, 24: 5, 25: 5, 26: 11, 27: 23, 28: 11, 29: 8, 30: 21, 31: 14, 32: 105 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 21, 23: 23, 24: 5, 25: 5, 26: 11, 27: 23, 28: 11, 29: 8, 30: 21, 31: 14, 32: 106 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -5578,6 +5583,20 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       let e = ''; try { await wrapNoteKeyPinLockPrfSolo(barePrfSolo, prfOutSolo, heldKey); } catch (x) { e = (x as Error).message; }
       return e === 'ERR_PINLOCKPRFSOLO_NOT_CONFIGURED' && (await unwrapNoteKeyPinLockPrfSolo(barePrfSolo, blobPrfSolo, prfOutSolo)) === null
         && isPinLockWrapPrfSolo(blobPrfSolo, barePrfSolo) === false && isPinLockWrapPrfSolo(blobPrfSolo, PINLOCKPRS) === true;
+    })());
+  // ⑧a change-pin-under-solo 行為面（t_18ab77de 清掃 G；池 11-12 NIT-4 帶）：solo wrap 態下 changePin
+  //    走零觸守衛——模式（jr2r. 前綴）＝解鎖模式單一真相（裁定 a）；solo KEK 無 PIN 腿，PIN 變更時
+  //    solo blob 必不被 composite rewrap 守衛識別、不被 composite 路徑消費；未來 reorder/revert 把
+  //    跨族判定/重封形靜默換掉（isPinLockWrapPrf 咬 jr2r.、composite unwrap 落 solo 形）即在此翻紅。
+  await A('[32] jr2r. change-pin-under-solo（solo wrap 態 changePin 零觸守衛）：isPinLockWrapPrfSolo 恆真（守衛入口）／isPinLockWrapPrf 不咬（composite rewrap 不目標）／composite unwrap 新 PIN＋空 PIN 皆 null 不拋（不重封——同「任何不符回 null」契約）／模式 byte 不變（jr2r. 前綴＋108B payload）＋零 rewrap side-effect（solo unwrap 同 prfOutput 解回同鑰＝PIN 變更對 solo 形零作用）',
+    (async () => {
+      const newPin = '135790'; // PIN 變更後值（6 位形；具體值不相關——solo KEK 無 PIN 腿）
+      return isPinLockWrapPrfSolo(blobPrfSolo, PINLOCKPRS) === true
+        && isPinLockWrapPrf(blobPrfSolo, PINLOCKPRS) === false
+        && (await unwrapNoteKeyPinLockPrf(PINLOCKPRS, blobPrfSolo, prfOutSolo, newPin)) === null
+        && (await unwrapNoteKeyPinLockPrf(PINLOCKPRS, blobPrfSolo, prfOutSolo, '')) === null
+        && blobPrfSolo.startsWith('jr2r.') && unb64Mod(blobPrfSolo.slice(5)).length === 108
+        && (await (async () => { const u = await unwrapNoteKeyPinLockPrfSolo(PINLOCKPRS, blobPrfSolo, prfOutSolo); return u !== null && (await raw32(u)) === origRaw; })());
     })());
   // 毒化三向（直載形）：拷貝樹 src/client 全樹＋cache-buster import——無 gate 再執行（J4 母型）；還原 byte-exact＋出生即棄。
   {
