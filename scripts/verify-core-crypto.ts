@@ -130,8 +130,13 @@ import {
   wrapNoteKeyPinLockPrf,
   unwrapNoteKeyPinLockPrf,
   isPinLockWrapPrf,
+  wrapNoteKeyPinLockPrfSolo,
+  unwrapNoteKeyPinLockPrfSolo,
+  isPinLockWrapPrfSolo,
   PINLOCKPRF_KAT,
+  PINLOCKPRFSOLO_KAT,
   verifyPinLockPrfKatProd,
+  verifyPinLockPrfSoloKatProd,
   type PinLockConfig,
 } from '../src/client/pinlock.ts';
 import {
@@ -234,6 +239,11 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // [32] 87→96＝jr2q. 合成面/包裹面/fail-closed/未配置面 4＋毒化三向直載形（拷貝樹＋pristine 照綠基準 1＋
 // Q1 HKDF 鹽面/Q2 Argon 腿/Q3 pinLockPrf 判準 3＋還原 byte-exact 1——J4 母型無 gate 再執行）；[26] 欄位名
 // 對規格擴 pinlockprf_kat 群；families.json 不動＝jr2q. 無 wire 家族向量（KAT 向量面））
+// 0.10.0 book 712→722（t_88a4990b jr2r. 單因子（2026-11-11 用戶裁定 (a)：PIN 恆可跳過）：[26]+1
+// pinlockprfsolo_kat 對帳（純 PRF 凍結值＋kat.json 同源）；[32] 96→105＝jr2r. 單因子面/包裹面/fail-closed/
+// 未配置面 4＋毒化三向直載形（拷貝樹＋pristine 照綠基準 1＋S1 solo HKDF 鹽面/S2 info 域/S3 pinLockPrfSolo
+// 判準 3＋還原 byte-exact 1——直載形無 gate 再執行）；[26] 欄位名對規格擴 pinlockprfsolo_kat 群；
+// families.json 不動＝jr2r. 無 wire 家族向量（KAT 向量面）；既有 jr1p./jr2p./jr2q. 原語零字動（卡禁））
 // 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」。
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
@@ -248,7 +258,7 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 21, 23: 23, 24: 5, 25: 5, 26: 10, 27: 23, 28: 11, 29: 8, 30: 21, 31: 14, 32: 96 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 21, 23: 23, 24: 5, 25: 5, 26: 11, 27: 23, 28: 11, 29: 8, 30: 21, 31: 14, 32: 105 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
 const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
@@ -3289,17 +3299,19 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
   const prodKeys26 = Object.keys((kat26?.argon_prod ?? {}) as object); // J14a：正式參數 KAT 向量
   const pl2Keys26 = Object.keys((kat26?.pinlock2_kat ?? {}) as object); // jr2p. fast 檔參數凍結 KAT（§7.1）
   const prfKeys26 = Object.keys((kat26?.pinlockprf_kat ?? {}) as object); // jr2q. HKDF 合成凍結 KAT（§7.3；R7a）
+  const soloKeys26 = Object.keys((kat26?.pinlockprfsolo_kat ?? {}) as object); // jr2r. 純 PRF 凍結 KAT（2026-11-11 用戶裁定 (a)；t_88a4990b）
   // 反空轉下限：實際鍵集須涵蓋閘面讀取的欄（鍵集取自資料＝資料缺欄時下限擋住空集合真值）
   const floor26 = (ks: string[], need: string[]): boolean => need.every((k) => ks.includes(k));
   await A('[26] 欄位名對規格（限定形）：頂層欄＝§7 頭表／§7.1 vectors 表／§7.2 kat 表逐列；巢狀欄逐一以 `fields[].欄`／`rfc9106.欄`／`argon_prod.欄`／`frozen_blobs[].欄`／`credentials[].欄`／`samples[].欄` 出現在對應節（欄名集取自向量檔實鍵＋閘讀欄下限）',
     spec26.length > 0 && !!kat26 && !!bip26
     && HEAD26.every((k) => row26(s7h26, k)) && keysOf26(vecs26).every((k) => row26(s71_26, k)) && VKEYS26.every((k) => row26(s71_26, k))
-    && ['rfc9106', 'argon_prod', 'pinlock2_kat', 'pinlockprf_kat', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
+    && ['rfc9106', 'argon_prod', 'pinlock2_kat', 'pinlockprf_kat', 'pinlockprfsolo_kat', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
     && floor26(fieldKeys26, ['name', 'offset', 'len', 'hex']) && fieldKeys26.every((k) => s71_26.includes('`fields[].' + k + '`'))
     && floor26(rfcKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password_hex', 'salt_hex', 'expected_tag_hex']) && rfcKeys26.every((k) => s72_26.includes('`rfc9106.' + k + '`'))
     && floor26(prodKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password', 'salt_hex', 'expected_tag_hex']) && prodKeys26.every((k) => s72_26.includes('`argon_prod.' + k + '`'))
     && floor26(pl2Keys26, ['memory_kib', 'iterations', 'parallelism', 'password', 'salt', 'expected_kek_hex']) && pl2Keys26.every((k) => s72_26.includes('`pinlock2_kat.' + k + '`'))
     && floor26(prfKeys26, ['algorithm', 'memory_kib', 'iterations', 'parallelism', 'password', 'prf_output_hex', 'pin_salt_prefix', 'pin_salt_hex', 'info_prefix', 'prefix', 'expected_kek_hex']) && prfKeys26.every((k) => s72_26.includes('`pinlockprf_kat.' + k + '`'))
+    && floor26(soloKeys26, ['algorithm', 'prf_output_hex', 'pin_salt_hex', 'info_prefix', 'prefix', 'expected_kek_hex']) && soloKeys26.every((k) => s72_26.includes('`pinlockprfsolo_kat.' + k + '`'))
     && floor26(frozenKeys26, ['prefix', 'wire', 'payload_len', 'expected_note_key_hex', 'source']) && frozenKeys26.every((k) => s72_26.includes('`frozen_blobs[].' + k + '`'))
     && floor26(credKeys26, ['kind', 'expected_hex']) && credKeys26.every((k) => s72_26.includes('`credentials[].' + k + '`'))
     && floor26(sampleKeys26, ['entropy_hex', 'checksum_hex', 'words', 'source']) && sampleKeys26.every((k) => s73_26.includes('`samples[].' + k + '`')));
@@ -3348,6 +3360,18 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
     && prf226.info_prefix === pinlock26.PINLOCKPRF_KAT.infoPrefix && prf226.prefix === pinlock26.PINLOCKPRF_KAT.prefix
     && prf226.memory_kib === PINLOCK2_MEMORY_KIB
     && (await pinlock26.verifyPinLockPrfKatProd()));
+  // jr2r.（2026-11-11 用戶裁定 (a) 單因子；t_88a4990b）：kat.json pinlockprfsolo_kat 對 pinlock.ts
+  // PINLOCKPRFSOLO_KAT／PINLOCKPRFSOLO_KAT_EXPECTED 同源（真原語重推導＝凍結值——HKDF 純 PRF 面：
+  // ikm=prfOutput[32]→KEK 32B（純 PRF 兩 32B 腿、Argon2id 腿移除）、salt=hex(pinSalt) 裸鹽（同 composite 形）、
+  // info=journal-pinlock-prf-v1:jr2r.；改合成公式／鹽面／info 域＝換新前綴，本面翻紅）。
+  const solo226 = (kat26?.pinlockprfsolo_kat ?? {}) as Record<string, unknown>;
+  await A('[26] pinlockprfsolo_kat 對帳：expected_kek_hex＝PINLOCKPRFSOLO_KAT_EXPECTED、prf_output/pin_salt_hex/info_prefix/prefix＝PINLOCKPRFSOLO_KAT（pinlock.ts 常數——verifyPinLockPrfSoloKatProd／產生器同源）＋真原語重推導＝凍結值（HKDF 純 PRF 載體正確性行為面）',
+    pinlock26.PINLOCKPRFSOLO_KAT_EXPECTED === solo226.expected_kek_hex
+    && solo226.prf_output_hex === pinlock26.PINLOCKPRFSOLO_KAT.prfOutput
+    && solo226.pin_salt_hex === pinlock26.PINLOCKPRFSOLO_KAT.pinSaltHex
+    && solo226.info_prefix === pinlock26.PINLOCKPRFSOLO_KAT.infoPrefix
+    && solo226.prefix === pinlock26.PINLOCKPRFSOLO_KAT.prefix
+    && (await pinlock26.verifyPinLockPrfSoloKatProd()));
   const samples26 = (Array.isArray(bip26?.samples) ? bip26!.samples : []) as { entropy_hex: string; checksum_hex: string; words: string[]; source: string }[];
   await A('[26] bip39 抽樣 ≥32 組：entropy hex64＋24 詞＋checksum＝SHA-256(entropy)[0]；逐組對照現行轉寫原語（recTokenToWords 逐詞相等——確定性轉寫非 KDF 重算）',
     samples26.length >= 32 && (await (async () => {
@@ -4618,9 +4642,11 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
   const rotKey32 = await generateNoteKey();
   const raw32 = async (k: CryptoKey | null): Promise<string | null> => (k ? hex(new Uint8Array(await crypto.subtle.exportKey('raw', k))) : null);
   // ① kid 契約（§3.1）
+  // 大寫負向面用定值 'ABCDEF01'（rotKid32 全数字形（10/16）^8≈2.3% 時 toUpperCase≡原值＝假負向
+  // ——2026-11-12 t_88a4990b 實炸收口；本段三處同收，帳面案數零變）。
   await A('[32] kid 形契約：generateKeyId＝8 位小寫 hex（4B 熵）＋isValidKid 正/負向（7 位/大寫/非 hex/legacy 皆拒）',
     /^[0-9a-f]{8}$/.test(rotKid32) && isValidKid(rotKid32)
-    && !isValidKid(rotKid32.slice(0, 7)) && !isValidKid(rotKid32.toUpperCase())
+    && !isValidKid(rotKid32.slice(0, 7)) && !isValidKid('ABCDEF01')
     && !isValidKid('zzzzzzzz') && !isValidKid('legacy'));
   await A('[32] 雙輪 kid 獨立（generateKeyId 兩次≠；碰撞概率 2^-32——ring 碰撞面由 generateKeyId 重試承載，不設 collision 欄）',
     generateKeyId() !== rotKid32);
@@ -4634,7 +4660,7 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
     && kidPrefixOf(CFG32.cipherBound2, ct2)?.body === ct2.slice(('jr2b.' + rotKid32 + '.').length));
   await A('[32] kidPrefixOf fail-closed：kid 欄畸形（7 位/大寫/無點）＝null（不回落盲試＝防 junk 前綴面）',
     kidPrefixOf('jr2b.', 'jr2b.' + rotKid32.slice(0, 7) + '.AAAA') === null
-    && kidPrefixOf('jr2b.', 'jr2b.' + rotKid32.toUpperCase() + '.AAAA') === null
+    && kidPrefixOf('jr2b.', 'jr2b.ABCDEF01.AAAA') === null
     && kidPrefixOf('jr2b.', 'jr2b.AAAA') === null
     && kidPrefixOf('jr2b.', 'jr1b.AAAA') === null);
   await A('[32] encryptNote2 未配置 cipherBound2 → ERR_BOUND2_NOT_CONFIGURED（兄弟 fork 選配律；attach/local 同律）',
@@ -4706,7 +4732,7 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       && (await decryptNote(CFG32, heldOf(rotKey32), 'jr2d.' + rotKid32 + '.' + body2, aad32, idp32)) === null);
     await A('[32] J1-c decryptNote kid 欄畸形（gggggggg／大寫／7 位）→ null（基前綴字面在場即族 claim——不落相容層、不回落盲試）',
       (await decryptNote(CFG32, heldOf(rotKey32), 'jr2b.' + 'g'.repeat(8) + '.' + body2, aad32, idp32)) === null
-      && (await decryptNote(CFG32, heldOf(rotKey32), 'jr2b.' + rotKid32.toUpperCase() + '.' + body2, aad32, idp32)) === null
+      && (await decryptNote(CFG32, heldOf(rotKey32), 'jr2b.ABCDEF01.' + body2, aad32, idp32)) === null
       && (await decryptNote(CFG32, heldOf(rotKey32), 'jr2b.' + rotKid32.slice(0, 7) + '.' + body2, aad32, idp32)) === null);
     await A('[32] J1-d opt-in 零變→N3 安全網接管（0.5.1 缺陷形終結；t_eb3cd413）：TACET 裸形（無 cipherX2 配置）decryptNote(jr2b. 字串) → null（修前相容層原樣回傳＝伺服器不需金鑰即可毀本地副本；cipherX2 配置態同值 J1-a）',
       (await decryptNote(TACET, heldOf(rotKey32), ct2, aad32, idp32)) === null
@@ -5521,6 +5547,102 @@ secOpen(32, '[32] 主鑰輪替原語族（kid 契約／jr2b. 族＋路由收口�
       }
       await A('[32] jr2q. 毒化還原 byte-exact＋樹出生即棄（Q1–Q3 腿 try/finally 補齊——J4 毒化還原案同形：殘毒樹零留存）',
         restoredPrf && !fsPrf.existsSync(treePrf));
+    }
+  }
+  // ⑧ jr2r.（單因子 PRF 形 pinlock；2026-11-11 用戶裁定 (a)：PIN 恆可跳過；t_88a4990b）——純 PRF 兩 32B 腿
+  //    （ikm=prfOutput[32]→KEK 32B；無 pin 參數）；同家族 payload 108B（鹽內嵌）。安全降級為用戶明示裁定
+  //    （誠實降級由 app i18n 承載）；PIN 鏈（jr1p./jr2p.）恆在後備＝glue 層回落，本原語不承載。
+  //    毒化三向 S1–S3＝直載形（拷貝樹 import＋cache-buster；無 gate 再執行＝無遞迴面——J4 母型）。
+  const PINLOCKPRS: PinLockConfig = { pinLock: 'jr1p.', pinLock2: 'jr2p.', pinLockSaltPrefix: PINLOCK.pinLockSaltPrefix, pinLockAad: PINLOCK.pinLockAad, pinLockPrf: 'jr2q.', pinLockPrfSolo: 'jr2r.' };
+  const prfOutSolo = hexToBytes(PINLOCKPRFSOLO_KAT.prfOutput);
+  await A('[32] jr2r. 單因子面（用戶裁定 (a)＝PIN 恆可跳過；純 PRF 兩 32B 腿）：PINLOCKPRFSOLO_KAT 參數案（prfOutput \'11\'×32＋pinSalt 面 16B 0x00＋info 域 journal-pinlock-prf-v1:jr2r.＋prefix jr2r.）＋verifyPinLockPrfSoloKatProd 真原語重推導＝凍結值',
+    PINLOCKPRFSOLO_KAT.prfOutput === '11'.repeat(32) && PINLOCKPRFSOLO_KAT.pinSaltHex === '00'.repeat(16)
+    && PINLOCKPRFSOLO_KAT.infoPrefix === 'journal-pinlock-prf-v1:' && PINLOCKPRFSOLO_KAT.prefix === 'jr2r.'
+    && (await verifyPinLockPrfSoloKatProd()));
+  const blobPrfSolo = await wrapNoteKeyPinLockPrfSolo(PINLOCKPRS, prfOutSolo, heldKey);
+  await A('[32] jr2r. 包裹面：前綴 jr2r.＋payload 嚴格 108B（鹽內嵌同 jr2q./jr2p.）＋wrap→unwrap 同 prfOutput 解回同鑰（無 PIN 參數；extractable 鐵律 1）',
+    blobPrfSolo.startsWith('jr2r.') && unb64Mod(blobPrfSolo.slice(5)).length === 108
+    && (await (async () => { const u = await unwrapNoteKeyPinLockPrfSolo(PINLOCKPRS, blobPrfSolo, prfOutSolo); return u !== null && (await raw32(u)) === origRaw; })()));
+  await A('[32] jr2r. fail-closed：prfOutput 33B wrap 拒（ERR_PINLOCKPRFSOLO_OUTPUT_BAD）/33B unwrap null／prfOutput 異 → null（不拋——同 unwrapNoteKeyPinLockPrf 任何不符回 null 契約）／junk 截斷 → null',
+    (async () => {
+      const prfBadSolo = new Uint8Array(33).fill(0x11);
+      let e = ''; try { await wrapNoteKeyPinLockPrfSolo(PINLOCKPRS, prfBadSolo, heldKey); } catch (x) { e = (x as Error).message; }
+      return e === 'ERR_PINLOCKPRFSOLO_OUTPUT_BAD'
+        && (await unwrapNoteKeyPinLockPrfSolo(PINLOCKPRS, blobPrfSolo, prfBadSolo)) === null
+        && (await unwrapNoteKeyPinLockPrfSolo(PINLOCKPRS, blobPrfSolo, new Uint8Array(32).fill(0x44))) === null
+        && (await unwrapNoteKeyPinLockPrfSolo(PINLOCKPRS, blobPrfSolo.slice(0, 8) + 'AAAAAAAAAAAAAAAA', prfOutSolo)) === null;
+    })());
+  await A('[32] pinLockPrfSolo 未配置面（opt-in 鐵律——與 pinLockPrf 各自獨立判準）：wrap → ERR_PINLOCKPRFSOLO_NOT_CONFIGURED；unwrap → null；isPinLockWrapPrfSolo 恆 false（未配置也拒 jr2r. blob＝帶內版本化律同源）',
+    (async () => {
+      const barePrfSolo = { pinLock: 'jr1p.', pinLockSaltPrefix: PINLOCK.pinLockSaltPrefix, pinLockAad: PINLOCK.pinLockAad, pinLockPrf: 'jr2q.' };
+      let e = ''; try { await wrapNoteKeyPinLockPrfSolo(barePrfSolo, prfOutSolo, heldKey); } catch (x) { e = (x as Error).message; }
+      return e === 'ERR_PINLOCKPRFSOLO_NOT_CONFIGURED' && (await unwrapNoteKeyPinLockPrfSolo(barePrfSolo, blobPrfSolo, prfOutSolo)) === null
+        && isPinLockWrapPrfSolo(blobPrfSolo, barePrfSolo) === false && isPinLockWrapPrfSolo(blobPrfSolo, PINLOCKPRS) === true;
+    })());
+  // 毒化三向（直載形）：拷貝樹 src/client 全樹＋cache-buster import——無 gate 再執行（J4 母型）；還原 byte-exact＋出生即棄。
+  {
+    const getBuiltinSolo = (id: string): unknown =>
+      (globalThis as unknown as { process?: { getBuiltinModule?: (i: string) => unknown } }).process?.getBuiltinModule?.(id);
+    const fsSolo = getBuiltinSolo('node:fs') as {
+      mkdtempSync?: (p: string) => string;
+      cpSync?: (a: string | URL, b: string, o?: { recursive: boolean }) => void;
+      existsSync?: (p: string) => boolean;
+      readFileSync?: (p: string | URL, e: string) => string;
+      writeFileSync?: (p: string, s: string, e: string) => void;
+      rmSync?: (p: string, o?: unknown) => void;
+    } | undefined;
+    const pathSolo = getBuiltinSolo('node:path') as { join?: (...p: string[]) => string } | undefined;
+    const osSolo = getBuiltinSolo('node:os') as { tmpdir?: () => string } | undefined;
+    const urlSolo = getBuiltinSolo('node:url') as { pathToFileURL?: (p: string) => { href: string } } | undefined;
+    if (!fsSolo?.mkdtempSync || !fsSolo.cpSync || !fsSolo.existsSync || !fsSolo.readFileSync || !fsSolo.writeFileSync || !fsSolo.rmSync || !pathSolo?.join || !osSolo?.tmpdir || !urlSolo?.pathToFileURL) {
+      // 原語缺席環境＝顯性 FAIL 行（非 silent true——[32] J4 同形）
+      await A('[32] jr2r. 毒化面（原語缺席環境）＝顯性 FAIL 行，毒化證據缺席顯形非 silent true', false, 'node fs/path/os/url 原語缺席');
+    } else {
+      const pkgRootSolo = new URL('../', import.meta.url);
+      const treeSolo = fsSolo.mkdtempSync(pathSolo.join(osSolo.tmpdir(), 't32-pinlockprfsolo-'));
+      let restoredSolo = false;
+      try {
+        fsSolo.cpSync(new URL('src/client/', pkgRootSolo), pathSolo.join(treeSolo, 'src/client'), { recursive: true });
+        const pPinSolo = pathSolo.join(treeSolo, 'src/client/pinlock.ts');
+        const srcPinSolo = fsSolo.readFileSync(new URL('src/client/pinlock.ts', pkgRootSolo), 'utf8');
+        const pristineSolo = (await import(urlSolo.pathToFileURL(pPinSolo).href + '?solo0')) as unknown as { verifyPinLockPrfSoloKatProd: typeof verifyPinLockPrfSoloKatProd };
+        await A('[32] jr2r. 毒化樹拷貝：src/client 全樹在場（pinlock.ts＋依賴鏈 note-crypto.ts／argon2.ts／vendor）byte-exact＋pristine KAT 照綠（紅綠互斥自證基準）',
+          fsSolo.existsSync(pPinSolo) && fsSolo.existsSync(pathSolo.join(treeSolo, 'src/client/note-crypto.ts')) && fsSolo.existsSync(pathSolo.join(treeSolo, 'src/client/argon2.ts'))
+          && fsSolo.readFileSync(pPinSolo, 'utf8') === srcPinSolo && (await pristineSolo.verifyPinLockPrfSoloKatProd()));
+        // S1：solo HKDF 鹽面摘除（hex(pinSalt)→''）→ KAT 翻紅（roundtrip 毒後自洽面不在此跑＝KAT 恆獨立承載）。
+        const needleS1 = "  const soloSalt = new TextEncoder().encode(toHex(pinSalt));";
+        const mutS1 = srcPinSolo.split(needleS1).length - 1;
+        if (mutS1 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_32_S1: ' + mutS1);
+        fsSolo.writeFileSync(pPinSolo, srcPinSolo.split(needleS1).join("  const soloSalt = new TextEncoder().encode('');"), 'utf8');
+        const modS1 = (await import(urlSolo.pathToFileURL(pPinSolo).href + '?solo1')) as unknown as { verifyPinLockPrfSoloKatProd: typeof verifyPinLockPrfSoloKatProd };
+        fsSolo.writeFileSync(pPinSolo, srcPinSolo, 'utf8');
+        await A('[32] jr2r. 毒化 S1（HKDF 鹽面摘除）→ KAT 翻紅（designated；pristine 照綠互證）', (await modS1.verifyPinLockPrfSoloKatProd()) === false);
+        // S2：info 域摘除（'journal-pinlock-prf-v1:'+'jr2r.'→''）→ KAT 翻紅（info 域獨立承載於 KAT）。
+        const needleS2 = "      info: new TextEncoder().encode('journal-pinlock-prf-v1:' + pinLockPrfSolo) as BufferSource,";
+        const mutS2 = srcPinSolo.split(needleS2).length - 1;
+        if (mutS2 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_32_S2: ' + mutS2);
+        fsSolo.writeFileSync(pPinSolo, srcPinSolo.split(needleS2).join("      info: new TextEncoder().encode('') as BufferSource,"), 'utf8');
+        const modS2 = (await import(urlSolo.pathToFileURL(pPinSolo).href + '?solo2')) as unknown as { verifyPinLockPrfSoloKatProd: typeof verifyPinLockPrfSoloKatProd };
+        fsSolo.writeFileSync(pPinSolo, srcPinSolo, 'utf8');
+        await A('[32] jr2r. 毒化 S2（info 域摘除）→ KAT 翻紅（designated；pristine 照綠互證）', (await modS2.verifyPinLockPrfSoloKatProd()) === false);
+        // S3：pinLockPrfSolo 選配欄判準摘除（wrap 守衛首臂）→ 未配置面真 flip（毒後 wrap 成功產 blob）。
+        const needleS3 = "  if (!cfg.pinLockPrfSolo || !cfg.pinLockAad) throw new Error('ERR_PINLOCKPRFSOLO_NOT_CONFIGURED');";
+        const mutS3 = srcPinSolo.split(needleS3).length - 1;
+        if (mutS3 !== 1) throw new Error('ERR_POISON_ANCHOR_DRIFT_32_S3: ' + mutS3);
+        fsSolo.writeFileSync(pPinSolo, srcPinSolo.split(needleS3).join("  if (!cfg.pinLockAad) throw new Error('ERR_PINLOCKPRFSOLO_NOT_CONFIGURED');"), 'utf8');
+        const modS3 = (await import(urlSolo.pathToFileURL(pPinSolo).href + '?solo3')) as unknown as { wrapNoteKeyPinLockPrfSolo: typeof wrapNoteKeyPinLockPrfSolo };
+        const barePrfSoloQ = { pinLock: 'jr1p.', pinLockSaltPrefix: PINLOCK.pinLockSaltPrefix, pinLockAad: PINLOCK.pinLockAad };
+        let threwS3 = ''; let flippedSolo = '';
+        try { flippedSolo = await modS3.wrapNoteKeyPinLockPrfSolo(barePrfSoloQ, prfOutSolo, heldKey); } catch (x) { threwS3 = (x as Error).message; }
+        await A('[32] jr2r. 毒化 S3（pinLockPrfSolo 判準摘除）→ 未配置面翻紅（designated：毒後 wrap 拋面消失＝blob 產出面非空——毒後前綴欄為字面 undefined 嫁接、非 jr2r. 字面，wrap 成功本身即翻面；pristine 同參數拋 ERR_PINLOCKPRFSOLO_NOT_CONFIGURED——正碼拋面互證）',
+          threwS3 === '' && flippedSolo.length > 0);
+        fsSolo.writeFileSync(pPinSolo, srcPinSolo, 'utf8');
+        restoredSolo = fsSolo.readFileSync(pPinSolo, 'utf8') === srcPinSolo;
+      } finally {
+        fsSolo.rmSync(treeSolo, { recursive: true, force: true }); // 幂等兜底：任一腿 ANCHOR_DRIFT throw 路徑也清樹（R1 MINOR-5 同形）
+      }
+      await A('[32] jr2r. 毒化還原 byte-exact＋樹出生即棄（S1–S3 腿 try/finally 補齊——J4 毒化還原案同形：殘毒樹零留存）',
+        restoredSolo && !fsSolo.existsSync(treeSolo));
     }
   }
   // ⑦ J4-CHG-2（0.5.3 t_4115dd83）：keyRingGet runtime proto 面（Object.hasOwn 取值）——正碼 3 案＋拷貝樹毒化 3 案

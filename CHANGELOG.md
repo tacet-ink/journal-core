@@ -5,6 +5,27 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.10.0] — 2026-11-12
+
+**Feature** — `jr2r.` 單因子 PRF 形本機鎖定前綴（2026-11-11 用戶裁定選 (a)：PIN 恆可跳過；t_88a4990b）：
+**純 PRF 兩 32B 腿**——`KEK = HKDF-SHA256(ikm = prfOutput[32], salt = 裸 pinSalt（hex 串，同 jr2q. 合成面鹽形）,
+info = 'journal-pinlock-prf-v1:' + <prefix>)`（Argon2id 腿移除；PRF 輸入鹽與 composite 同形——LS 持久
+pinSalt glue 由接線端承載「同帳恆同 PRF 輸入」）。新原語 `wrapNoteKeyPinLockPrfSolo`／
+`unwrapNoteKeyPinLockPrfSolo`（無 pin 參數；pinSalt 16B 內嵌 payload，同 108B 鹽內嵌形；AAD 同
+cfg.pinLockAad）＋`isPinLockWrapPrfSolo`；**opt-in 鐵律**：`PinLockConfig.pinLockPrfSolo` 未配置＝整面
+退場（wrap 拋 `ERR_PINLOCKPRFSOLO_NOT_CONFIGURED`、未配置也拒收 jr2r. blob）；prfOutput 非 32B＝
+`ERR_PINLOCKPRFSOLO_OUTPUT_BAD`（wrap 拋／unwrap null）。**安全降級為用戶明示裁定**（生物辨識被欺騙＝
+等同解鎖；離線面與 composite 同強）——誠實降級文案由 app i18n 承載；**PIN 恆可解鎖契約不破**：PIN 鏈
+（jr1p./jr2p.）恆在後備（單因子模式僅改首選路由——glue 層 prf 失敗回落純 PIN 鏈）；密語/復原套件面
+（jr4d./jr1w.）與 server 面零牽動（bio 不過線）。既有 `jr1p.`／`jr2p.`／`jr2q.` 原語零字動。
+Solo KAT：`PINLOCKPRFSOLO_KAT`（凍結 prfOutput 向量＋純 PRF 面）——docs/vectors/kat.json
+`pinlockprfsolo_kat` 同源對帳。閘帳 712→722（[26]+1 `pinlockprfsolo_kat` 對帳；[32]+9＝jr2r. 單因子/
+包裹/fail-closed/未配置 4＋毒化三向 S1 solo HKDF 鹽面／S2 info 域／S3 pinLockPrfSolo 判準（含拷貝＋
+pristine 基準與還原 byte-exact——直載形））；root 匯出＋CI 具名探針同步。
+
+**Docs** — `docs/rotation-design.md` §7.3 尾補單因子形狀態句（用戶裁定 (a)；jr2r. 前綴；誠實降級承載面；
+PIN 恆可解鎖契約面）；`docs/format-spec.md` §7.2 補 `pinlockprfsolo_kat` 列。
+
 ## [0.9.0] — 2026-11-10
 
 **Feature** — `jr2q.` WebAuthn PRF 形本機鎖定前綴（rotation-design §7.3 R7a 定稿；PRF 4/4 真機矩陣

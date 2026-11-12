@@ -91,6 +91,8 @@ export interface PinLockConfig {
   pinLock2?: string;
   /** jr2q.（WebAuthn PRF 合成 pinlock）前綴，如 'jr2q.'. 未配置 = jr2q. API 拒絕（整面退場），jr1p./jr2p. 面零變（cfg 選配律）。 */
   pinLockPrf?: string;
+  /** jr2r.（單因子 PRF 形 pinlock；2026-11-11 用戶裁定 (a)：PIN 恆可跳過）前綴，如 'jr2r.'. 未配置 = jr2r. API 拒絕（整面退場），jr1p./jr2p./jr2q. 面零變（cfg 選配律）。 */
+  pinLockPrfSolo?: string;
 }
 
 /** KEK = PBKDF2-SHA256(pinNorm, pinLockSaltPrefix + hex(pinSalt), 600k) → AES-GCM key（nonextractable）。 */
@@ -381,4 +383,119 @@ export async function unwrapNoteKeyPinLockPrf(cfg: PinLockConfig, wrapped: strin
 /** jr2q. 前綴判定（lock-store 分流/形狀面用；cfg 未配置恆 false）。 */
 export function isPinLockWrapPrf(wrapped: string, cfg: PinLockConfig): boolean {
   return !!cfg.pinLockPrf && wrapped.startsWith(cfg.pinLockPrf);
+}
+
+// ── jr2r.（單因子 PRF 形 pinlock；2026-11-11 用戶裁定 (a)：PIN 恆可跳過） ──
+//
+// KEK（jr2q. 合成家族，Argon2id 腿移除——純 PRF 兩 32B 腿）：
+//   KEK = HKDF-SHA256(ikm = prfOutput[32],
+//                      salt = hex(pinSalt)（裸——同 jr2q. 合成面鹽形）,
+//                      info = 'journal-pinlock-prf-v1:' + <prefix>)
+// ⚠️ 安全降級為用戶明示裁定（誠實降級由 app i18n 承載）：生物辨識被欺騙＝等同解鎖；
+// 離線面與 composite 同強（PRF 不出晶片）。PIN 鏈（jr1p./jr2p.）恆在後備（PIN 恆可解鎖
+// 契約——本原語僅首選路由、非取代；glue 層 prf 失敗回落純 PIN 鏈）。
+// PRF 輸入鹽同 composite 形（LS 持久 pinSalt glue＝呼叫端職責——同一 pinSalt 16B 餵 PRF eval，
+// 「同帳恆同 PRF 輸入」穩定性契約；payload 內嵌鹽 16B 隨機自生，兩鹽各承其角）。
+// payload 同 jr2q./jr2p.（108B 鹽內嵌族）；AAD 同 cfg.pinLockAad。
+export const PINLOCKPRFSOLO_KAT = Object.freeze({
+  prfOutput: '11'.repeat(32),
+  pinSaltHex: '00'.repeat(16),
+  infoPrefix: 'journal-pinlock-prf-v1:',
+  prefix: 'jr2r.',
+} as const);
+
+/** 凍結值（docs/vectors/kat.json `pinlockprfsolo_kat.expected_kek_hex` 同源；node 真原語產生）。 */
+export const PINLOCKPRFSOLO_KAT_EXPECTED =
+  '05260d6c37aca7f9c980eb8a088155e3ad75fe7348935f4c20bf5ce8ac7835ee';
+
+/**
+ * jr2r. solo KEK（HKDF 純 PRF 面；KAT 釘此面）。prfOutput 必 32B（裝置輸出形檢）。
+ * 合成公式／鹽面／info 域禁改（改＝換新前綴，帶內版本化）。
+ */
+async function deriveLockKekPrfSolo(prfOutput: Uint8Array, pinSalt: Uint8Array, pinLockPrfSolo: string): Promise<Uint8Array> {
+  if (prfOutput.length !== 32) throw new Error('ERR_PINLOCKPRFSOLO_OUTPUT_BAD');
+  const soloSalt = new TextEncoder().encode(toHex(pinSalt));
+  const hkdfKey = await crypto.subtle.importKey('raw', prfOutput as BufferSource, 'HKDF', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: soloSalt as BufferSource,
+      info: new TextEncoder().encode('journal-pinlock-prf-v1:' + pinLockPrfSolo) as BufferSource,
+    },
+    hkdfKey,
+    256,
+  ));
+}
+
+/** KEK key 形薄殼（AES-GCM、nonextractable——deriveLockKekPrf 家族對偶面；鐵律 1 對偶）。 */
+async function deriveLockKekPrfSoloKey(prfOutput: Uint8Array, pinSalt: Uint8Array, pinLockPrfSolo: string): Promise<CryptoKey> {
+  const bits = await deriveLockKekPrfSolo(prfOutput, pinSalt, pinLockPrfSolo);
+  return crypto.subtle.importKey('raw', bits as BufferSource, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+/** jr2r. fast 檔 KAT（verifyPinLockPrfKatProd 同形）：以真原語重推導凍結值——HKDF 純 PRF 面
+ *  （32B prfOutput → 32B KEK 兩 32B 腿）行為承載；改合成公式／鹽面／info 域＝換新前綴，帶內版本化。 */
+export async function verifyPinLockPrfSoloKatProd(): Promise<boolean> {
+  const k = PINLOCKPRFSOLO_KAT;
+  try {
+    const bits = await deriveLockKekPrfSolo(
+      hexToBytes(k.prfOutput),
+      hexToBytes(k.pinSaltHex),
+      k.prefix,
+    );
+    return toHex(bits) === PINLOCKPRFSOLO_KAT_EXPECTED;
+  } catch {
+    return false;
+  }
+}
+
+/** jr2r. 包裹：無 pin 參數（單因子——用戶裁定 (a)）。payload 同 jr2q.（pinSalt[16] ‖ iv[12] ‖ GCM(KEK, hex(noteKey), aad)）。
+ *  ⚠️ **opt-in 鐵律**（jr2q. 家族同源）：pinLockPrfSolo 未配置＝整面退場
+ * （拋 ERR_PINLOCKPRFSOLO_NOT_CONFIGURED；未配置也拒收 jr2r. blob——帶內版本化律同源，禁靜默落 PIN 形）。
+ *  ⚠️ prfOutput 非 32B＝拋 ERR_PINLOCKPRFSOLO_OUTPUT_BAD（形檢前置——只吃 32B 裝置輸出）。
+ *  pinSalt 16B 隨機產生並內嵌 payload——呼叫端以同一 pinSalt 餵 PRF eval，同帳恆同 PRF 輸入。 */
+export async function wrapNoteKeyPinLockPrfSolo(cfg: PinLockConfig, prfOutput: Uint8Array, noteKey: CryptoKey): Promise<string> {
+  if (!cfg.pinLockPrfSolo || !cfg.pinLockAad) throw new Error('ERR_PINLOCKPRFSOLO_NOT_CONFIGURED');
+  if (prfOutput.length !== 32) throw new Error('ERR_PINLOCKPRFSOLO_OUTPUT_BAD');
+  const pinSalt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
+  const kek = await deriveLockKekPrfSoloKey(prfOutput, pinSalt, cfg.pinLockPrfSolo);
+  const rawHex = toHex(new Uint8Array(await crypto.subtle.exportKey('raw', noteKey)));
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(cfg.pinLockAad) as BufferSource },
+    kek,
+    new TextEncoder().encode(rawHex) as BufferSource,
+  ));
+  const payload = new Uint8Array(PAYLOAD_LEN);
+  payload.set(pinSalt, 0);
+  payload.set(iv, SALT_LEN);
+  payload.set(ct, SALT_LEN + IV_LEN);
+  return cfg.pinLockPrfSolo + b64(payload);
+}
+
+/** jr2r. 解包（blob 直解；PIN 回落鐵律在 glue 層路由——PIN 鏈恆在後備）。嚴格 108B＋rawHex hex 形
+ *  （同 unwrapNoteKeyPinLockPrf 嚴格度）；任何不符（前綴/長度/prfOutput/GCM/AAD）回 null 不拋。
+ *  成功 → noteKey extractable=true（鐵律 1）。 */
+export async function unwrapNoteKeyPinLockPrfSolo(cfg: PinLockConfig, wrapped: string, prfOutput: Uint8Array): Promise<CryptoKey | null> {
+  try {
+    if (!cfg.pinLockPrfSolo || !cfg.pinLockAad) return null;
+    if (!wrapped.startsWith(cfg.pinLockPrfSolo)) return null;
+    if (prfOutput.length !== 32) return null;
+    const payload = unb64(wrapped.slice(cfg.pinLockPrfSolo.length));
+    if (payload.length !== PAYLOAD_LEN) return null;
+    const pinSalt = payload.slice(0, SALT_LEN);
+    const ivPrefixedCt = payload.slice(SALT_LEN); // 鹽內嵌家族：payload = pinSalt[16] ‖ iv[12] ‖ ct
+    const kek = await deriveLockKekPrfSoloKey(prfOutput, pinSalt, cfg.pinLockPrfSolo);
+    const rawHex = await decryptWithKey(kek, ivPrefixedCt, cfg.pinLockAad);
+    if (!rawHex || rawHex.length !== 64 || !/^[0-9a-f]+$/.test(rawHex)) return null;
+    return importAesGcm(hexToBytes(rawHex), true);
+  } catch {
+    return null;
+  }
+}
+
+/** jr2r. 前綴判定（lock-store 分流/形狀面用；cfg 未配置恆 false）。 */
+export function isPinLockWrapPrfSolo(wrapped: string, cfg: PinLockConfig): boolean {
+  return !!cfg.pinLockPrfSolo && wrapped.startsWith(cfg.pinLockPrfSolo);
 }

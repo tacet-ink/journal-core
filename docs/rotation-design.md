@@ -255,6 +255,7 @@ RotationProgress = {
   - **零知識相容**：PRF assertion 只在 client↔platform authenticator 之間；server 零參與（探針卡否決案「伺服器端 credential 註冊」照守）。
   - **前置**：t_59239934 真機探針（iOS Safari/iOS PWA/macOS Chrome/Android Chrome 四格 PRF 支援矩陣）結果回收後才定實作排程——**本設計不預設支援面**。
   - **狀態（2026-11-10）**：四格矩陣 11-10 收齊（PRF 4/4 綠；largeBlob Android 缺位——本設計零依賴 largeBlob，禁作跨平台面）。
+  - **狀態（2026-11-12，R7a 補案）**：單因子形 `jr2r.`（用戶 2026-11-11 裁定選 (a)：PIN 恆可跳過；core 0.10.0）：`KEK = HKDF-SHA256(ikm = prfOutput[32], salt = hex(pinSalt) 裸鹽（同 §7.3 定稿鹽形）, info = 'journal-pinlock-prf-v1:jr2r.')`——純 PRF 兩 32B 腿（Argon2id 腿移除）；PRF 輸入鹽同形（LS 持久 pinSalt glue＝同帳恆同 PRF 輸入）。**安全降級為用戶明示裁定**：生物辨識被欺騙＝等同解鎖（離線面與合成形同強——PRF 不出晶片）；誠實降級文案由 app i18n 承載（審查核點）。**PIN 恆可解鎖契約不破**：PIN 鏈（jr1p./jr2p.）恆在後備（單因子模式僅改首選路由、非取代——prf 失敗回落純 PIN 鏈）；密語/復原套件面（jr4d./jr1w.）零牽動；server 面零牽動（bio 不過線）。
 
 ## 8. J8 收尾面現值（S2-S6 後）
 

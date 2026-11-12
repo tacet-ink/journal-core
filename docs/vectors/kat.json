@@ -53,6 +53,15 @@
     "expected_kek_hex": "29f9adf26f5cdda5c0c505c096d7c4f7a760fd7b4496b4b4c12434806ab59647",
     "verify_ok": true
   },
+  "pinlockprfsolo_kat": {
+    "algorithm": "HKDF-SHA256(ikm=prfOutput)",
+    "prf_output_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "pin_salt_hex": "00000000000000000000000000000000",
+    "info_prefix": "journal-pinlock-prf-v1:",
+    "prefix": "jr2r.",
+    "expected_kek_hex": "05260d6c37aca7f9c980eb8a088155e3ad75fe7348935f4c20bf5ce8ac7835ee",
+    "verify_ok": true
+  },
   "frozen_blobs": [
     {
       "source": "verify [14] KAT14",
