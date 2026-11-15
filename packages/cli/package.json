@@ -2,6 +2,28 @@
   "name": "@tacet-ink/journal-cli",
   "version": "0.11.0",
   "private": true,
-  "description": "tacet.ink 本機 CLI（0.11.0 占位空殼——實作歸 R3b 卡；加密只 import core）",
-  "type": "module"
+  "description": "tacet.ink 索取祕密本機 CLI（R3b t_8b19f126）：request／verify／submit——加密只 import journal-core，值永不回模型上下文",
+  "type": "module",
+  "bin": {
+    "tacet-secret": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.7.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "node --experimental-strip-types scripts/verify-cli.ts",
+    "e2e": "node scripts/e2e-cli.cjs"
+  },
+  "dependencies": {
+    "@tacet-ink/journal-core": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0"
+  }
 }

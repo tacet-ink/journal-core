@@ -43,6 +43,22 @@ publish 動作歸部署窗/上架階段——本版只 local（dist-tags 帳未�
 **Docs** — `docs/format-spec.md`：布局表＋2（`content-stamp`／`ecdh-envelope`）、家族表＋2、
 §4.15／§4.16 逐條契約、§7.1 fields 名＋`eph_pub`、§7.2＋`jr5s_kat`／`jr5e_kat` 列、b64url 編碼例外註記。
 
+**packages/cli（R3b，t_8b19f126）** — 索取祕密本機 CLI `tacet-secret`（`private: true` 不上 npm；
+加密一律 `import` 本包，零自帶加密）：`request`（主路徑——N3 抓 /sreq→sha256→比對公開 repo
+SHA256SUMS，不符／任一抓取失敗／entry 缺席＝停、告知、不給連結；填寫連結公鑰 fragment 可交人，
+取件連結私鑰＋token 只落 `<stateDir>/<slot_id>.retrieve.json`（600/700），stdout 零值只「已寫入」）
+＋`verify`（/secret＋/sreq 同驗四方帳，人可自跑）＋`submit`（**預設關**：非 TTY＝直接拒零 API；
+TTY＝印摘要＋輸入 slot id 確認；ephemeral 一用一換＋write-once 零重試；成功面「已寫入：conf_code=xxxx」）
+＋`--self-test`（core 0.11.0 向量 KAT 自檢，27 斷言）。輸入面 `env:`/`file:` 參照＋白名單（內建
+`<home>/.tacet-secret`＋`TACET_SECRET_WHITELIST`＋狀態目錄 whitelist 檔；env 名面
+`TACET_SECRET_ENV_WHITELIST`、預設 `TACET_SECRET_` 前綴；realpath 後分隔符界前綴匹配）；
+exit code 表 0–5。
+**Gates** — `packages/cli/scripts/verify-cli.ts`（單位閘 41 斷言，in-gate 毒化齒 3）＋
+`scripts/e2e-cli.cjs`（hermetic devstack-stub＋真 PTY，64 斷言）；CI verify.yml＋3 步
+（CLI typecheck+build／verify／e2e）。
+**誠實界線（README 必載）** — 工具只驗自己抓到那份（不擋針對性攻擊）；頂層頁無 SRI；信任錨＝
+公開 repo 所在的 GitHub。差異化＝類別描述形（不點名競品）；I3 投遞工具排除（I 線停車）。
+
 ## [0.10.0] — 2026-11-12
 
 **Feature** — `jr2r.` 單因子 PRF 形本機鎖定前綴（2026-11-11 用戶裁定選 (a)：PIN 恆可跳過；t_88a4990b）：

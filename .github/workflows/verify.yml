@@ -73,3 +73,20 @@ jobs:
       # 斷言數以腳本實際輸出為準（npm run verify 自帶「N 斷言全綠」尾行）
       - name: Verify crypto primitives
         run: npm run verify
+
+      # —— packages/cli（R3b t_8b19f126）：索取祕密本機 CLI ——
+      # workspace 包 typecheck/build 走包內 tsconfig（root tsconfig 不 include packages/）
+      - name: CLI typecheck + build
+        run: |
+          npm run typecheck -w @tacet-ink/journal-cli
+          npm run build -w @tacet-ink/journal-cli
+
+      # 單位閘（hermetic 零外網）：N3 fail-closed／白名單／state／確認閘／CLI 面／README 帳／
+      # 毒化齒（段帳 41 斷言，整行錨 CLI-VERIFY-OK）
+      - name: CLI verify (unit gate, hermetic)
+        run: npm run verify -w @tacet-ink/journal-cli
+
+      # e2e（hermetic devstack-stub＋真 PTY 自 re-exec）：request 全形＋N3 毒化＋白名單毒化＋
+      # 送出流人確認（64 斷言，整行錨 E2E-CLI-OK）
+      - name: CLI e2e (hermetic devstack + real PTY)
+        run: npm run e2e -w @tacet-ink/journal-cli
