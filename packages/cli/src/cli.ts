@@ -62,7 +62,10 @@ interface ParsedOpts {
   positional: string[];
 }
 
-/** 極小參數解析（零依賴）；未知旗標／缺值＝null（呼叫端 usage 錯）。 */
+/** 極小參數解析（零依賴）；未知旗標／缺值＝null（呼叫端 usage 錯）。
+ *  注意：for-loop 的 i++ 會再進一步，故取值分支必設 i = t[1] - 1（下一枚＝值之後的旗標；
+ *  審查 r1 M-2 補實測：舊形 i = t[1] 會吃掉下一枚——`--base X --help` 的 --help 被吞、
+ *  `--base X --ttl 9x` 的 9x 被當位置參數＝strict parse 破洞）。 */
 export function parseArgs(args: string[]): ParsedOpts | null {
   const o: ParsedOpts = { positional: [] };
   const take = (i: number, flag: string): [string, number] | null => {
@@ -75,32 +78,32 @@ export function parseArgs(args: string[]): ParsedOpts | null {
       const t = take(i, a);
       if (!t) return null;
       o.base = t[0];
-      i = t[1];
+      i = t[1] - 1;
     } else if (a === '--sums') {
       const t = take(i, a);
       if (!t) return null;
       o.sums = t[0];
-      i = t[1];
+      i = t[1] - 1;
     } else if (a === '--ttl') {
       const t = take(i, a);
       if (!t) return null;
       o.ttl = t[0];
-      i = t[1];
+      i = t[1] - 1;
     } else if (a === '--annual-token') {
       const t = take(i, a);
       if (!t) return null;
       o.annualToken = t[0];
-      i = t[1];
+      i = t[1] - 1;
     } else if (a === '--out') {
       const t = take(i, a);
       if (!t) return null;
       o.out = t[0];
-      i = t[1];
+      i = t[1] - 1;
     } else if (a === '--confirm-input') {
       const t = take(i, a);
       if (!t) return null;
       o.confirmInput = t[0];
-      i = t[1];
+      i = t[1] - 1;
     } else if (a === '--annual') {
       o.annual = true;
     } else if (a === '--json') {
@@ -151,6 +154,16 @@ async function main(): Promise<number> {
     process.stderr.write('參數錯（未知旗標或缺值）——tacet-secret --help\n');
     return EXIT_USAGE;
   }
+  // --help/-h 在一切網路之前攔截（任何子命令）——零網路、零 slot、零副作用
+  if (o.positional.includes('--help')) {
+    process.stdout.write(USAGE + '\n');
+    return EXIT_OK;
+  }
+  // strict parse：request/verify 不收位置參數（submit 的兩位置參數在其分支內驗）——零網路前拒
+  if ((args[0] === 'request' || args[0] === 'verify') && o.positional.length !== 0) {
+    process.stderr.write(`${args[0]} 不收位置參數（tacet-secret --help）\n`);
+    return EXIT_USAGE;
+  }
   const base = checkBase(o.base);
   const sums = o.sums ?? DEFAULT_SUMS_URL;
 
@@ -174,14 +187,14 @@ async function main(): Promise<number> {
       json: !!o.json,
     });
     for (const line of r.lines) process.stdout.write(line + '\n');
-    if (r.exit === 0 && r.jsonOut) process.stdout.write(JSON.stringify(r.jsonOut, null, 2) + '\n');
+    if (r.exit === 0 && o.json && r.jsonOut) process.stdout.write(JSON.stringify(r.jsonOut, null, 2) + '\n');
     return r.exit;
   }
 
   if (args[0] === 'verify') {
     const r = await runVerify({ base, sums, json: !!o.json });
     for (const line of r.lines) process.stdout.write(line + '\n');
-    if (r.jsonOut) process.stdout.write(JSON.stringify(r.jsonOut, null, 2) + '\n');
+    if (o.json && r.jsonOut) process.stdout.write(JSON.stringify(r.jsonOut, null, 2) + '\n');
     return r.exit;
   }
 

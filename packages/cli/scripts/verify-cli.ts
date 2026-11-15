@@ -8,15 +8,18 @@
  *       sums 抓取失敗／runRequest 毒化＝停且零 API／runRequest MATCH＝交連結＋bundle 600＋POST 恰一＋stdout 零 token
  *   [2] 白名單 refs（7）：env 前綴規則／env 越界拒／env 明列白名單／file 內建 stateDir／
  *       file 越界拒／file TACET_SECRET_WHITELIST／realpath 分隔符界（/wh 不匹配 /wh-evil）
- *   [3] state/out（4）：預設路徑帳／--out 越界拒（fail-early）／O_EXCL 覆蓋先拒／權限 600+700
+ *   [3] state/out（5）：預設路徑帳／--out 越界拒（fail-early）／O_EXCL 覆蓋先拒／權限 600+700／
+ *       fresh HOME 首跑 stateDir 自建 700（umask 077；不崩潰、不 orphan slot）
  *   [4] 確認閘（4）：allowNonTty 測試縫／非 TTY 子程序 rc3 零 API（預設關）／
  *       錯答 rc5 零 API／正答 rc0 conf_code＋fill 一次
- *   [5] CLI 面（8）：dist 在場／--self-test rc0／無參數 rc2／未知子命令 rc2／bad ttl rc2／
- *       I3 排除面（零 deliver 子命令）／零自帶加密面（src 零 node:crypto 零原語 API）／package 面（private+bin）
+ *   [5] CLI 面（10）：dist 在場／--self-test rc0／無參數 rc2／未知子命令 rc2／bad ttl rc2／
+ *       I3 排除面（零 deliver 子命令）／零自帶加密面（src 零 node:crypto 零原語 API）／
+ *       package 面（private+bin）／子命令 --help 網路前攔截 rc0／位置參數 strict parse rc2
  *   [6] README 帳（6）：誠實界線三條逐條在場／不點名律（零競品名）／tag 規約面／送出預設關面
- *   [7] 毒化齒（3，designated-RED）：n3 比對摘除→[1] 毒面翻「放行」＝RED／
- *       refs 白名單守衛摘除→越界翻「放行」＝RED／submit 非 TTY 拒摘除→rc3 翻 rc5＝RED
- *       每齒：變異→子程序跑不變式檢查（期望 RED）→還原→hash 核對還原。
+ *   [7] 毒化齒（6，designated-RED；3 齒 × pristine-GREEN＋毒化專用 RED）：
+ *       n3 比對摘除→「放行」／refs 白名單守衛摘除→越界「放行」／submit 非 TTY 拒摘除→rc3 翻 rc5。
+ *       每齒：pristine 必綠臂先行→變異→不變式檢查專用結束碼＋標記（crash≠變異破——
+ *       兩臂皆 rc=1 無法分辨，故 RED 判據＝專用碼＋標記）→還原→hash 核對還原。
  *
  * hermetic：全段零外網（hermetic SreqStub＋127.0.0.1:1 不可達面）；HOME 指向 temp 目錄；
  * 啟動時清空環境 TACET_SECRET_*（防 ambient 污染白名單段）。
@@ -52,7 +55,7 @@ function check(cond: boolean, label: string): void {
 }
 
 // —— 段帳 ——
-const SEC_CASES: Record<number, number> = { 1: 9, 2: 7, 3: 4, 4: 4, 5: 8, 6: 6, 7: 3 };
+const SEC_CASES: Record<number, number> = { 1: 9, 2: 7, 3: 5, 4: 4, 5: 10, 6: 6, 7: 6 };
 const secRan: Record<number, number> = {};
 function secOpen(sec: number, title: string): void {
   secRan[sec] = 0;
@@ -96,7 +99,7 @@ async function main(): Promise<void> {
   const { runRequest } = await import('../src/request.ts');
   const { runSubmit, confirmGateState, parseFillLink } = await import('../src/submit.ts');
 
-  // ============ [1] N3 fail-closed（7）============
+  // ============ [1] N3 fail-closed（9）============
   secOpen(1, 'N3 fail-closed');
   const r1a = await n3Gate(base, SUMS_OK);
   check(r1a.match === true && r1a.reason === 'ok', '1a MATCH→放行（reason ok）');
@@ -193,7 +196,7 @@ async function main(): Promise<void> {
   }
   check(err2g instanceof RefError && err2g.code === 'ref-file-not-whitelisted', '2g realpath 分隔符界（/wh 不匹配 /wh-evil）');
 
-  // ============ [3] state/out（4）============
+  // ============ [3] state/out（5）============
   secOpen(3, 'state/out');
   const slotId3 = 'a'.repeat(32);
   check(
@@ -220,6 +223,36 @@ async function main(): Promise<void> {
   const dirMode = (fs.statSync(path.join(TMP_HOME, '.tacet-secret')).mode & 0o777).toString(8);
   const fileMode = (fs.statSync(out3c).mode & 0o777).toString(8);
   check(dirMode === '700' && fileMode === '600', '3d 權限面（dir 700＋file 600）');
+  // 3e fresh HOME 首跑（無 stateDir；umask 077）：CLI 自建 700＋bundle 600＋POST 恰一
+  //（MAJOR-2：舊形於 slot 已建後 realpathSync(parent) ENOENT 崩潰＝orphan slot＋rc-1 撞 N3 停手碼）
+  {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-gate-freshhome-'));
+    const prevHome = process.env.HOME;
+    const prevUmask = process.umask();
+    stub.reqLog.length = 0;
+    let rrFresh: { exit: number } | null = null;
+    let freshErr: unknown = null;
+    try {
+      process.env.HOME = freshHome;
+      process.umask(0o077);
+      rrFresh = await runRequest({ base, sums: SUMS_OK, ttl: '7d', tier: 'free', annualTokenRef: null, out: null, json: false });
+    } catch (e) {
+      freshErr = e;
+    } finally {
+      process.env.HOME = prevHome;
+      process.umask(prevUmask);
+    }
+    const freshDir = path.join(freshHome, '.tacet-secret');
+    const fdirMode = fs.existsSync(freshDir) ? (fs.statSync(freshDir).mode & 0o777).toString(8) : null;
+    const fBundle = fs.existsSync(freshDir) ? fs.readdirSync(freshDir).find((f) => f.endsWith('.retrieve.json')) : undefined;
+    const fFileMode = fBundle ? (fs.statSync(path.join(freshDir, fBundle)).mode & 0o777).toString(8) : null;
+    const fPost = stub.reqLog.filter((r: any) => r.method === 'POST' && r.path === '/api/sreq').length;
+    check(
+      freshErr === null && rrFresh !== null && rrFresh.exit === 0 && fdirMode === '700' && fFileMode === '600' && fPost === 1,
+      `3e fresh HOME 首跑（umask 077 下 stateDir 自建 ${fdirMode}；bundle ${fFileMode}；POST ${fPost}）` +
+        (freshErr !== null ? ` err=${String(freshErr).slice(0, 160)}` : ''),
+    );
+  }
 
   // ============ [4] 確認閘（4）============
   secOpen(4, '確認閘');
@@ -256,7 +289,7 @@ async function main(): Promise<void> {
     '4d 正答→rc0 conf_code＋fill 恰一',
   );
 
-  // ============ [5] CLI 面（7）============
+  // ============ [5] CLI 面（10）============
   secOpen(5, 'CLI 面');
   check(fs.existsSync(distCli), '5a dist 在場（先 build）');
   const sp5a = fs.existsSync(distCli)
@@ -281,6 +314,26 @@ async function main(): Promise<void> {
   check(!cryptoHit, '5f 零自帶加密面（src 零 node:crypto 零原語 API——加密只 import core）');
   const pkg = JSON.parse(fs.readFileSync(path.join(PKG, 'package.json'), 'utf8'));
   check(pkg.private === true && !!pkg.bin && !!pkg.bin['tacet-secret'], '5g package 面（private 不上 npm＋bin tacet-secret）');
+  // 5h 子命令 --help 網路前攔截（MAJOR 附 MINOR-2：舊形 request --help 真執行 N3→slot／落包 orphan 族）
+  const sp5h = spawnSync(process.execPath, [distCli, 'request', '--base', UNREACHABLE, '--help'], {
+    encoding: 'utf8',
+    timeout: 30_000,
+    env: { ...process.env, HOME: TMP_HOME },
+  });
+  check(
+    sp5h.status === 0 && /用法:/.test(sp5h.stdout ?? ''),
+    `5h request --help rc0＋usage（網路前攔截、零網路；實際 rc=${sp5h.status}）`,
+  );
+  // 5i strict parse：request 不收位置參數（零網路前拒；parse 偏移修復後的位置參數面）
+  const sp5i = spawnSync(process.execPath, [distCli, 'request', 'stray-arg', '--base', UNREACHABLE], {
+    encoding: 'utf8',
+    timeout: 30_000,
+    env: { ...process.env, HOME: TMP_HOME },
+  });
+  check(
+    sp5i.status === 2 && /不收位置參數/.test(sp5i.stderr ?? ''),
+    `5i request 位置參數 rc2（strict parse 零網路前拒；實際 rc=${sp5i.status}）`,
+  );
 
   // ============ [6] README 帳（6）============
   secOpen(6, 'README 帳');
@@ -292,33 +345,51 @@ async function main(): Promise<void> {
   check(/journal-cli-v0\.1\.0/.test(readme), '6e 發佈 tag 規約面（<名>-v<version>）在場');
   check(/預設關/.test(readme), '6f 送出預設關面在場');
 
-  // ============ [7] 毒化齒（3，designated-RED）============
+  // ============ [7] 毒化齒（6，designated-RED；3 齒 × pristine-GREEN＋毒化專用 RED）============
   secOpen(7, '毒化齒');
   const checksDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-gate-checks-'));
   const SRC = (rel: string) => path.join(PKG, 'src', rel);
+  const REPO = path.join(PKG, '..', '..');
   const sha = (p: string) => sha256Hex(fs.readFileSync(p, 'utf8'));
+  /**
+   * 齒義（審查 r1 精化）：pristine 必綠臂先行——RED 必須由「不變式 trip」承載、專用結束碼＋
+   * 標記判據（crash≠變異破：parse/env 崩潰與守衛缺席皆 rc=1 無法分辨）；變異後還原＋hash 核對。
+   */
   async function tooth(
     id: string,
     file: string,
     from: string,
     to: string,
     checkSrc: string,
+    redMarker: string,
+    redCode: number,
   ): Promise<void> {
     const orig = fs.readFileSync(file, 'utf8');
     if (!orig.includes(from)) throw new Error(`tooth ${id}: 變異錨缺席（src 已漂移）`);
     const h0 = await sha(file);
-    fs.writeFileSync(file, orig.replace(from, to));
     const checkFile = path.join(checksDir, `check-${id}.mjs`);
     fs.writeFileSync(checkFile, checkSrc);
-    const sp = spawnSync(process.execPath, ['--experimental-strip-types', checkFile], {
-      encoding: 'utf8',
-      timeout: 120_000,
-      env: { ...process.env, HOME: TMP_HOME },
-    });
+    const runCheck = () =>
+      spawnSync(process.execPath, ['--experimental-strip-types', checkFile], {
+        encoding: 'utf8',
+        timeout: 120_000,
+        env: { ...process.env, HOME: TMP_HOME },
+      });
+    const sp0 = runCheck();
+    const out0 = `${sp0.stdout ?? ''}\n${sp0.stderr ?? ''}`;
+    check(
+      sp0.status === 0,
+      `7${id}a pristine GREEN（未變異 src 下不變式檢查過；rc=${sp0.status}${sp0.status !== 0 ? '；' + out0.slice(0, 200) : ''}）`,
+    );
+    fs.writeFileSync(file, orig.replace(from, to));
+    const sp = runCheck();
     fs.writeFileSync(file, orig);
     const restored = (await sha(file)) === h0;
-    // 齒義：毒化後不變式檢查必 RED（rc≠0）；若 GREEN＝守衛未咬（齒腐）；timeout/kill（status null）亦非可接受 RED
-    check(sp.status !== null && sp.status !== 0 && restored, `7${id} 毒化 RED（${file.split('/').pop()} 守衛摘除→不變式檢查翻紅；還原核對=${restored}）`);
+    const outP = `${sp.stdout ?? ''}\n${sp.stderr ?? ''}`;
+    check(
+      sp.status === redCode && outP.includes(redMarker) && restored,
+      `7${id}b 毒化專用 RED（守衛摘除→rc=${sp.status} 期望 ${redCode}＋${redMarker}；還原核對=${restored}${sp.status !== redCode ? '；' + outP.slice(0, 200) : ''}）`,
+    );
   }
 
   // P1：n3 比對摘除→毒化 sums 翻「放行」
@@ -337,14 +408,18 @@ const pages = fs.mkdtempSync(path.join(os.tmpdir(), 'tooth1-pages-'));
 fs.writeFileSync(path.join(pages, 'sreq.html'), '<html>t1</html>');
 fs.writeFileSync(path.join(pages, 'secret.html'), '<html>s1</html>');
 const stub = await new SreqStub(pages).listen();
-const sums = path.join(os.tmpdir(), 'tooth1-sums');
-fs.writeFileSync(sums, '0'.repeat(64) + '  sreq.html\\n');
+const sums = path.join(os.tmpdir(), 'tooth1-sums-' + process.pid + '.txt');
+fs.writeFileSync(sums, '0'.repeat(64) + '  sreq.html');
 const r = await n3Gate(stub.base, sums);
-if (r.reason !== 'mismatch') { console.error('tooth1: 不變式破（reason=' + r.reason + '）'); process.exit(1); }
-await stub.close(); process.exit(0);
+if (r.reason !== 'mismatch') { console.error('TOOTH1-RED 不變式破（reason=' + r.reason + '）'); process.exit(11); }
+await stub.close();
+process.exit(0);
 `,
+    'TOOTH1-RED',
+    11,
   );
   // P2：refs 白名單守衛摘除→越界 file 翻「放行」
+  //（審查 r1 修：舊模板字串含裸 LF→兩臂皆 SyntaxError＝parse 崩潰承載假 RED；現零換行字串＋專用碼）
   await tooth(
     '2',
     SRC('refs.ts'),
@@ -356,18 +431,23 @@ import path from 'node:path';
 process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'tooth2-home-'));
 const { RefError, parseRef, resolveRefValue } = await import(${JSON.stringify(pathToFileURL(SRC('refs.ts')).href)});
 const out = path.join(process.env.HOME, 'outside.txt');
-fs.writeFileSync(out, 'secret\n');
+fs.writeFileSync(out, 'tooth2-secret-value');
 try {
   const v = resolveRefValue(parseRef('file:' + out));
-  console.error('tooth2: 不變式破（越界放行=' + v.trim() + '）');
-  process.exit(1);
+  console.error('TOOTH2-RED 不變式破（越界放行=' + v + '）');
+  process.exit(12);
 } catch (e) {
-  if (!(e instanceof RefError)) { console.error('tooth2: 非 RefError', e); process.exit(1); }
+  if (!(e instanceof RefError)) { console.error('TOOTH2-CRASH 非 RefError: ' + String(e && e.stack)); process.exit(6); }
 }
+console.log('TOOTH2-OK（越界拒）');
 process.exit(0);
 `,
+    'TOOTH2-RED',
+    12,
   );
   // P3：submit 非 TTY 拒摘除→rc3 翻 rc5（錯答面）
+  //（審查 r1 修：舊模板 import 路徑不存在（packages/src/…）→全臂 ERR_MODULE_NOT_FOUND；
+  // 且未 await async sha256Hex→sums 檔寫成 [object Promise]。現＝repo 根絕對路徑＋await）
   await tooth(
     '3',
     SRC('submit.ts'),
@@ -384,21 +464,24 @@ const { SreqStub } = createRequire(${JSON.stringify(path.join(PKG, 'scripts', 'l
 const pages = fs.mkdtempSync(path.join(os.tmpdir(), 'tooth3-pages-'));
 fs.writeFileSync(path.join(pages, 'sreq.html'), '<html>t3</html>');
 fs.writeFileSync(path.join(pages, 'secret.html'), '<html>s3</html>');
-const { sha256Hex } = await import(${JSON.stringify(pathToFileURL(path.join(PKG, '..', 'src', 'server', 'hash.ts')).href)});
+const { sha256Hex } = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'src', 'server', 'hash.ts')).href)});
 const stub = await new SreqStub(pages).listen();
 const sums = path.join(home, 'sums');
-fs.writeFileSync(sums, sha256Hex('<html>t3</html>') + '  sreq.html\\n');
+fs.writeFileSync(sums, await sha256Hex('<html>t3</html>') + '  sreq.html');
 const { runRequest } = await import(${JSON.stringify(pathToFileURL(SRC('request.ts')).href)});
 const { runSubmit } = await import(${JSON.stringify(pathToFileURL(SRC('submit.ts')).href)});
 const rr = await runRequest({ base: stub.base, sums, ttl: '7d', tier: 'free', annualTokenRef: null, out: null, json: false });
-const link = rr.lines.join('\\n').match(/(https?:\\/\\/127\\.0\\.0\\.1:\\d+\\/sreq\\/\\?s=[0-9a-f]{32}#p=[A-Za-z0-9_-]+)/);
-if (!link) { console.error('tooth3: fill link 缺席'); process.exit(1); }
+const linkLine = rr.lines.find((l) => typeof l === 'string' && l.startsWith('http'));
+if (!linkLine) { console.error('TOOTH3-CRASH fill link 缺席（rr.exit=' + rr.exit + '）'); process.exit(6); }
 const payload = path.join(home, '.tacet-secret', 'p.txt');
 fs.writeFileSync(payload, 'x');
-const out = await runSubmit({ base: stub.base, fillLink: link[1], sourceRef: 'file:' + payload, confirmInput: 'wrong', allowNonTty: false });
-if (out.exit !== 3) { console.error('tooth3: 不變式破（非 TTY rc=' + out.exit + '，期望 3）'); process.exit(1); }
-await stub.close(); process.exit(0);
+const out = await runSubmit({ base: stub.base, fillLink: linkLine, sourceRef: 'file:' + payload, confirmInput: 'wrong', allowNonTty: false });
+if (out.exit !== 3) { console.error('TOOTH3-RED 不變式破（非 TTY rc=' + out.exit + '，期望 3）'); process.exit(13); }
+await stub.close();
+process.exit(0);
 `,
+    'TOOTH3-RED',
+    13,
   );
 
   // ============ 帳面收口 ============

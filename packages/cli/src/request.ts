@@ -5,19 +5,23 @@
  *   1. （annual 時）annual-token 參照解析（白名單守衛；值只進程序記憶體）
  *   2. N3 三步：抓 /sreq→sha256→比對 SHA256SUMS；不符＝停、告知、不給連結（exit 1）
  *   3. A 金鑰對（core generateEnvelopeKeyPair；P-256）
- *   4. POST /api/sreq（開 slot；canonical 回應無 fragment）
- *   5. 連結組裝：填寫連結（公鑰 fragment，可交人）；取件連結（私鑰 fragment＋token）
- *   6. 取件連結寫入白名單路徑（600）——stdout 只有「已寫入 <path>」（值零明文）
+ *   4. pre-POST 驗收（fail-early 零 slot 灼燒）：explicit --out 越界／已存在拒＋
+ *      stateDir 700 自建（乾淨機首跑前提）
+ *   5. POST /api/sreq（開 slot；canonical 回應＝相對路徑 URL 欄）
+ *   6. 連結組裝（CLI 以 N3 實抓 origin 自組——server URL 欄只做一致性斷言）：
+ *      填寫連結（公鑰 fragment，可交人）；取件連結（私鑰 fragment＋token）
+ *   7. 取件連結寫入白名單路徑（600）——stdout 只有「已寫入 <path>」（值零明文）
  *
  * 輸出紀律（L127-129）：stdout 永不含 token 原值／私鑰 JWK／明文內容；
  * 元資料（slot_id／exp／slot_nonce）＝A 端本就有權知道的設計暴露面。
  */
 
+import path from 'node:path';
 import {
   generateEnvelopeKeyPair,
 } from '@tacet-ink/journal-core/secret/jr5e';
 import { n3Gate, type N3Result } from './n3.ts';
-import { RefError, parseRef, resolveRefValue } from './refs.ts';
+import { RefError, parseRef, resolveRefValue, stateDir } from './refs.ts';
 import { resolveOutPath, writeRetrieveBundle, type RetrieveBundle } from './state.ts';
 
 export const TTL_CHOICES = ['10m', '1h', '3d', '7d', '14d'] as const;
@@ -90,10 +94,19 @@ export async function runRequest(o: RequestOpts): Promise<RequestOutcome> {
     return { exit: 1, lines };
   }
   lines.push(`N3 ok：/sreq sha256 對 SHA256SUMS（${n3.liveSha!.slice(0, 12)}…）`);
-  // 3. A 金鑰對
+  // 4. pre-POST 驗收（fail-early：explicit --out 越界／已存在拒＝零 slot 灼燒；
+  //    預設路徑＝stateDir 700 自建——乾淨機首跑不再於 slot 已建後崩潰）
+  let preOutPath: string | null = null;
+  try {
+    preOutPath = resolveOutPath(o.out, null);
+  } catch (e) {
+    if (e instanceof RefError) return fail(lines, 4, e.message);
+    throw e;
+  }
+  // 5. A 金鑰對
   const pair = await generateEnvelopeKeyPair();
   const { privJwk, pubJwk } = pair;
-  // 4. 開 slot
+  // 6. 開 slot
   const base0 = o.base.replace(/\/+$/, '');
   const body: Record<string, unknown> = { a_pub_jwk: pubJwk, ttl_ms: resolveTtlMs(o.ttl, o.tier) };
   if (annualToken !== null) body.annual_token = annualToken;
@@ -121,14 +134,14 @@ export async function runRequest(o: RequestOpts): Promise<RequestOutcome> {
     lines.push(`開 slot 失敗（網路）：${e instanceof Error ? e.message : String(e)}`);
     return { exit: 1, lines };
   }
-  // 形檢 fail-closed：canonical 回應必備欄
+  // 形檢 fail-closed：canonical 回應必備欄（token 形＝真後端 43 字 b64url，與取件面同族）
   const need: Array<[string, (v: unknown) => boolean]> = [
     ['slot_id', (v) => typeof v === 'string' && /^[0-9a-f]{32}$/.test(v)],
-    ['token', (v) => typeof v === 'string' && v.length > 0],
+    ['token', (v) => typeof v === 'string' && v.length === 43 && /^[A-Za-z0-9_-]+$/.test(v)],
     ['slot_nonce', (v) => typeof v === 'string' && /^[0-9a-f]{32}$/.test(v)],
     ['exp', (v) => typeof v === 'number'],
-    ['fill_url', (v) => typeof v === 'string' && v.includes('?s=')],
-    ['retrieve_url', (v) => typeof v === 'string' && v.includes('?s=')],
+    ['fill_url', (v) => typeof v === 'string' && v.length > 0],
+    ['retrieve_url', (v) => typeof v === 'string' && v.length > 0],
   ];
   for (const [k, f] of need) {
     if (!f(slot?.[k])) {
@@ -136,10 +149,22 @@ export async function runRequest(o: RequestOpts): Promise<RequestOutcome> {
       return { exit: 1, lines };
     }
   }
-  // 5. 連結組裝（R1 問 3 凍結形：query 定位、fragment 帶金鑰）
-  const fillLink = `${slot.fill_url}#p=${b64urlJson(pubJwk)}`;
-  const retrieveLink = `${slot.retrieve_url}&t=${slot.token}#k=${b64urlJson(privJwk)}`;
-  // 6. 取件連結落檔（白名單＋600）；stdout 只有「已寫入」
+  // 7. 連結組裝——CLI 以 N3 實抓 origin 自組，不用 server URL 欄組裝：
+  //    canonical 形＝相對路徑 /sreq/?s=<id>（fill）與 /sreq/?s=<id>&t=<token>（retrieve，
+  //    已帶 t）——server 欄位只做一致性斷言，不符即停；禁用 new URL(fill_url, base)
+  //    天真解法（絕對值／//host 值會覆蓋 N3 origin＝外洩通道）
+  const origin = new URL(n3.url).origin; // N3 實抓 URL＝信任 origin
+  const fillPath = `/sreq/?s=${slot.slot_id}`;
+  const retrievePath = `/sreq/?s=${slot.slot_id}&t=${slot.token}`;
+  if (slot.fill_url !== fillPath || slot.retrieve_url !== retrievePath) {
+    lines.push(
+      `server 回應 URL 欄與 canonical 形不符（期望相對 "${fillPath}"／"${retrievePath}"）——誠實停手（不組連結）。`,
+    );
+    return { exit: 1, lines };
+  }
+  const fillLink = `${origin}${fillPath}#p=${b64urlJson(pubJwk)}`;
+  const retrieveLink = `${origin}${retrievePath}#k=${b64urlJson(privJwk)}`;
+  // 8. 取件連結落檔（白名單＋600）；stdout 只有「已寫入」
   const bundle: RetrieveBundle = {
     v: 1,
     slot_id: slot.slot_id,
@@ -152,7 +177,8 @@ export async function runRequest(o: RequestOpts): Promise<RequestOutcome> {
   };
   let outPath: string;
   try {
-    outPath = writeRetrieveBundle(resolveOutPath(o.out, slot.slot_id), bundle);
+    const target = preOutPath ?? path.join(stateDir(), `${slot.slot_id}.retrieve.json`);
+    outPath = writeRetrieveBundle(target, bundle);
   } catch (e) {
     if (e instanceof RefError) return fail(lines, 4, e.message);
     throw e;

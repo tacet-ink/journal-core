@@ -40,6 +40,13 @@ node packages/cli/dist/cli.js --help
 
 Node ≥ 24.7（`node:crypto` WebCrypto＋`fetch`）。
 
+### 首跑（全新環境）
+
+不需預建 `~/.tacet-secret`：`request` 首跑自建該狀態目錄（700）與取件包檔（600）——
+umask 077 下亦然（mkdir 後補 chmod 齊權限）。`~` 在 `file:` 參照裡**不會**被
+CLI 展開——請寫全徑（`$HOME/…` 由 shell 先展開）；文件裡的 `~/.tacet-secret`
+都是指狀態目錄的位置，不是參照字面。
+
 ## 使用
 
 ```sh
@@ -53,7 +60,7 @@ tacet-secret request --annual --annual-token env:TACET_SECRET_ANNUAL_TOKEN --ttl
 tacet-secret verify
 
 # 投遞（預設關）：人在終端機跑，CLI 會要求輸入 slot 編號確認
-tacet-secret submit '<填寫連結>' file:~/.tacet-secret/payload.txt
+tacet-secret submit '<填寫連結>' file:$HOME/.tacet-secret/payload.txt
 
 # 可選自檢（core 0.11.0 向量：jr5e/jr5s KAT＋負向量，走真模組）
 tacet-secret --self-test

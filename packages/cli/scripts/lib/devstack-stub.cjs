@@ -26,6 +26,10 @@ function hex(n) {
   return crypto.randomBytes(n).toString('hex');
 }
 
+function b64url(buf) {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 }
@@ -127,7 +131,7 @@ class SreqStub {
       }
       const ttlMs = typeof ttl === 'number' ? ttl : 604800000; // 缺席＝預設 7d
       const id = hex(16);
-      const token = hex(32);
+      const token = b64url(crypto.randomBytes(32)); // 43 字 b64url（真後端 generateSreqToken 同形）
       const nonce = hex(16);
       this.slots.set(id, {
         id,
@@ -149,8 +153,9 @@ class SreqStub {
         token,
         slot_nonce: nonce,
         exp: Date.now() + ttlMs,
-        fill_url: `${this.base}/sreq/?s=${id}`,
-        retrieve_url: `${this.base}/sreq/?s=${id}`,
+        // canonical 形（與真後端 backend/src/routes/sreq.ts 同形）：相對路徑、retrieve 已帶 &t
+        fill_url: `/sreq/?s=${id}`,
+        retrieve_url: `/sreq/?s=${id}&t=${token}`,
       });
     }
 

@@ -12,7 +12,9 @@
  * 覆蓋（card §5）：request 全形＋N3 毒化（改一字→停手不給連結、零 API）＋verify
  * 四方帳（MATCH／MISMATCH／fail-closed／--json）＋白名單毒化（file 越界/env 非名單）
  * ＋annual 參照＋submit 人確認（非 TTY 拒零 API；TTY 正確＝送出＋conf_code＋burn
- * 取件＋全鏈解密；錯答中止；write-once；token 單用）＋--out 碰撞＋用法錯面。
+ * 取件＋全鏈解密；錯答中止；write-once；token 單用）＋--out 碰撞＋用法錯面
+ * ＋fresh HOME 首跑（clean-HOME walkthrough：無 .tacet-secret→CLI 自建 700＋bundle 600＋POST 恰一）
+ * ＋request --help 網路前攔截（rc0 零網路）。
  */
 
 'use strict';
@@ -101,7 +103,9 @@ async function innerMain() {
   const { runSubmit, confirmGateState } = await import(pathToFileURL(path.join(PKG, 'dist', 'submit.js')));
 
   // 內容來源（白名單內）＋annual 權杖
-  const secretContent = 'e2e 祕密內容\n第 2 行（UTF-8 多行＋換行原樣）\n';
+  // canary（claude Q2②）：隨機值，任何 fixture 天然不該含它——掃 submit 全路徑 stdout+stderr+burn 回應
+  const canary = 'CANARY-' + crypto.randomBytes(8).toString('hex');
+  const secretContent = `e2e 祕密內容 ${canary}\n第 2 行（UTF-8 多行＋換行原樣）\n`;
   const secretFile = path.join(TMP.home, '.tacet-secret', 'payload.txt');
   fs.writeFileSync(secretFile, secretContent, { mode: 0o600 });
   const annualToken = 'annual-e2e-token-XYZ';
@@ -197,6 +201,19 @@ async function innerMain() {
       check(!out.includes(secretContent), 'R1 內容零明文');
       check(/只交給你確認的人/.test(out), 'R1 W1 提醒行在場');
       check(!!r.jsonOut && r.jsonOut.fill_url === r1fill, 'R1 --json fill_url＝stdout 連結');
+      // 真形釘住（MAJOR-3）：連結＝N3 實抓 origin＋正規路徑；server 欄位只做一致性斷言
+      const rl = bundle.retrieve_link;
+      const rlT = (rl.match(/&t=/g) || []).length;
+      check(rlT === 1 && /#k=/.test(rl), 'R1 retrieve_link 真形（&t= 恰一＋#k=；零雙 token）');
+      const rlUrl = new URL(rl);
+      check(
+        rlUrl.origin === new URL(base).origin && rlUrl.pathname.replace(/\/$/, '') === '/sreq' && rlUrl.searchParams.get('s') === slots[0],
+        'R1 retrieve_link origin＝N3 實抓 origin＋/sreq/?s=<slot>',
+      );
+      check(
+        r1fill && new URL(r1fill).origin === new URL(base).origin && new URL(r1fill).pathname.replace(/\/$/, '') === '/sreq',
+        'R1 填寫連結 origin＋路徑真形',
+      );
     }
 
     // ---- R2 request N3 毒化（sums 一字改→停手不給連結、零 API）----
@@ -264,6 +281,35 @@ async function innerMain() {
       check(r2.exit === 4 && /已存在/.test(r2.lines.join('\n')), 'W3 二寫 rc4（不覆蓋）', `exit=${r2.exit}`);
     }
 
+    // ---- R4 fresh HOME 首跑（clean-HOME walkthrough；in-process——沙箱吞子程序環回）----
+    {
+      const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), 'tacet-cli-e2e-freshhome-'));
+      const prevHome = process.env.HOME;
+      const prevUmask = process.umask();
+      stub.reqLog.length = 0;
+      let rr = null;
+      let freshErr = null;
+      try {
+        process.env.HOME = freshHome;
+        process.umask(0o077);
+        rr = await runRequest({ base, sums: sumsFile, ttl: '7d', tier: 'free', annualTokenRef: null, out: null, json: false });
+      } catch (e) {
+        freshErr = e;
+      } finally {
+        process.env.HOME = prevHome;
+        process.umask(prevUmask);
+      }
+      const dir = path.join(freshHome, '.tacet-secret');
+      const dirMode = fs.existsSync(dir) ? (fs.statSync(dir).mode & 0o777) : null;
+      const names = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+      const bname = names.find((f) => f.endsWith('.retrieve.json'));
+      const fileMode = bname ? (fs.statSync(path.join(dir, bname)).mode & 0o777) : null;
+      check(freshErr === null && rr !== null && rr.exit === 0, 'R4 fresh HOME 首跑 rc0（不崩潰、不 orphan slot）', `err=${freshErr ? String(freshErr).slice(0, 160) : `exit=${rr && rr.exit}`}`);
+      check(dirMode === 0o700, 'R4 stateDir 自建 700（umask 077 下）', `mode=${dirMode === null ? 'absent' : dirMode.toString(8)}`);
+      check(fileMode === 0o600, 'R4 取件包 600', `mode=${fileMode === null ? 'absent' : fileMode.toString(8)}`);
+      check(stub.countPaths((p) => p === '/api/sreq') === 1, 'R4 恰一 POST /api/sreq（無重試、無 orphan）');
+    }
+
     // ---- S1 submit 非 TTY＝拒（子程序；零網路）----
     phase('S1 submit non-TTY');
     {
@@ -272,6 +318,7 @@ async function innerMain() {
       const r = child(['submit', fillLink, `file:${secretFile}`], { input: '' });
       check(r.status === 3, 'S1 submit 非 TTY rc3', `rc=${r.status}`);
       check(/未送出/.test(r.stderr), 'S1「未送出」告知');
+      check(!r.stdout.includes(canary) && !r.stderr.includes(canary), 'S1 canary 零洩漏（rc3 面 stdout+stderr）');
     }
 
     // ---- S1b 確認閘判定（in-process 雙態）----
@@ -304,12 +351,14 @@ async function innerMain() {
       const r = await runSubmit({ base, fillLink, sourceRef: `file:${secretFile}`, confirmInput: null, allowNonTty: false });
       const out = r.lines.join('\n');
       check(r.exit === 0, 'S2 submit TTY rc0（互動確認過）', `exit=${r.exit} out=${out.slice(0, 300)}`);
+      check(!out.includes(canary), 'S2 canary 零洩漏（成功面 stdout）');
       const confMatch = out.match(/conf_code=([0-9a-f]{4})/);
       check(!!confMatch, 'S2 conf_code 在場（「已寫入」面）');
       check(stub.countPaths((p) => p === '/api/sreq/fill') === 1, 'S2 fill 恰一呼叫（零重試）');
       // burn 取件（in-process 同程序 fetch）
       const burnRes = await (await fetch(`${base}/api/sreq/${sid}?t=${encodeURIComponent(token)}`)).json();
       check(burnRes.ciphertext && String(burnRes.ciphertext).startsWith('jr5e.'), 'S2 burn 取件 ciphertext 在場（jr5e. 形）');
+      check(!JSON.stringify(burnRes).includes(canary), 'S2 canary 零洩漏（burn 回應密文面）');
       check(confMatch && burnRes.conf_code === confMatch[1], 'S2 burn conf_code＝submit conf_code');
       // 全鏈解密（core 真模組＋取件包私鑰）
       const { openEnvelope } = await import(pathToFileURL(path.join(PKG, '..', '..', 'dist', 'secret', 'jr5e.js')));
@@ -335,6 +384,7 @@ async function innerMain() {
       const r = await runSubmit({ base, fillLink, sourceRef: `file:${secretFile}`, confirmInput: null, allowNonTty: false });
       check(r.exit === 5, 'S3 錯答 rc5（中止）', `exit=${r.exit}`);
       check(/已中止（未送出）/.test(r.lines.join('\n')), 'S3「已中止（未送出）」告知');
+      check(!r.lines.join('\n').includes(canary) && !(r.stderr ?? []).join('\n').includes(canary), 'S3 canary 零洩漏（rc5 面 stdout+stderr）');
       check(stub.countPaths((p) => p === '/api/sreq/fill') === 0, 'S3 中止零 fill 呼叫');
     }
 
@@ -352,6 +402,8 @@ async function innerMain() {
       check(r5.status === 2, 'U1 未知子命令 rc2', `rc=${r5.status}`);
       const r6 = child(['submit', 'not-a-url', 'env:whatever']);
       check(r6.status === 2, 'U1 submit 壞連結 rc2（零網路前拒）', `rc=${r6.status}`);
+      const r7 = child(['request', '--base', base, '--sums', sumsFile, '--help']);
+      check(r7.status === 0 && /用法:/.test(r7.stdout), 'U1 request --help rc0＋usage（網路前攔截、零網路）', `rc=${r7.status} out=${r7.stdout.slice(0, 80)}`);
     }
   } finally {
     await stub.close();
