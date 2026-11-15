@@ -5,6 +5,44 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.11.0] — 2026-11-15
+
+**Feature** — secret 家族收進 core（R3a agent 工具套件鋪底；t_c4ecb987）：
+**`jr5s.` 一次性密語密文**（/secret 方案 B 現行契約第二實作；/secret 頁零動——一致性靠向量對拍）：
+key＝S raw 32B 外部（非 KDF）、GCM 明文＝`0x73 ‖ UTF8(明文)`（解碼首字面錯＝fail-closed null）、
+AAD＝`'jr5s:' ‖ id`（id＝sha256Hex(b64url(S)) 前 32 hex＝公開 locator）、**b64url 無 padding 正形**
+（/secret 單檔頁契約編碼例外——其餘家族恆標準 b64）；明文上限 ≤512 UTF-16 units（payload [30,1565]B ↔
+wire ≤2092 字元）。新原語 `jr5sEncrypt`／`jr5sDecrypt`（decrypt 對 prefix/形/長度/標記/GCM/AAD 錯位
+恆 null；encrypt 壞輸入 fail-loud）／`secretIdOfKey`。
+**`jr5e.` ECDH 單向封裝**（R1 design-final 問 2 凍結規格；request-secret 領取面）：
+`ikm＝P-256 共享點 x[32]`、`HKDF-SHA256(salt＝eph_pub raw 65B, info＝AAD)`→AES-256-GCM（無 tag-stamp）、
+blob＝`jr5e.`＋b64url(eph_pub[65] ‖ iv[12] ‖ ct ‖ tag[16])；**單向語意**＝B 端 ephemeral P-256 用畢即棄
+（不上線）、A 端私鑰只在領取連結 fragment（JWK d）；金鑰派生正形＝WebCrypto 兩步
+（`deriveKey(ECDH→HKDF non-extractable)`→`deriveKey(HKDF→AES-GCM, length 256)`），deriveBits 對位形
+同值（三腿對拍）。新原語 `sealEnvelope`／`openEnvelope`（open 對 prefix/形/AAD/GCM/eph_pub 損毀恆 null）／
+`newEphemeralJwk`／`jwkPubRaw`。子路徑 `./secret/jr5s`／`./secret/jr5e`（root 匯出面零動）。
+
+**Vectors** — `docs/vectors/families.json` 17→19 列（新布局 `content-stamp`＝28+n（n≥1，GCM 明文 0x73 標記）、
+`ecdh-envelope`＝93+n）；`kat.json` 新增 `jr5s_kat`（參照腿＝node:crypto 定值直算＋/secret 頁向量對拍）與
+`jr5e_kat`（三腿＝R1 設計凍結＋node:crypto 複算＋WebCrypto 兩步；含 ikm/aes_key 中間值凍結）——
+正例＋竄改負例（jr5s 7 組／jr5e 4 組）各一組以上（design 驗收清單 L163）。
+
+**Gates** — verify 新增段 [33]（13 斷言）：jr5s 封/解/locator 凍結對拍＋wire 解碼 ct/tag 字面對帳、
+jr5s 負向量 7 組 fail-closed、jr5e 封/解/eph_pub 凍結對拍＋blob 解碼字面對帳、jr5e 負向量 4 組、
+jr5e 同鍵跨腿（deriveBits 形 vs 兩步形）＋中間值對帳、b64url 正形/拒 padding 面；[26] 新增 2
+（`jr5s_kat`／`jr5e_kat` 逐欄同源對帳）＋既有對帳隨形（家族覆蓋 19 列/18 前綴、布局長度＋新布局）；
+[21] exports 鍵數 15→17。閘帳 723→738。
+KAT 單一真相＝`scripts/verify-core-crypto.ts` 頂層 `KAT_SR_S`／`KAT_SR_E` 字面（generate-vectors
+同源 pick 抽取——非第二份向量）。
+
+**Monorepo** — npm workspaces `packages/*` 鋪底：`packages/cli`／`packages/mcp` 占位空殼
+（package.json＋README 指針、`private: true`、零實作——實作歸 R3b/R3c 卡）；**發佈 tag 規約**
+（2026-10-24 裁定）寫進 README：多包 tag 形 `<名>-v<version>`、包名禁 `v` 開頭、root 包維持 `v*`。
+publish 動作歸部署窗/上架階段——本版只 local（dist-tags 帳未動）。
+
+**Docs** — `docs/format-spec.md`：布局表＋2（`content-stamp`／`ecdh-envelope`）、家族表＋2、
+§4.15／§4.16 逐條契約、§7.1 fields 名＋`eph_pub`、§7.2＋`jr5s_kat`／`jr5e_kat` 列、b64url 編碼例外註記。
+
 ## [0.10.0] — 2026-11-12
 
 **Feature** — `jr2r.` 單因子 PRF 形本機鎖定前綴（2026-11-11 用戶裁定選 (a)：PIN 恆可跳過；t_88a4990b）：

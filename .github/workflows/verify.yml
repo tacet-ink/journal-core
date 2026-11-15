@@ -64,7 +64,7 @@ jobs:
       - name: dts-fixture (.d.ts consumers, both moduleResolution)
         run: node scripts/dts-fixture.cjs
 
-      # 子路徑 runtime import 探針（0.5.3 J4）：repo package.json exports 每鍵（15）在臨時安裝樹
+      # 子路徑 runtime import 探針（0.5.3 J4）：repo package.json exports 每鍵（17；R3a +2＝./secret/jr5s＋./secret/jr5e）在臨時安裝樹
       # `node -e import()` 逐鍵子行程——0.5.0 漏 ./client/keyring exports 型回歸網（dts-fixture 只證
       # 型別面；本步證 runtime 解析面）。不需 typescript；閘 [21] 咬此步在場。
       - name: Subpath import probe (package.json exports, runtime ESM)

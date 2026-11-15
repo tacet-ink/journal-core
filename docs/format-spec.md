@@ -59,6 +59,8 @@ payload 三種布局：
 | `content` | `iv[12] ‖ ct[n] ‖ tag[16]` | `28 + n`（n＝明文 UTF-8 位元組數） |
 | `salt-external` | `iv[12] ‖ ct[64] ‖ tag[16]` | 恰 92 |
 | `salt-embedded` | `pinSalt[16] ‖ iv[12] ‖ ct[64] ‖ tag[16]` | 恰 108 |
+| `content-stamp` | `iv[12] ‖ ct[n] ‖ tag[16]`（GCM 明文＝`0x73 ‖ UTF8(明文)`——解碼首字面錯＝拒） | `28 + n`（n≥1；明文含 1B 標記） |
+| `ecdh-envelope` | `eph_pub[65] ‖ iv[12] ‖ ct[n] ‖ tag[16]` | `93 + n`（n＝明文 UTF-8 位元組數） |
 
 `salt-external`：鹽（若有）不在 payload 內，由呼叫端另存（如 `users.salt`／`shares.salt`）或由 config 承載。
 `salt-embedded`：16 位元組 pinSalt 內嵌 payload 頭（自描述），另可能有外置 `salt1`。
@@ -84,8 +86,14 @@ payload 三種布局：
 | `jr4d.` | PIN 第二因子合鑰（密語正規化 v3） | salt-embedded | 108 | Argon2id×2（pass 段 NFKC） → HKDF-SHA256 | `notekey2` |
 | `jr1p.` | 本機 PIN 鎖定 | salt-embedded | 108 | PBKDF2-SHA256 600000 | 呼叫端 config（Tacet＝`notekey-pinlock`） |
 | `jr2p.` | 本機 PIN 鎖定（Argon2id fast 檔） | salt-embedded | 108 | Argon2id m=262144 KiB t=1 p=1（參數凍結 KAT `pinlock2_kat`） | 呼叫端 config（同 `jr1p.`——AAD 零動） |
+| `jr5s.` | 一次性密語密文（/secret 方案 B） | content-stamp | 29+n | 無（key＝S raw 32B 外部；n≥1，29B tag-only 拒） | `jr5s:<id>`（id＝sha256Hex(b64url(S)) 前 32 hex） |
+| `jr5e.` | ECDH 單向封裝（request-secret） | ecdh-envelope | 93+n | ECDH P-256 shared ‖ HKDF-SHA256(salt＝eph_pub raw 65B, info＝AAD) | 呼叫端傳入（部署形 `jr5e:<slot_id>`） |
 
 驗證閘另以 `jr1g.` 當 guest 前綴對照組（驗證品牌參數化本身）；與 `jr1u.` 同一家族、同布局。
+
+**編碼例外（secret 家族）**：`jr5s.`／`jr5e.` 線上形＝`prefix + b64url(payload)`——RFC 4648 §5
+URL-safe 字母表（`-_`）、**無補位**（零 `=`；/secret 單檔頁契約正形，b64url 字面與標準 base64
+字面可互辨）；其餘家族恆 §0.1 標準 b64。
 
 ## 2. 正規化函式
 
@@ -325,6 +333,43 @@ wire    = 'jr2p.' + b64(pinSalt[16] ‖ iv[12] ‖ GCM(KEK, UTF8(hex(noteKey)), 
 - 與 `jr1p.` 的分工：`jr1p.` 刻意 PBKDF2（解鎖即時性）；`jr2p.` 是強度升檔面（離線爆破
   成本乘數），兩前綴並存期以讀舊寫新收斂。
 
+### 4.15 `jr5s.` 一次性密語密文（/secret 方案 B；R3a core 收編 t_c4ecb987）
+
+```
+S    = 呼叫端產生／持有的密語（≤512 UTF-16 units；UTF-8 ≤1536B）
+id   = sha256Hex(UTF8(b64url(S))) 前 32 hex（locator；公開可算）
+wire = 'jr5s.' + b64url(iv[12] ‖ GCM(raw(S 32B), 0x73 ‖ UTF8(明文), 'jr5s:' ‖ id))   // payload 29+n（n≥1）
+```
+
+- 金鑰＝S raw 32B 外部（非 KDF；S 即密鑰）；`0x73`＝`'s'` 標記首字（解碼首字面錯＝fail-closed null）。
+- 失敗契約：`jr5sDecrypt` 對 prefix 錯／b64url 形錯（含 `=` 任意位置、len%4==1、非字母表字元）／
+  payload <29B／標記首字錯／GCM 認證失敗／AAD locator 錯位——恆回 `null`；`jr5sEncrypt` 壞輸入
+  fail-loud（不靜默）。
+- 上限：明文 ≤512 UTF-16 units → UTF-8 ≤1536B → payload ∈ [30, 1565]B ↔ wire ≤2092 字元。
+- 一致性：/secret 頁（`public/secret.html`＋`backend/src/lib/secrets.ts`）為同契約單檔實作；
+  本卡零動該頁——一致性靠向量對拍（`jr5s_kat`）守門。
+- 入口：`jr5sEncrypt(plaintext, secretRaw, id, iv)`／`jr5sDecrypt(wire, secretRaw, id)`／
+  `secretIdOfKey(secretB64url)`（`src/secret/jr5s.ts`；子路徑 `@tacet-ink/journal-core/secret/jr5s`）。
+
+### 4.16 `jr5e.` ECDH 單向封裝（request-secret；R1 design-final 問 2）
+
+```
+ikm  = ECDH P-256(a_priv, eph_pub) 共享點 x 座標（32B）
+key  = HKDF-SHA256(ikm, salt = eph_pub raw 65B, info = AAD) → AES-256
+wire = 'jr5e.' + b64url(eph_pub[65] ‖ iv[12] ‖ GCM(key, UTF8(明文), AAD))            // payload 93+n
+```
+
+- 單向語意：封裝端 ephemeral P-256 金鑰對**用畢即棄**（不上線、不入帳）；解封端 A 之私鑰只在
+  領取連結 fragment（JWK `d`）——A 公鑰可公開。
+- 金鑰派生正形：WebCrypto 兩步（`deriveKey(ECDH→HKDF non-extractable)`→`deriveKey(HKDF→AES-GCM,
+  length 256)`）；`deriveBits` 對位形輸出必同值（KAT 三腿對拍）。
+- AAD 參數化：呼叫端傳入；部署形 `jr5e:<slot_id>`。
+- 失敗契約：`openEnvelope` 對 prefix 錯／b64url 形錯／AAD 錯位／GCM 認證失敗／eph_pub 損毀——
+  恆回 `null`；`sealEnvelope` 壞輸入 fail-loud。
+- JWK 規矩：P-256 EC JWK（x/y/d b64url 32B）；公鑰 import `usages: []`、私鑰必含 `deriveKey`。
+- 入口：`sealEnvelope(plaintext, aPubJwk, ephPrivJwk, iv, aad)`／`openEnvelope(wire, aPrivJwk, aad)`／
+  `newEphemeralJwk()`／`jwkPubRaw(jwk)`（`src/secret/jr5e.ts`；子路徑 `@tacet-ink/journal-core/secret/jr5e`）。
+
 ## 5. 登入憑證（非前綴形，供第三方對帳）
 
 | 名稱 | 定義 | 輸出 |
@@ -370,7 +415,7 @@ PH1 鹽是 per-product 固定域鹽（PH2 UNIQUE 約束）；v2／v3 鹽域值�
 | `inputs` | 產生時的輸入（密語、PIN、identity、config 欄、外置鹽 `salt_hex`／`salt1_hex`、`note_key_hex` 或 `plaintext`） |
 | `wire` | 完整線上字串（`prefix + b64(payload)`） |
 | `payload_len` | Base64 解碼後位元組數 |
-| `fields` | payload 欄位切分陣列，每項 `fields[].name`（`pinSalt`／`iv`／`ct`／`tag`）、`fields[].offset`、`fields[].len`、`fields[].hex`；`fields[].len` 總和＝`payload_len` |
+| `fields` | payload 欄位切分陣列，每項 `fields[].name`（`pinSalt`／`eph_pub`／`iv`／`ct`／`tag`）、`fields[].offset`、`fields[].len`、`fields[].hex`；`fields[].len` 總和＝`payload_len` |
 
 金鑰包裹家族的 `inputs.note_key_hex` 固定 `c3`×32（驗證閘 KAT 母型），以此 wire 依本規格解包須得回之；
 content 家族以 `inputs.plaintext`／`inputs.aad` 解密須得回原文。
@@ -384,6 +429,8 @@ content 家族以 `inputs.plaintext`／`inputs.aad` 解密須得回原文。
 | `pinlock2_kat` | jr2p. fast 檔參數凍結 KAT（rotation-design §7.1；J14 母型；僅 node 閘面跑）：`pinlock2_kat.algorithm`、`pinlock2_kat.version`、`pinlock2_kat.memory_kib`（262144＝256MiB）、`pinlock2_kat.iterations`（t=1）、`pinlock2_kat.parallelism`（p=1）、`pinlock2_kat.password`（確定性測試 PIN，非生產 PIN）、`pinlock2_kat.salt`（pinLockSaltPrefix ‖ 16B 0x00 hex）、`pinlock2_kat.expected_kek_hex`（KEK 32B）與 `pinlock2_kat.verify_ok`（產生時真原語重推導對凍結值的在場存證） |
 | `pinlockprf_kat` | jr2q. HKDF 合成凍結 KAT（rotation-design §7.3 定稿；R7a 併案；僅 node 閘面跑）：`pinlockprf_kat.algorithm`（HKDF-SHA256(ikm=prfOutput‖Argon2id)）、`pinlockprf_kat.memory_kib`（262144＝Argon2id 腿承襲 pinlock2 檔位 256MiB）、`pinlockprf_kat.iterations`（t=1）、`pinlockprf_kat.parallelism`（p=1）、`pinlockprf_kat.password`（確定性測試 PIN，非生產 PIN）、`pinlockprf_kat.prf_output_hex`（凍結 prfOutput 32B 裝置輸出向量，'11'×32）、`pinlockprf_kat.pin_salt_prefix`（Argon 腿 salt 前綴）、`pinlockprf_kat.pin_salt_hex`（16B 0x00——HKDF salt＝裸 hex 串）、`pinlockprf_kat.info_prefix`（`journal-pinlock-prf-v1:`）、`pinlockprf_kat.prefix`（`jr2q.`）、`pinlockprf_kat.expected_kek_hex`（KEK 32B）與 `pinlockprf_kat.verify_ok`（產生時真原語重推導對凍結值的在場存證） |
 | `pinlockprfsolo_kat` | jr2r. 單因子純 PRF 凍結 KAT（2026-11-11 用戶裁定 (a)：PIN 恆可跳過；t_88a4990b；僅 node 閘面跑）：`pinlockprfsolo_kat.algorithm`（HKDF-SHA256(ikm=prfOutput)——純 PRF 兩 32B 腿、Argon2id 腿移除）、`pinlockprfsolo_kat.prf_output_hex`（凍結 prfOutput 32B 裝置輸出向量，'11'×32）、`pinlockprfsolo_kat.pin_salt_hex`（16B 0x00——HKDF salt＝裸 hex 串，同合成面鹽形）、`pinlockprfsolo_kat.info_prefix`（`journal-pinlock-prf-v1:`）、`pinlockprfsolo_kat.prefix`（`jr2r.`）、`pinlockprfsolo_kat.expected_kek_hex`（KEK 32B）與 `pinlockprfsolo_kat.verify_ok`（產生時真原語重推導對凍結值的在場存證） |
+| `jr5s_kat` | jr5s. 凍結 KAT（R3a core 收編 t_c4ecb987；參照腿＝node:crypto 直算＋/secret 頁向量對拍；僅 node 閘面跑）：`jr5s_kat.algorithm`（AES-256-GCM；key＝S raw 32B 外部；plain＝0x73 ‖ UTF8(明文)；AAD 綁 locator）、`jr5s_kat.prefix`（`jr5s.`）、`jr5s_kat.aad_domain`（`jr5s:`）、`jr5s_kat.tag_byte_hex`（`73`）、`jr5s_kat.key_hex`（S 32B 合成定值）、`jr5s_kat.key_b64url`、`jr5s_kat.id`（locator 32 hex）、`jr5s_kat.aad`（`jr5s:<id>`）、`jr5s_kat.iv_hex`（12B）、`jr5s_kat.plaintext`（含多字元＋emoji 樣本）、`jr5s_kat.wire`（凍結線上形）、`jr5s_kat.wire_chars`、`jr5s_kat.blob_bytes`（b64url 解碼後位元組數）、`jr5s_kat.ct_hex`（ct 25B；對應 GCM 明文 `0x73 ‖ UTF8(明文)`）、`jr5s_kat.gcm_tag_hex` 與 `jr5s_kat.negatives`（竄改負向量 `n1_tag_flip`／`n2_ct_flip`／`n3_cross_id_aad`／`n4_wrong_key`／`n5_stamp_mismatch`／`n6_padding`／`n7_below_min`，皆須 open→null） |
+| `jr5e_kat` | jr5e. 凍結 KAT（R1 design-final 問 2 凍結；三腿＝設計凍結＋node:crypto 複算＋WebCrypto 兩步；僅 node 閘面跑）：`jr5e_kat.algorithm`（ECDH P-256 shared ‖ HKDF-SHA256(salt＝eph_pub raw 65B, info＝AAD) → AES-256-GCM；無 tag-stamp）、`jr5e_kat.prefix`（`jr5e.`）、`jr5e_kat.curve`（`P-256`）、`jr5e_kat.slot_id`、`jr5e_kat.aad`、`jr5e_kat.a_priv_jwk`／`jr5e_kat.a_pub_jwk`／`jr5e_kat.eph_priv_jwk`（合成 JWK，d 為領取面載體形）、`jr5e_kat.eph_pub_raw_hex`（04‖x‖y 65B）、`jr5e_kat.iv_hex`、`jr5e_kat.plaintext`、`jr5e_kat.ikm_hex`（凍結共享點 32B）、`jr5e_kat.aes_key_hex`（凍結 HKDF 輸出 32B）、`jr5e_kat.blob`（凍結線上形）、`jr5e_kat.blob_bytes`、`jr5e_kat.wire_chars`、`jr5e_kat.ct_hex`、`jr5e_kat.gcm_tag_hex` 與 `jr5e_kat.negatives`（`n1_tag_byte_flip`／`n2_cross_slot_aad`／`n3_sealed_to_other_pub`／`n4_corrupt_eph_pub`，皆須 open→null） |
 | `frozen_blobs` | 驗證閘凍結 blob（[14] `jr2w.`、[17] `jr3w.`／`jr3d.`／`jr4w.`／`jr4d.`、[20] `jr1r.`／`jr1w.` 復原舊契約）：`frozen_blobs[].prefix`、`frozen_blobs[].wire`、`frozen_blobs[].payload_len`、`frozen_blobs[].inputs`（解包輸入）、`frozen_blobs[].expected_note_key_hex`、`frozen_blobs[].source`（閘段號） |
 | `credentials` | §5 憑證派生樣本：`credentials[].kind`、`credentials[].input`、`credentials[].input_nfkc`（僅 `ph1_v3`：`input` 經 `normalizePassphrase` 後的值）、`credentials[].salt`、`credentials[].expected_hex` |
 

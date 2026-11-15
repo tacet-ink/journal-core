@@ -102,6 +102,78 @@ const KAT20 = {
   identity: pick(/KAT_BLOB_R20, '[0-9a-f]{64}', '([^']+)'/, 'KAT20 identity', s20),
 };
 
+
+// ── [33] secret 家族凍結 KAT 抽取（R3a t_c4ecb987；單一真相＝閘 KAT_SR_S/KAT_SR_E 字面） ──
+function pickNeg(src: string, key: string): string {
+  return pick(new RegExp(key + ": '([^']*)'"), 'KAT_SR.negatives.' + key, src);
+}
+function jwkOf(src: string, label: string): { kty: string; crv: string; x: string; y: string; d?: string } {
+  const i = src.indexOf(label + ': {');
+  if (i < 0) fail('閘源碼 JWK 缺席：' + label);
+  const seg = src.slice(i, src.indexOf('}', i));
+  // 前導空白錨（防 kty: 'EC' 內 'y: ' 子串假咬）
+  const x = pick(/ x: '([^']+)'/, label + '.x', seg);
+  const y = pick(/ y: '([^']+)'/, label + '.y', seg);
+  const dm = seg.match(/ d: '([^']+)'/);
+  return { kty: 'EC', crv: 'P-256', x, y, ...(dm ? { d: dm[1] } : {}) };
+}
+const srS = block('const KAT_SR_S = {');
+const KAT_SR_S = {
+  key_hex: pick(/key_hex: '([0-9a-f]{64})'/, 'KAT_SR_S.key_hex', srS),
+  key_b64url: pick(/key_b64url: '([^']+)'/, 'KAT_SR_S.key_b64url', srS),
+  id: pick(/id: '([0-9a-f]{32})'/, 'KAT_SR_S.id', srS),
+  aad: pick(/aad: '([^']+)'/, 'KAT_SR_S.aad', srS),
+  iv_hex: pick(/iv_hex: '([0-9a-f]{24})'/, 'KAT_SR_S.iv_hex', srS),
+  plaintext: pick(/plaintext: '([^']+)'/, 'KAT_SR_S.plaintext', srS),
+  wire: pick(/wire: '([^']+)'/, 'KAT_SR_S.wire', srS),
+  ct_hex: pick(/ct_hex: '([0-9a-f]+)'/, 'KAT_SR_S.ct_hex', srS),
+  gcm_tag_hex: pick(/gcm_tag_hex: '([0-9a-f]{32})'/, 'KAT_SR_S.gcm_tag_hex', srS),
+  negatives: {
+    n1_tag_flip: pickNeg(srS, 'n1_tag_flip'),
+    n2_ct_flip: pickNeg(srS, 'n2_ct_flip'),
+    n3_cross_id_aad: pickNeg(srS, 'n3_cross_id_aad'),
+    n4_wrong_key: pickNeg(srS, 'n4_wrong_key'),
+    n5_stamp_mismatch: pickNeg(srS, 'n5_stamp_mismatch'),
+    n6_padding: pickNeg(srS, 'n6_padding'),
+    n7_below_min: pickNeg(srS, 'n7_below_min'),
+  },
+};
+const srE = block('const KAT_SR_E = {');
+const KAT_SR_E = {
+  slot_id: pick(/slot_id: '([0-9a-f]{32})'/, 'KAT_SR_E.slot_id', srE),
+  aad: pick(/aad: '([^']+)'/, 'KAT_SR_E.aad', srE),
+  a_priv_jwk: jwkOf(srE, 'a_priv_jwk'),
+  a_pub_jwk: jwkOf(srE, 'a_pub_jwk'),
+  eph_priv_jwk: jwkOf(srE, 'eph_priv_jwk'),
+  eph_pub_raw_hex: pick(/eph_pub_raw_hex: '([0-9a-f]{130})'/, 'KAT_SR_E.eph_pub_raw_hex', srE),
+  iv_hex: pick(/iv_hex: '([0-9a-f]{24})'/, 'KAT_SR_E.iv_hex', srE),
+  plaintext: pick(/plaintext: '([^']+)'/, 'KAT_SR_E.plaintext', srE),
+  ikm_hex: pick(/ikm_hex: '([0-9a-f]{64})'/, 'KAT_SR_E.ikm_hex', srE),
+  aes_key_hex: pick(/aes_key_hex: '([0-9a-f]{64})'/, 'KAT_SR_E.aes_key_hex', srE),
+  ct_hex: pick(/ct_hex: '([0-9a-f]+)'/, 'KAT_SR_E.ct_hex', srE),
+  gcm_tag_hex: pick(/gcm_tag_hex: '([0-9a-f]{32})'/, 'KAT_SR_E.gcm_tag_hex', srE),
+  blob: pick(/blob: '([^']+)'/, 'KAT_SR_E.blob', srE),
+  negatives: {
+    n1_tag_byte_flip: pickNeg(srE, 'n1_tag_byte_flip'),
+    n2_cross_slot_aad: pickNeg(srE, 'n2_cross_slot_aad'),
+    n3_sealed_to_other_pub: pickNeg(srE, 'n3_sealed_to_other_pub'),
+    n4_corrupt_eph_pub: pickNeg(srE, 'n4_corrupt_eph_pub'),
+  },
+};
+const srModS = await import('../src/secret/jr5s.ts');
+const srModE = await import('../src/secret/jr5e.ts');
+const srUtil = await import('../src/secret/util.ts');
+// 真原語重推導＝凍結值（載體正確性；改原語／改參數＝本面 fail）
+{
+  const wireS = await srModS.jr5sEncrypt(KAT_SR_S.plaintext, hexToBytes(KAT_SR_S.key_hex), KAT_SR_S.id, hexToBytes(KAT_SR_S.iv_hex));
+  if (wireS !== KAT_SR_S.wire) fail('jr5s. 真原語重推導 ≠ 凍結 wire（載體不正確）');
+  if ((await srModS.jr5sDecrypt(KAT_SR_S.wire, hexToBytes(KAT_SR_S.key_hex), KAT_SR_S.id)) !== KAT_SR_S.plaintext) fail('jr5s. 凍結 wire 解不開');
+  if ((await srModS.secretIdOfKey(KAT_SR_S.key_b64url)) !== KAT_SR_S.id) fail('jr5s. locator 推導 ≠ 凍結 id');
+  const blobE = await srModE.sealEnvelope(KAT_SR_E.plaintext, KAT_SR_E.a_pub_jwk, KAT_SR_E.eph_priv_jwk, hexToBytes(KAT_SR_E.iv_hex), KAT_SR_E.aad);
+  if (blobE !== KAT_SR_E.blob) fail('jr5e. 真原語重推導 ≠ 凍結 blob（載體不正確）');
+  if ((await srModE.openEnvelope(KAT_SR_E.blob, KAT_SR_E.a_priv_jwk, KAT_SR_E.aad)) !== KAT_SR_E.plaintext) fail('jr5e. 凍結 blob 解不開');
+}
+
 // ── 部署形 config（Tacet 實例前綴；與閘 TACET/TACET2/3/4/5 同值——自檢 unwrap 承載對帳） ──
 const mapStore = new Map<string, string>();
 const store: KeyStore = {
@@ -143,7 +215,11 @@ function fieldsOf(layout: string, payload: Uint8Array): Field[] {
     ? [['pinSalt', 16], ['iv', 12], ['ct', 64], ['tag', 16]]
     : layout === 'salt-external'
       ? [['iv', 12], ['ct', 64], ['tag', 16]]
-      : [['iv', 12], ['ct', payload.length - 28], ['tag', 16]];
+      : layout === 'content-stamp'
+        ? [['iv', 12], ['ct', payload.length - 28], ['tag', 16]]
+        : layout === 'ecdh-envelope'
+          ? [['eph_pub', 65], ['iv', 12], ['ct', payload.length - 93], ['tag', 16]]
+          : [['iv', 12], ['ct', payload.length - 28], ['tag', 16]];
   const out: Field[] = [];
   let off = 0;
   for (const [name, len] of spans) {
@@ -161,8 +237,11 @@ async function family(
 ): Promise<void> {
   if (!wire.startsWith(prefix)) fail(`${prefix} 前綴不符：${wire.slice(0, 8)}`);
   if (!(await selfCheck())) fail(`${prefix}（${name}）自檢 unwrap/decrypt 失敗`);
-  const payload = unb64(wire.slice(prefix.length));
-  const expectLen = layout === 'salt-embedded' ? 108 : layout === 'salt-external' ? 92 : 28 + new TextEncoder().encode(String(inputs.plaintext)).length;
+  // R3a：secret 家族（content-stamp/ecdh-envelope）正形＝b64url 無 padding（/secret 線上契約）——src/secret/util.ts 真原語解碼；舊家族＝b64 帶 padding。
+  const payload = (layout === 'content-stamp' || layout === 'ecdh-envelope')
+    ? srUtil.b64urlDecode(wire.slice(prefix.length))
+    : unb64(wire.slice(prefix.length));
+  const expectLen = layout === 'salt-embedded' ? 108 : layout === 'salt-external' ? 92 : layout === 'content-stamp' ? 29 + new TextEncoder().encode(String(inputs.plaintext)).length : layout === 'ecdh-envelope' ? 93 + new TextEncoder().encode(String(inputs.plaintext)).length : 28 + new TextEncoder().encode(String(inputs.plaintext)).length;
   if (payload.length !== expectLen) fail(`${prefix} payload ${payload.length}B ≠ 規格 ${expectLen}B`);
   families.push({ prefix, family: name, layout, kdf, aad: aadStr, inputs, wire, payload_len: payload.length, fields: fieldsOf(layout, payload) });
 }
@@ -276,6 +355,20 @@ async function rawOfGuest(): Promise<string> {
     async () => keyIs((await unwrapNoteKeyPinLock2(PINLOCK, lock2, lockPin)).key));
 }
 
+// secret 家族（R3a core 收編；t_c4ecb987；b64url 無 padding 正形；/secret 頁零動——向量對拍守門）
+{
+  const keyS = hexToBytes(KAT_SR_S.key_hex);
+  const wireS = await srModS.jr5sEncrypt(KAT_SR_S.plaintext, keyS, KAT_SR_S.id, hexToBytes(KAT_SR_S.iv_hex));
+  await family('jr5s.', '一次性密語密文（/secret 方案 B）', 'content-stamp', 'none（key＝S raw 32B 外部；AES-256-GCM，plain＝0x73 ‖ UTF8(明文)）', KAT_SR_S.aad,
+    { plaintext: KAT_SR_S.plaintext, key_hex: KAT_SR_S.key_hex, key_b64url: KAT_SR_S.key_b64url, id: KAT_SR_S.id, aad: KAT_SR_S.aad, iv_hex: KAT_SR_S.iv_hex }, wireS,
+    async () => (await srModS.jr5sDecrypt(wireS, keyS, KAT_SR_S.id)) === KAT_SR_S.plaintext);
+  const ivE = hexToBytes(KAT_SR_E.iv_hex);
+  const blobE = await srModE.sealEnvelope(KAT_SR_E.plaintext, KAT_SR_E.a_pub_jwk, KAT_SR_E.eph_priv_jwk, ivE, KAT_SR_E.aad);
+  await family('jr5e.', 'ECDH 單向封裝（request-secret）', 'ecdh-envelope', 'ECDH P-256 shared ‖ HKDF-SHA256(salt＝eph_pub raw 65B, info＝AAD) → AES-256-GCM', KAT_SR_E.aad,
+    { plaintext: KAT_SR_E.plaintext, a_pub_jwk: KAT_SR_E.a_pub_jwk, eph_priv_jwk: KAT_SR_E.eph_priv_jwk, eph_pub_raw_hex: KAT_SR_E.eph_pub_raw_hex, slot_id: KAT_SR_E.slot_id, aad: KAT_SR_E.aad, iv_hex: KAT_SR_E.iv_hex }, blobE,
+    async () => (await srModE.openEnvelope(blobE, KAT_SR_E.a_priv_jwk, KAT_SR_E.aad)) === KAT_SR_E.plaintext);
+}
+
 // ── KAT ──────────────────────────────────────────────────────────────────────
 if (!(await verifyArgonKat())) fail('RFC 9106 KAT 不符（載體不正確）');
 if (!(await verifyArgonKatProd())) fail('正式參數 KAT 不符（prod 參數 m=64MiB t=3 p=1 載體不正確；kat.json argon_prod 凍結向量漂移）');
@@ -383,6 +476,26 @@ write('kat.json', {
     info_prefix: PINLOCKPRFSOLO_KAT.infoPrefix, prefix: PINLOCKPRFSOLO_KAT.prefix,
     expected_kek_hex: PINLOCKPRFSOLO_KAT_EXPECTED,
     verify_ok: await verifyPinLockPrfSoloKatProd(),
+  },
+  jr5s_kat: { // jr5s. 凍結 KAT（R3a；參照腿＝node:crypto 直算＋/secret 頁對拍；僅 node 閘面跑）
+    algorithm: 'AES-256-GCM（key＝S raw 32B 外部；plain＝0x73 ‖ UTF8(明文)；AAD 綁 locator）',
+    prefix: 'jr5s.', aad_domain: 'jr5s:', tag_byte_hex: '73',
+    key_hex: KAT_SR_S.key_hex, key_b64url: KAT_SR_S.key_b64url, id: KAT_SR_S.id, aad: KAT_SR_S.aad,
+    iv_hex: KAT_SR_S.iv_hex, plaintext: KAT_SR_S.plaintext,
+    wire: KAT_SR_S.wire, wire_chars: KAT_SR_S.wire.length,
+    blob_bytes: srUtil.b64urlDecode(KAT_SR_S.wire.slice(5)).length,
+    ct_hex: KAT_SR_S.ct_hex, gcm_tag_hex: KAT_SR_S.gcm_tag_hex,
+    negatives: KAT_SR_S.negatives,
+  },
+  jr5e_kat: { // jr5e. 凍結 KAT（R1 design-final 問 2；三腿＝設計凍結＋node:crypto 複算＋WebCrypto 兩步；僅 node 閘面跑）
+    algorithm: 'ECDH P-256 shared ‖ HKDF-SHA256(salt＝eph_pub raw 65B, info＝AAD) → AES-256-GCM（無 tag-stamp）',
+    prefix: 'jr5e.', curve: 'P-256', slot_id: KAT_SR_E.slot_id, aad: KAT_SR_E.aad,
+    a_priv_jwk: KAT_SR_E.a_priv_jwk, a_pub_jwk: KAT_SR_E.a_pub_jwk, eph_priv_jwk: KAT_SR_E.eph_priv_jwk,
+    eph_pub_raw_hex: KAT_SR_E.eph_pub_raw_hex, iv_hex: KAT_SR_E.iv_hex, plaintext: KAT_SR_E.plaintext,
+    ikm_hex: KAT_SR_E.ikm_hex, aes_key_hex: KAT_SR_E.aes_key_hex,
+    blob: KAT_SR_E.blob, blob_bytes: srUtil.b64urlDecode(KAT_SR_E.blob.slice(5)).length, wire_chars: KAT_SR_E.blob.length,
+    ct_hex: KAT_SR_E.ct_hex, gcm_tag_hex: KAT_SR_E.gcm_tag_hex,
+    negatives: KAT_SR_E.negatives,
   },
   frozen_blobs: frozen,
   credentials,

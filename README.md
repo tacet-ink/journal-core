@@ -69,7 +69,7 @@ run: `npm install @tacet-ink/journal-core && node example.mts`（0.3.4 起；Nod
 ```sh
 git clone https://github.com/tacet-ink/journal-core.git && cd journal-core
 npm ci --ignore-scripts
-npm run verify   # 723 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
+npm run verify   # 738 assertions, all green, run against the real modules (no mocks); needs this repo checkout — the published package is dist-only since 0.3.4 (no gate, no src/, no scripts/)
 ```
 
 上例為高階 Vault API；錯誤碼見[例外契約](#例外契約錯誤碼語意)（`VaultError` 表）。低階原語範例（note-crypto 兩時代加解密、前綴自配）與完整 API 見[使用（Usage）](#使用usage)節。Live product: [https://tacet.ink](https://tacet.ink)
@@ -113,13 +113,19 @@ npm run verify   # 723 assertions, all green, run against the real modules (no m
 | `src/server/ladder.ts` | 密語正規化 v3 世代 ladder 表原語（ph2_ladder：以舊 ph2 查列／遷移入表 upsert 值主權威）＋幽靈守衛查表接線已內建 loginRouteCore——fork 只需配 `ladderLookup` store＋0011 migration（未配置＝單查行為零變） |
 | `src/server/ratelimit.ts` | per-IP fixed-window 限流（單句 UPSERT…RETURNING；D1 計數，跨 isolate 有效；IPv6 鍵經 `normalizeRateIp` 聚合至 /64；IPv4-mapped 位址回點分 IPv4 鍵（＝原生同 /32 鍵）；0.4.1 第二層粗桶 `normalizeRateIpCoarse`（/48|/24）＋`checkRateLadder` 雙窗＋`bumpRate` opts.fallbackInMemory 記憶體退避＋`globalLoginBump` 全站計數——粗桶/全站計數表由呼叫端自建表＋GC 承載（tacet maintenance 母型），core 不代建） |
 | `src/server/cors.ts`／`hash.ts` | 共用 CORS／雜湊工具（`src/server/env.ts` 為內部 Env 介面，不入 exports） |
+| `src/secret/jr5s.ts`／`jr5e.ts` | secret 家族原語（R3a 0.11.0）：`jr5s.` 一次性密語密文（/secret 方案 B；key＝S raw 32B 外部＋0x73 標記＋AAD 綁 locator；b64url 無 padding 正形）＋`jr5e.` ECDH 單向封裝（P-256 ephemeral 用畢即棄＋HKDF(salt＝eph_pub, info＝AAD)→AES-256-GCM）——子路徑 `./secret/jr5s`／`./secret/jr5e`（`src/secret/util.ts` 為內部 b64url 工具，不入 exports） |
 
 發行形（0.3.0 起）：`dist/`＝tsc 原生 emit 的 ESM `.js`＋`.d.ts`，`exports` 全部子路徑指向 dist。
 0.3.4 起發行包 dist-only：`files` 白名單恰 `dist`／`docs`／`migrations`／README／LICENSE——`src/`、`scripts/`
 不再隨包（驗證閘與向量產生器為 repo 樹面，走源碼 clone 動線）；稽核／閱讀路徑＝GitHub 瀏覽 `src/`＋
 [docs/format-spec.md](./docs/format-spec.md) 規格＋[docs/vectors/](./docs/vectors/) 向量（`docs/` 仍隨包）。
 
-## 前綴契約（家族表：15 個資料前綴＋閘對照組 jr1g.）
+monorepo 鋪底（0.11.0 起）：npm workspaces `packages/*`——`packages/cli`／`packages/mcp` 為
+**占位空殼**（package.json＋README 指針、`private: true`、零實作——實作歸 R3b/R3c 卡；加密一律
+`import` 本包，自帶加密實作禁）。**發佈 tag 規約**（2026-10-24 裁定）：多包 tag 形
+`<名>-v<version>`（如 `journal-cli-v0.1.0`）；包名禁 `v` 開頭（防 tag 撞名）；root 包維持 `v*` 單包形。
+
+## 前綴契約（家族表：19 列／18 個資料前綴＋閘對照組 jr1g.）
 
 前綴是版本契約：payload 佈局與 KDF 由前綴界定，升級 = 新前綴。
 逐位元組布局、KDF 參數、AAD 與世代契約的完整規格見 [docs/format-spec.md](./docs/format-spec.md)，
@@ -143,6 +149,8 @@ Tacet 部署實例（config 傳入）：
 | `jrsw.` | 分享包裹 V1（PBKDF2 版；建立面退役，讀取面兩代並行保留） | PBKDF2-SHA256 600k | 同 jr1w. 形，AAD `notekey-share`（⚠️ 不可傳入帳戶主鑰 noteKey——分享包裹的金鑰範圍＝該次分享；傳主鑰＝收分享者可解全帳戶（J1；tacet 親例）） |
 | `jr3s.` | 單篇分享連結包裹（Argon2id 版；`createShareEnvelope` 高階組裝產出） | Argon2id（同上參數） | 同 jr1w. 形，AAD `notekey-share`（⚠️ 不可傳入帳戶主鑰 noteKey——分享包裹的金鑰範圍＝該次分享；傳主鑰＝收分享者可解全帳戶（J1；tacet 親例）） |
 | `jr1p.` | 本機 PIN 鎖定（開啟時鎖定） | PBKDF2-SHA256 600k（刻意不用 Argon2id：解鎖要即時） | 同 jr2w. 形，AAD `notekey-pinlock` |
+| `jr5s.` | 一次性密語密文（/secret 方案 B；R3a 0.11.0） | 無（key＝S raw 32B 外部） | b64url(iv[12] ‖ GCM(0x73 ‖ UTF8(明文)))，AAD `jr5s:<id>`（id＝sha256Hex(b64url(S)) 前 32 hex；編碼例外＝b64url 無 padding） |
+| `jr5e.` | ECDH 單向封裝（request-secret；R3a 0.11.0） | ECDH P-256 shared ‖ HKDF-SHA256(salt＝eph_pub raw 65B, info＝AAD) | b64url(eph_pub[65] ‖ iv[12] ‖ GCM(明文))，ephemeral 用畢即棄；AAD 呼叫端傳入（部署形 `jr5e:<slot_id>`） |
 
 guest 密文前綴在閘對照組另驗 `jr1g.`（閘自造前綴，驗證品牌參數化本身；tacet 部署實例 guest 用 `jr1u.`）。
 跨前綴呼叫一律回 null（前綴守衛＋AAD＋長度把關），不拋、不降級。
@@ -161,7 +169,7 @@ jr3d/jr4d 兩入參數同輸入，域分離由 info 承載；凍結 KAT 兩 blob
 
 ```sh
 npm ci --ignore-scripts
-npm run verify   # 723 帳對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
+npm run verify   # 738 帳對真模組（禁鏡像；限流單句 UPSERT…RETURNING 直載真 SQLite）：roundtrip/AAD 防搬移/
                  # extractable/時代隔離/跨前綴家族隔離/payload 竄改/RFC 9106 KAT/BIP39 @scure 對照 200 組/
                  # server-side（inboundCipher/validWrappedKey/pickKeyPackage/checkRate/timingSafeEq）+ pinlock 全函式
                  # + 密語正規化 v3 世代（normalizePassphrase／jr4w./jr4d.／PH1 v3 鹽域分離＋帶內版本化舊契約向量）
@@ -173,7 +181,7 @@ npm run verify   # 723 帳對真模組（禁鏡像；限流單句 UPSERT…RETUR
                  # ＋KAT 凍結向量 [17]（HKDF info 域世代分離＋v3/raw 入口契約四 blob）
                  # ＋包裹前綴快檢 [13-2]（錯前綴試探免付 KDF：五入口行為＋計時帽＋計數錨）
                  # ＋CI 供應鏈面 [21]（npm ci --ignore-scripts＋dependabot runner fromJSON 分流＋腳本摘除＋NIT-1 錨＋r2 MINOR-1 URL 直傳；
-                 #   723 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
+                 #   738 帳＝repo 樹——workflow 錨在 .github＝repo 樹恆在、四條全跑；包內 SKIP 對照帳段隨 0.3.4 dist-only 瘦身退役：發行包不再帶閘＝無包內帳可言）
                  # ＋發行 tarball 治理面 [22]（pack 白名單零 open-card-pr.sh）
                  # ＋格式規格＋測試向量 [26]（docs/format-spec.md＋docs/vectors 存在性／位元組 shape／欄位名對規格／凍結 KAT 逐字對閘）
                  # ＋高階 Vault API [27]（roundtrip 三形／新舊前綴解鎖／upgrade／換密語／復原／VaultError 毒化／載體覆寫＋Worker 回退鏈／vendor 孿生）
@@ -500,7 +508,7 @@ prefix family (`families.json`), known-answer vectors (RFC 9106 Argon2id, the ga
 `scripts/generate-vectors.ts` against the real primitives and committed as frozen evidence; the
 verify gate checks their presence and shape (section [26]) and does not regenerate them.
 
-**Verification.** `npm run verify` runs 723 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
+**Verification.** `npm run verify` runs 738 assertions against the real modules (no mocks; run it from a repo checkout — since 0.3.4 the published package is dist-only and carries no gate):
 roundtrips, AAD tamper-evidence, extractability rules, era isolation, cross-prefix family
 isolation, payload tampering, RFC 9106 KAT, a 200-vector BIP39 cross-check, and the
 login ladder-guard behavior suite (external audit #8), and presence/shape checks for the format
