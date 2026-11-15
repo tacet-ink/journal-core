@@ -207,6 +207,67 @@ const TACET: NoteCryptoConfig = {
   store,
 };
 
+
+// ── [33] secret 家族凍結 KAT（R3a, t_c4ecb987, core 0.11.0）──────────────────────────────
+// 單一真相＝本字面（閘源碼）；產生器 scripts/generate-vectors.ts pick 同源抽取 →
+// docs/vectors/kat.json jr5s_kat/jr5e_kat＋families.json 兩新入（[26] 同源對帳：
+// kat.json 欄＝本字面逐欄）。
+// jr5s 參照腿＝node:crypto 直算（定值、機器無關）；/secret 頁對拍帳＝真 secret.html
+//   函式抽取探針（Node WebCrypto 同路徑）逐位元組一致（R3a 一手實證 2026-11-15）。
+// jr5e＝R1 design-final 問 2 凍結 KAT（t_4482de1d；node v26.8.1 final-probe.mjs 全綠＋
+//   本卡獨立複算 MATCH＋WebCrypto 兩步形位元組一致——三腿）。
+const KAT_SR_S = {
+  prefix: 'jr5s.',
+  aad_domain: 'jr5s:',
+  tag_byte_hex: '73',
+  key_hex: '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
+  key_b64url: 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8',
+  id: 'ea866a757e4c38babfa8127cbe9a409d',
+  aad: 'jr5s:ea866a757e4c38babfa8127cbe9a409d',
+  iv_hex: '101112131415161718191a1b',
+  plaintext: 'S3cr3t-JR5S-KAT-值-🔑',
+  wire: 'jr5s.EBESExQVFhcYGRobDq2rdTv6Tp6AJz1OIjIoB_q1zrI2MsgldlVKjfR5Lk__tV0UpNT1AoQ',
+  wire_chars: 76,
+  blob_bytes: 53,
+  ct_hex: '0eadab753bfa4e9e80273d4e22322807fab5ceb23632c82576',
+  gcm_tag_hex: '554a8df4792e4fffb55d14a4d4f50284',
+  negatives: {
+    n1_tag_flip: 'jr5s.EBESExQVFhcYGRobDq2rdTv6Tp6AJz1OIjIoB_q1zrI2MsgldlVKjfR5Lk__tV0UpNT1AoU',
+    n2_ct_flip: 'jr5s.EBESExQVFhcYGRobD62rdTv6Tp6AJz1OIjIoB_q1zrI2MsgldlVKjfR5Lk__tV0UpNT1AoQ',
+    n3_cross_id_aad: 'jr5s.EBESExQVFhcYGRobDq2rdTv6Tp6AJz1OIjIoB_q1zrI2MsgldrxeMFr9kF5P8d3iM0P26nM',
+    n4_wrong_key: 'jr5s.EBESExQVFhcYGRobA6HOjUo7Ac4wwjdHPPNpDj6eg1kbLArZIrGXRW7b532RScEXDVkJu0E',
+    n5_stamp_mismatch: 'jr5s.EBESExQVFhcYGRobCa2rdTv6Tp6AJz1OIjIoB_q1zrI2MsgldpeeFcVUFxcTX9nDWcIYlU4',
+    n6_padding: 'jr5s.EBESExQVFhcYGRobDq2rdTv6Tp6AJz1OIjIoB_q1zrI2MsgldlVKjfR5Lk__tV0UpNT1AoQ=',
+    n7_below_min: 'jr5s.EBESExQVFhcYGRobDhgrawQdQJjAuU9ZHDbMDWc',
+  },
+};
+const KAT_SR_E = {
+  prefix: 'jr5e.',
+  aad_domain: 'jr5e:',
+  curve: 'P-256',
+  slot_id: 'c3c4c5c6c7c8c9c0d1d2d3d4d5d6d7d8',
+  aad: 'jr5e:c3c4c5c6c7c8c9c0d1d2d3d4d5d6d7d8',
+  a_priv_jwk: { kty: 'EC', crv: 'P-256', x: '9fxY8As0AUCnzA2eVPj6e96LbX2cV0-4vXbMnqR3jiQ', y: 'Sx3TdtDXnCPG2RwMCNdxjsM8IS_-MTYcTECqtWwbsqA', d: 'mCKbuxbdljnaHlio_60H8hrr5-v2h6SILny8ilY5okw' },
+  a_pub_jwk: { kty: 'EC', crv: 'P-256', x: '9fxY8As0AUCnzA2eVPj6e96LbX2cV0-4vXbMnqR3jiQ', y: 'Sx3TdtDXnCPG2RwMCNdxjsM8IS_-MTYcTECqtWwbsqA' },
+  eph_priv_jwk: { kty: 'EC', crv: 'P-256', x: 'aKQiVDQRsFc7-nWy0T-zs5tW2I0legY_XIBVOxUUbvc', y: 'XvZO-rWY26CViYgpPUNCgt4CdQiLqETgUgltv1xMO4I', d: 'lnnFmvwhT7K_PRCH475i5U9xu7Fn-3w8CcQ74RhjLCM' },
+  eph_pub_raw_hex: '0468a422543411b0573bfa75b2d13fb3b39b56d88d257a063f5c80553b15146ef75ef64efab598dba0958988293d434282de0275088ba844e052096dbf5c4c3b82',
+  iv_hex: '000102030405060708090a0b',
+  plaintext: 'S3cr3t-KAT-reference-value',
+  ikm_hex: 'e6af72c0f94942f4a40cacc6c881c300d1ab842d7b3f10466748dbf3e0ba0503',
+  aes_key_hex: 'aa6a413ecef5a84d2ee2f6cfbe80438a6568a55029807380518b705fcbf0db2f',
+  ct_hex: '85bf64a5a206270034eca8f11f58502fc937c568fb49be60c54b',
+  gcm_tag_hex: 'd82e29868cf4bd8360cae7b89caad260',
+  blob: 'jr5e.BGikIlQ0EbBXO_p1stE_s7ObVtiNJXoGP1yAVTsVFG73XvZO-rWY26CViYgpPUNCgt4CdQiLqETgUgltv1xMO4IAAQIDBAUGBwgJCguFv2SlogYnADTsqPEfWFAvyTfFaPtJvmDFS9guKYaM9L2DYMrnuJyq0mA',
+  blob_bytes: 119,
+  wire_chars: 164,
+  negatives: {
+    n1_tag_byte_flip: 'jr5e.BGikIlQ0EbBXO_p1stE_s7ObVtiNJXoGP1yAVTsVFG73XvZO-rWY26CViYgpPUNCgt4CdQiLqETgUgltv1xMO4IAAQIDBAUGBwgJCguFv2SlogYnADTsqPEfWFAvyTfFaPtJvmDFS9guKYaM9L2DYcrnuJyq0mA',
+    n2_cross_slot_aad: 'jr5e.BGikIlQ0EbBXO_p1stE_s7ObVtiNJXoGP1yAVTsVFG73XvZO-rWY26CViYgpPUNCgt4CdQiLqETgUgltv1xMO4IAAQIDBAUGBwgJCgv2QM4Njrj6zDWfRcUmGCfX2Jtyzx-Yd9v-prMGyUp6bqcS_e1Ufx8K9vA',
+    n3_sealed_to_other_pub: 'jr5e.BGikIlQ0EbBXO_p1stE_s7ObVtiNJXoGP1yAVTsVFG73XvZO-rWY26CViYgpPUNCgt4CdQiLqETgUgltv1xMO4IAAQIDBAUGBwgJCgsIl8kBlyBsxdsSFCycdvxXVnR2T4OMpxXXlbzA-l2AuqLioRQAIQXfTRs',
+    n4_corrupt_eph_pub: 'jr5e.BGikIlQ0EbBXO_t1stE_s7ObVtiNJXoGP1yAVTsVFG73XvZO-rWY26CViYgpPUNCgt4CdQiLqETgUgltv1xMO4IAAQIDBAUGBwgJCguFv2SlogYnADTsqPEfWFAvyTfFaPtJvmDFS9guKYaM9L2DYMrnuJyq0mA',
+  },
+};
+
 let passed = 0;
 const failures: string[] = [];
 async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): Promise<void> {
@@ -249,6 +310,12 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // （composite rewrap 不目標）／composite unwrap（新 PIN・空 PIN）null 不拋（不重封）／模式 byte
 // 不變＋零 rewrap side-effect（solo unwrap 同 prfOutput 解回同鑰）；純測試面零 API 動——registry
 // 0.10.0 恆任／tag 不動／不 publish）
+// 0.11.0 book 723→738（t_c4ecb987 R3a secret 家族 core 收編：[33] 新段 13 案＝jr5s/jr5e 凍結 KAT
+// 位元組一致＋竄改負向量（GCM 認證/AAD 綁結/0x73 標記/形檢/off-curve）＋上限導出鏈＋JWK 形面＋
+// 隨機 iv roundtrip＋AAD 參數化；[26] 11→13＝jr5s_kat/jr5e_kat 對帳（kat.json＝閘 KAT_SR 字面
+// 同源＋shape）；[21] exports 鍵數 15→17＝./secret/jr5s＋./secret/jr5e 子路徑（斷言在位值變、非新增案）；
+// families.json +2（jr5s./jr5e. wire 家族向量）；/secret 頁零動（L133）、CLI/MCP 只 import core（L132）、
+// 不 publish（上架歸部署窗））
 // 超額也 RED（J14b）＝帳面漂移任一面（過/欠）都紅，帳冊語意從「防欠」完整成「防漂移」。
 // 帳面語意契約（逐段「案 X/帳」對 secRan 執行值顯形）：全跑態執行 ≠ 帳＝帳面漂移 RED（過/欠雙面）。
 // 條件態未行使＝exemptUnder 逐段豁免面（非 skip 態、非帳面虛報；r2 MINOR-1 收窄——非整輪限定）：
@@ -263,9 +330,9 @@ async function A(name: string, cond: boolean | Promise<boolean>, detail = ''): P
 // for (const [k] of secRan) if (!secCases[k] && k !== 22) FAIL（負向斷言本體在 [25] 段
 //——secCases 全摘即 RED）；反向缺席段＝帳面誠實「案 0/N · skip」。
 // secCases 載體三群：[24]/[25] self-account＋--only 段存在面＋teeth（段帳由 secRan 執行自記）。
-const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 21, 23: 23, 24: 5, 25: 5, 26: 11, 27: 23, 28: 11, 29: 8, 30: 21, 31: 14, 32: 106 };
+const secCases: Record<number, number> = { 1: 3, 2: 9, 3: 9, 4: 4, 5: 3, 6: 20, 7: 28, 8: 8, 9: 22, 10: 5, 11: 41, 12: 69, 13: 39, 14: 18, 15: 59, 16: 21, 17: 14, 18: 39, 19: 17, 20: 47, 21: 21, 23: 23, 24: 5, 25: 5, 26: 13, 27: 23, 28: 11, 29: 8, 30: 21, 31: 14, 32: 106, 33: 13 };
 // secOrder 上移＝[25] book 鍵雙向等值 teeth（第 5 案）在 [25] 段自承載——尾段帳面循環零動。
-const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+const secOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
 function parseOnly(spec: string): { err: string | null; set: number[] } {
   const set = new Set<number>();
   const specStr = spec.trim();
@@ -2884,18 +2951,18 @@ secOpen(21, '[21] CI 供應鏈面（npm ci --ignore-scripts＋dependabot runner 
     }
     // J4-CHG-5：子路徑 runtime import 探針步（scripts/ci-subpath-probe.cjs——0.5.0 漏 ./client/keyring exports
     //   subpath 型回歸網：dts-fixture 只證 types 條件，探針證 default 條件 runtime 解析）。檔在場＋不入 tarball
-    //  （package.json files 白名單零 scripts——dist-only 母型保線）＋exports 鍵數 15（帳齒：exports 增減即咬）。
+    //  （package.json files 白名單零 scripts——dist-only 母型保線）＋exports 鍵數 17（帳齒：exports 增減即咬；R3a +2＝./secret/jr5s＋./secret/jr5e）。
     {
       const reProbe21 = /- name: Subpath import probe \(package\.json exports, runtime ESM\)\n\s+run: node scripts\/ci-subpath-probe\.cjs/;
       const needleProbe21 = 'ci-subpath-probe';
       const cntProbe21 = srcVy21.split(needleProbe21).length - 1;
       const probeFile21 = !!fs21?.existsSync && fs21.existsSync(new URL('../scripts/ci-subpath-probe.cjs', import.meta.url));
       const pkg21 = JSON.parse(await srcOf('../package.json')) as { files?: string[]; exports?: Record<string, unknown> };
-      await A('[21] J4 子路徑探針步落真：workflow 步在場（dts-fixture 之後、verify 之前）＋scripts/ci-subpath-probe.cjs 檔在場＋scripts 不入 files 白名單（dist-only 母型）＋exports 鍵數 15',
+      await A('[21] J4 子路徑探針步落真：workflow 步在場（dts-fixture 之後、verify 之前）＋scripts/ci-subpath-probe.cjs 檔在場＋scripts 不入 files 白名單（dist-only 母型）＋exports 鍵數 17',
         reProbe21.test(srcVy21)
         && srcVy21.indexOf('node scripts/dts-fixture.cjs') < srcVy21.indexOf('node scripts/ci-subpath-probe.cjs')
         && srcVy21.indexOf('node scripts/ci-subpath-probe.cjs') < srcVy21.indexOf('run: npm run verify')
-        && probeFile21 && Array.isArray(pkg21.files) && !pkg21.files.includes('scripts') && Object.keys(pkg21.exports ?? {}).length === 15);
+        && probeFile21 && Array.isArray(pkg21.files) && !pkg21.files.includes('scripts') && Object.keys(pkg21.exports ?? {}).length === 17);
       await A('[21] J4 探針毒化錨恰 1（split 計數——probe 檔名字面 workflow 內單點承載）', cntProbe21 === 1, 'cnt=' + cntProbe21);
       await A('[21] J4 毒化（探針步檔名字面摘除）→ 探針契約 regex 翻 false（designated；正碼 true）',
         cntProbe21 === 1 && reProbe21.test(srcVy21) && !reProbe21.test(srcVy21.split(needleProbe21).join('REMOVED')));
@@ -3261,6 +3328,7 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
   const fam26 = await readJson26('../docs/vectors/families.json');
   const kat26 = await readJson26('../docs/vectors/kat.json');
   const bip26 = await readJson26('../docs/vectors/bip39.json');
+  const secretUtil26 = await import('../src/secret/util.ts'); // R3a: secret 家族 b64url 無 padding 正形解碼（真原語；[33] 同源）
   type Vec26 = { prefix: string; family: string; layout: string; kdf: string; aad: string; inputs: Record<string, unknown>; wire: string; payload_len: number; fields: { name: string; offset: number; len: number; hex: string }[] };
   const vecs26 = (Array.isArray(fam26?.vectors) ? fam26!.vectors : []) as Vec26[];
   const HEAD26 = ['format', 'package_version', 'spec', 'generator', 'note'];
@@ -3269,27 +3337,33 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
     && [fam26, kat26, bip26].every((j) => HEAD26.every((k) => typeof j![k] === 'string') && j!.format === 'journal-core-vectors/1'
       && j!.spec === 'docs/format-spec.md' && j!.generator === 'scripts/generate-vectors.ts'));
   // 規格表前綴集（§1 家族逐條表：| `prefix` | 家族 | 布局 | payload | KDF | AAD |）
-  const specRows26 = spec26.split('\n').filter((l) => /^\| `jr[0-9a-z]{2}\.`(（[^|]*）)? \|/.test(l) && /\| (content|salt-external|salt-embedded) \|/.test(l));
+  const specRows26 = spec26.split('\n').filter((l) => /^\| `jr[0-9a-z]{2}\.`(（[^|]*）)? \|/.test(l) && /\| (content|content-stamp|salt-external|salt-embedded|ecdh-envelope) \|/.test(l));
   const specPrefixes26 = new Set(specRows26.map((l) => l.match(/^\| `(jr[0-9a-z]{2}\.)`/)![1]));
   const vecPrefixes26 = new Set(vecs26.map((v) => v.prefix));
-  await A('[26] 家族覆蓋雙向：規格家族表 17 列前綴集＝families.json 前綴集（16 前綴；jr1w. 兩世代各一組）',
-    specRows26.length === 17 && vecs26.length === 17 && specPrefixes26.size === 16
+  await A('[26] 家族覆蓋雙向：規格家族表 19 列前綴集＝families.json 前綴集（18 前綴；jr1w. 兩世代各一組；R3a +2＝jr5s./jr5e. secret 家族）',
+    specRows26.length === 19 && vecs26.length === 19 && specPrefixes26.size === 18
     && [...specPrefixes26].every((p) => vecPrefixes26.has(p)) && [...vecPrefixes26].every((p) => specPrefixes26.has(p)));
   const VKEYS26 = ['prefix', 'family', 'layout', 'kdf', 'aad', 'inputs', 'wire', 'payload_len', 'fields'];
   await A('[26] families 位元組 shape：payload_len＝wire b64 解碼真長；fields offset 連續、len 總和＝payload_len、hex 拼接＝payload 逐位元組',
     vecs26.length > 0 && vecs26.every((v) => {
       if (!VKEYS26.every((k) => k in v) || !v.wire.startsWith(v.prefix)) return false;
       let payload: Uint8Array;
-      try { payload = unb64Mod(v.wire.slice(v.prefix.length)); } catch { return false; }
+      try {
+        // R3a：secret 家族（content-stamp/ecdh-envelope）正形＝b64url 無 padding（/secret 線上契約）——
+        // src/secret/util.ts 真原語解碼；舊家族＝b64 帶 padding（unb64Mod）。兩正形以 layout 分流（前綴字面零特判）。
+        payload = (v.layout === 'content-stamp' || v.layout === 'ecdh-envelope')
+          ? secretUtil26.b64urlDecode(v.wire.slice(v.prefix.length))
+          : unb64Mod(v.wire.slice(v.prefix.length));
+      } catch { return false; }
       let off = 0;
       for (const f of v.fields) { if (f.offset !== off || f.hex.length !== f.len * 2) return false; off += f.len; }
       return payload.length === v.payload_len && off === v.payload_len && v.fields.map((f) => f.hex).join('') === hex(payload);
     }));
-  await A('[26] 布局長度＝規格：salt-external 92／salt-embedded 108（pinSalt 頭 16）／content 28+UTF8(plaintext)；且規格家族表該前綴列含同布局＋同長度',
+  await A('[26] 布局長度＝規格：salt-external 92／salt-embedded 108（pinSalt 頭 16）／content 28+UTF8(plaintext)／content-stamp 29+UTF8(plaintext)（0x73 標記在 GCM 內）／ecdh-envelope 93+UTF8(plaintext)（eph_pub 65 頭）；且規格家族表該前綴列含同布局＋同長度',
     vecs26.length > 0 && vecs26.every((v) => {
-      const want = v.layout === 'salt-external' ? 92 : v.layout === 'salt-embedded' ? 108 : v.layout === 'content' ? 28 + enc.encode(String(v.inputs.plaintext)).length : -1;
-      const lenCol = v.layout === 'content' ? '28+n' : String(want);
-      const head = v.layout === 'salt-embedded' ? v.fields[0]?.name === 'pinSalt' && v.fields[0]?.len === 16 : v.fields[0]?.name === 'iv';
+      const want = v.layout === 'salt-external' ? 92 : v.layout === 'salt-embedded' ? 108 : v.layout === 'content' ? 28 + enc.encode(String(v.inputs.plaintext)).length : v.layout === 'content-stamp' ? 29 + enc.encode(String(v.inputs.plaintext)).length : v.layout === 'ecdh-envelope' ? 93 + enc.encode(String(v.inputs.plaintext)).length : -1;
+      const lenCol = v.layout === 'content' ? '28+n' : v.layout === 'content-stamp' ? '29+n' : v.layout === 'ecdh-envelope' ? '93+n' : String(want);
+      const head = v.layout === 'salt-embedded' ? v.fields[0]?.name === 'pinSalt' && v.fields[0]?.len === 16 : v.layout === 'ecdh-envelope' ? v.fields[0]?.name === 'eph_pub' && v.fields[0]?.len === 65 : v.fields[0]?.name === 'iv';
       return want === v.payload_len && head && specRows26.some((l) => l.startsWith('| `' + v.prefix + '`') && l.includes('| ' + v.layout + ' | ' + lenCol + ' |'));
     }));
   // 欄位名限定形（通用字 name/len/hex/source… 在規格檔隨處可見＝裸字檢查無咬力）：頂層欄＝§7 頭表／§7.1／§7.2 對應節
@@ -3305,18 +3379,22 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
   const pl2Keys26 = Object.keys((kat26?.pinlock2_kat ?? {}) as object); // jr2p. fast 檔參數凍結 KAT（§7.1）
   const prfKeys26 = Object.keys((kat26?.pinlockprf_kat ?? {}) as object); // jr2q. HKDF 合成凍結 KAT（§7.3；R7a）
   const soloKeys26 = Object.keys((kat26?.pinlockprfsolo_kat ?? {}) as object); // jr2r. 純 PRF 凍結 KAT（2026-11-11 用戶裁定 (a)；t_88a4990b）
+  const srSKeys26 = Object.keys((kat26?.jr5s_kat ?? {}) as object); // jr5s. 凍結 KAT（R3a core 收編；t_c4ecb987）
+  const srEKeys26 = Object.keys((kat26?.jr5e_kat ?? {}) as object); // jr5e. 凍結 KAT（R1 問 2 core 收編；t_c4ecb987）
   // 反空轉下限：實際鍵集須涵蓋閘面讀取的欄（鍵集取自資料＝資料缺欄時下限擋住空集合真值）
   const floor26 = (ks: string[], need: string[]): boolean => need.every((k) => ks.includes(k));
   await A('[26] 欄位名對規格（限定形）：頂層欄＝§7 頭表／§7.1 vectors 表／§7.2 kat 表逐列；巢狀欄逐一以 `fields[].欄`／`rfc9106.欄`／`argon_prod.欄`／`frozen_blobs[].欄`／`credentials[].欄`／`samples[].欄` 出現在對應節（欄名集取自向量檔實鍵＋閘讀欄下限）',
     spec26.length > 0 && !!kat26 && !!bip26
     && HEAD26.every((k) => row26(s7h26, k)) && keysOf26(vecs26).every((k) => row26(s71_26, k)) && VKEYS26.every((k) => row26(s71_26, k))
-    && ['rfc9106', 'argon_prod', 'pinlock2_kat', 'pinlockprf_kat', 'pinlockprfsolo_kat', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
+    && ['rfc9106', 'argon_prod', 'pinlock2_kat', 'pinlockprf_kat', 'pinlockprfsolo_kat', 'jr5s_kat', 'jr5e_kat', 'frozen_blobs', 'credentials'].every((k) => k in kat26! && row26(s72_26, k)) && 'samples' in bip26! && s73_26.includes('`samples`')
     && floor26(fieldKeys26, ['name', 'offset', 'len', 'hex']) && fieldKeys26.every((k) => s71_26.includes('`fields[].' + k + '`'))
     && floor26(rfcKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password_hex', 'salt_hex', 'expected_tag_hex']) && rfcKeys26.every((k) => s72_26.includes('`rfc9106.' + k + '`'))
     && floor26(prodKeys26, ['memory_kib', 'iterations', 'parallelism', 'tag_len', 'password', 'salt_hex', 'expected_tag_hex']) && prodKeys26.every((k) => s72_26.includes('`argon_prod.' + k + '`'))
     && floor26(pl2Keys26, ['memory_kib', 'iterations', 'parallelism', 'password', 'salt', 'expected_kek_hex']) && pl2Keys26.every((k) => s72_26.includes('`pinlock2_kat.' + k + '`'))
     && floor26(prfKeys26, ['algorithm', 'memory_kib', 'iterations', 'parallelism', 'password', 'prf_output_hex', 'pin_salt_prefix', 'pin_salt_hex', 'info_prefix', 'prefix', 'expected_kek_hex']) && prfKeys26.every((k) => s72_26.includes('`pinlockprf_kat.' + k + '`'))
     && floor26(soloKeys26, ['algorithm', 'prf_output_hex', 'pin_salt_hex', 'info_prefix', 'prefix', 'expected_kek_hex']) && soloKeys26.every((k) => s72_26.includes('`pinlockprfsolo_kat.' + k + '`'))
+    && floor26(srSKeys26, ['algorithm', 'prefix', 'aad_domain', 'tag_byte_hex', 'key_hex', 'key_b64url', 'id', 'aad', 'iv_hex', 'plaintext', 'wire', 'wire_chars', 'blob_bytes', 'ct_hex', 'gcm_tag_hex', 'negatives']) && srSKeys26.every((k) => s72_26.includes('`jr5s_kat.' + k + '`'))
+    && floor26(srEKeys26, ['algorithm', 'prefix', 'curve', 'slot_id', 'aad', 'a_priv_jwk', 'a_pub_jwk', 'eph_priv_jwk', 'eph_pub_raw_hex', 'iv_hex', 'plaintext', 'ikm_hex', 'aes_key_hex', 'ct_hex', 'gcm_tag_hex', 'blob', 'blob_bytes', 'wire_chars', 'negatives']) && srEKeys26.every((k) => s72_26.includes('`jr5e_kat.' + k + '`'))
     && floor26(frozenKeys26, ['prefix', 'wire', 'payload_len', 'expected_note_key_hex', 'source']) && frozenKeys26.every((k) => s72_26.includes('`frozen_blobs[].' + k + '`'))
     && floor26(credKeys26, ['kind', 'expected_hex']) && credKeys26.every((k) => s72_26.includes('`credentials[].' + k + '`'))
     && floor26(sampleKeys26, ['entropy_hex', 'checksum_hex', 'words', 'source']) && sampleKeys26.every((k) => s73_26.includes('`samples[].' + k + '`')));
@@ -3377,6 +3455,32 @@ secOpen(26, '[26] 格式規格＋測試向量（docs/format-spec.md＋docs/vecto
     && solo226.info_prefix === pinlock26.PINLOCKPRFSOLO_KAT.infoPrefix
     && solo226.prefix === pinlock26.PINLOCKPRFSOLO_KAT.prefix
     && (await pinlock26.verifyPinLockPrfSoloKatProd()));
+  // jr5s./jr5e.（R3a core 收編；t_c4ecb987）：kat.json jr5s_kat/jr5e_kat 對本閘 KAT_SR_S/KAT_SR_E 字面
+  // 同源（單一真相＝閘源碼；產生器 pick 抽取）＋shape（解碼長/前綴/negatives 數）。真原語重推導
+  // 行為面居 [33]——本段承載向量檔同源帳面面（J14 母型：kat 對帳段）。
+  const srS26 = (kat26?.jr5s_kat ?? {}) as Record<string, unknown>;
+  const srE26 = (kat26?.jr5e_kat ?? {}) as Record<string, unknown>;
+  const b64uLen26 = (s: string): number => { if (s.includes('=') || s.length % 4 === 1) return -1; return Math.floor((s.length * 3) / 4); };
+  await A('[26] jr5s_kat 對帳：kat.json 欄＝本閘 KAT_SR_S 逐欄同源＋wire 解碼長＝blob_bytes（53B）＋wire_chars＝76＋negatives 7 條全 jr5s. 前綴（expect open null）',
+    srS26.wire === KAT_SR_S.wire && srS26.key_hex === KAT_SR_S.key_hex && srS26.key_b64url === KAT_SR_S.key_b64url
+    && srS26.id === KAT_SR_S.id && srS26.aad === KAT_SR_S.aad && srS26.iv_hex === KAT_SR_S.iv_hex
+    && srS26.plaintext === KAT_SR_S.plaintext && srS26.ct_hex === KAT_SR_S.ct_hex
+    && srS26.gcm_tag_hex === KAT_SR_S.gcm_tag_hex && srS26.blob_bytes === KAT_SR_S.blob_bytes
+    && srS26.wire_chars === KAT_SR_S.wire_chars
+    && b64uLen26(String(srS26.wire).slice(5)) === KAT_SR_S.blob_bytes
+    && srS26.negatives !== null && typeof srS26.negatives === 'object' && Object.keys(srS26.negatives as object).length === 7
+    && Object.values(srS26.negatives as Record<string, string>).every((w) => typeof w === 'string' && w.startsWith('jr5s.')));
+  await A('[26] jr5e_kat 對帳：kat.json 欄＝本閘 KAT_SR_E 逐欄同源（R1 問 2 凍結）＋blob 解碼長＝blob_bytes（119B）＋wire_chars＝164＋negatives 4 條全 jr5e. 前綴（expect open null）',
+    srE26.blob === KAT_SR_E.blob && srE26.ikm_hex === KAT_SR_E.ikm_hex && srE26.aes_key_hex === KAT_SR_E.aes_key_hex
+    && srE26.ct_hex === KAT_SR_E.ct_hex && srE26.gcm_tag_hex === KAT_SR_E.gcm_tag_hex
+    && srE26.slot_id === KAT_SR_E.slot_id && srE26.aad === KAT_SR_E.aad && srE26.iv_hex === KAT_SR_E.iv_hex
+    && srE26.plaintext === KAT_SR_E.plaintext && srE26.eph_pub_raw_hex === KAT_SR_E.eph_pub_raw_hex
+    && (srE26.a_priv_jwk as Record<string, unknown>)?.d === KAT_SR_E.a_priv_jwk.d
+    && (srE26.eph_priv_jwk as Record<string, unknown>)?.x === KAT_SR_E.eph_priv_jwk.x
+    && srE26.blob_bytes === KAT_SR_E.blob_bytes && srE26.wire_chars === KAT_SR_E.wire_chars
+    && b64uLen26(String(srE26.blob).slice(5)) === KAT_SR_E.blob_bytes
+    && srE26.negatives !== null && typeof srE26.negatives === 'object' && Object.keys(srE26.negatives as object).length === 4
+    && Object.values(srE26.negatives as Record<string, string>).every((w) => typeof w === 'string' && w.startsWith('jr5e.')));
   const samples26 = (Array.isArray(bip26?.samples) ? bip26!.samples : []) as { entropy_hex: string; checksum_hex: string; words: string[]; source: string }[];
   await A('[26] bip39 抽樣 ≥32 組：entropy hex64＋24 詞＋checksum＝SHA-256(entropy)[0]；逐組對照現行轉寫原語（recTokenToWords 逐詞相等——確定性轉寫非 KDF 重算）',
     samples26.length >= 32 && (await (async () => {
@@ -5780,6 +5884,185 @@ secOpen(25, '[25] 段級運行樣本：secEnter 真值表＋tag 形帳＋secCase
     JSON.stringify(Object.keys(secCases).map(Number).sort((a, b) => a - b)) === JSON.stringify(secOrder));
   await A('[25] self-account：secCases[25] = 5 恰此五案（段帳面 self-proving——帳漂移即本面 RED；r2 第 4 案＝book 鍵雙向等值 teeth；本案恆居末＝ranN 斷言對本段執行值 self-proving；secCases 載體面：[24]/[25] 自證段＋--only 段存在面＋teeth 三載體）',
     secCases[25] === 5 && (secRan.get(25) ?? 0) === 4);
+}
+
+// ── 33. secret 家族（jr5s./jr5e. core 收編；R3a t_c4ecb987，core 0.11.0）──
+//
+// 行為面（對真模組）：凍結 KAT 位元組一致（jr5s 參照腿＝node:crypto 直算；jr5e＝R1 design-final
+// 問 2 凍結值＋WebCrypto 兩步形同源）、竄改負向量（GCM 認證/AAD 綁結/0x73 標記/形檢/off-curve 面）、
+// 上限導出鏈（常數為導出值非魔數）、JWK 形面、隨機 iv roundtrip、AAD 參數化（brief L126：
+// 域常數＝部署形、函式面參數化——換域零 core 改動）。值面：模組不回明文以外任何面（R3 §2-2）——
+// 本段只斷 seal/open 回值契約（純函式零 store，無副作用面）。
+secOpen(33, '[33] secret 家族（jr5s./jr5e. core 收編）：凍結 KAT＋竄改負向量＋形/帽＋JWK 面＋AAD 參數化'); if (secEnter(33)) {
+{
+  const srS = await import('../src/secret/jr5s.ts');
+  const srE = await import('../src/secret/jr5e.ts');
+  const srU = await import('../src/secret/util.ts');
+  const u8hex33 = (h: string): Uint8Array => new Uint8Array(h.match(/../g)!.map((x) => parseInt(x, 16)));
+  const hex33 = (b: Uint8Array): string => Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
+  const ivS33 = u8hex33(KAT_SR_S.iv_hex);
+  const keyS33 = u8hex33(KAT_SR_S.key_hex);
+  // 1. jr5s KAT 正例（位元組一致＋open＋locator 推導）
+  await A('[33] jr5s KAT 正例：jr5sEncrypt(凍結 key/iv/pt/id) === 凍結 wire 位元組一致（76 字元/53B）＋jr5sDecrypt(凍結 wire) === 明文＋secretIdOfKey(凍結 key_b64url) === 凍結 id（locator key 推導）', (async () => {
+    const wire = await srS.jr5sEncrypt(KAT_SR_S.plaintext, keyS33, KAT_SR_S.id, ivS33);
+    if (wire !== KAT_SR_S.wire || wire.length !== KAT_SR_S.wire_chars) return false;
+    if ((await srS.jr5sDecrypt(KAT_SR_S.wire, keyS33, KAT_SR_S.id)) !== KAT_SR_S.plaintext) return false;
+    // 凍結 wire 解碼面對帳（ct/tag 字面齒：非對帳同值自證——凍結 blob 的 ct[25B]‖tag[16B] 切分＝字面）
+    const rawW = srU.b64urlDecode(KAT_SR_S.wire.slice(5));
+    if (rawW.length !== KAT_SR_S.blob_bytes) return false;
+    if (hex33(rawW.subarray(12, rawW.length - 16)) !== KAT_SR_S.ct_hex || hex33(rawW.subarray(rawW.length - 16)) !== KAT_SR_S.gcm_tag_hex) return false;
+    return (await srS.secretIdOfKey(KAT_SR_S.key_b64url)) === KAT_SR_S.id;
+  })());
+  // 2. jr5s 竄改負向量（GCM auth 域＋AAD locator 綁結）
+  await A('[33] jr5s KAT 負例（竄改）：N1 tag 翻/N2 ct 翻/N3 跨 id AAD 重封/N4 錯 key → 全 null 不拋（GCM 認證域＋AAD locator 綁結）', (async () => {
+    for (const w of [KAT_SR_S.negatives.n1_tag_flip, KAT_SR_S.negatives.n2_ct_flip, KAT_SR_S.negatives.n3_cross_id_aad, KAT_SR_S.negatives.n4_wrong_key]) {
+      try { if ((await srS.jr5sDecrypt(w, keyS33, KAT_SR_S.id)) !== null) return false; } catch { return false; }
+    }
+    return true;
+  })());
+  // 3. jr5s 契約面負向量（標記/padding/下限/形）
+  await A('[33] jr5s KAT 負例（契約面）：N5 標記錯（GCM 認證過、0x73 標記拒）/N6 "=" padding 拒（正形無 padding）/N7 29B 下限拒（tag-only 空明文）/N8 形面（錯前綴/非字串/空字串）→ 全 null 不拋', (async () => {
+    const bads: unknown[] = [KAT_SR_S.negatives.n5_stamp_mismatch, KAT_SR_S.negatives.n6_padding, KAT_SR_S.negatives.n7_below_min, 'jr5x.' + 'A'.repeat(68), 42, ''];
+    for (const w of bads) {
+      try { if ((await srS.jr5sDecrypt(w, keyS33, KAT_SR_S.id)) !== null) return false; } catch { return false; }
+    }
+    return true;
+  })());
+  // 4. jr5s 隨機 iv roundtrip＋UTF-8 面＋空明文 fail-loud
+  await A('[33] jr5s 隨機 iv roundtrip：同明文兩封 wire 異（隨機 iv）且皆解回；CJK＋emoji 混排 UTF-8 面；空明文封裝面 throw TypeError（fail-loud、與 30B 下限一致）', (async () => {
+    const g = await srS.generateSecretKey();
+    const pt = 'CJK-混排-roundtrip-📝-日本語-한국어';
+    const w1 = await srS.jr5sEncrypt(pt, g.key, g.id);
+    const w2 = await srS.jr5sEncrypt(pt, g.key, g.id);
+    if (w1 === w2) return false;
+    if ((await srS.jr5sDecrypt(w1, g.key, g.id)) !== pt || (await srS.jr5sDecrypt(w2, g.key, g.id)) !== pt) return false;
+    try { await srS.jr5sEncrypt('', g.key, g.id); return false; } catch (e) { if (!(e instanceof TypeError)) return false; }
+    return true;
+  })());
+  // 5. jr5s 上限導出鏈（常數導出自名件、無魔數）
+  await A('[33] jr5s 上限導出鏈自洽：常數＝名件導出（BLOB_MAX=12+1+512*3+16=1565、WIRE_MAX=5+ceil(1565*4/3)=2092，無魔數）；形檢收 512-unit CJK wire（1536B UTF-8＝緊界 2092 字元）＋513-unit 封裝面 throw（2096 字元越界）', (async () => {
+    if (srS.JR5S_BLOB_MAX_BYTES !== 12 + 1 + 512 * 3 + 16) return false;
+    if (srS.JR5S_WIRE_MAX_CHARS !== 5 + Math.ceil((12 + 1 + 512 * 3 + 16) * 4 / 3)) return false;
+    const g = await srS.generateSecretKey();
+    const p512 = '字'.repeat(512);
+    const w512 = await srS.jr5sEncrypt(p512, g.key, g.id);
+    if (w512.length !== srS.JR5S_WIRE_MAX_CHARS || !srS.jr5sWireShapeOk(w512)) return false;
+    if ((await srS.jr5sDecrypt(w512, g.key, g.id)) !== p512) return false;
+    try { await srS.jr5sEncrypt('字'.repeat(513), g.key, g.id); return false; } catch (e) { if (!(e instanceof TypeError)) return false; }
+    return !srS.jr5sWireShapeOk(w512 + 'A');
+  })());
+  // 6. generateSecretKey 面
+  await A('[33] generateSecretKey：keyB64url 43 字元 b64url 字母表＋id 32hex 小寫＝sha256Hex(keyB64url) 前 32（locator 推導）＋key 32B＋兩次呼叫異（CSPRNG）', (async () => {
+    const g1 = await srS.generateSecretKey();
+    const g2 = await srS.generateSecretKey();
+    if (!/^[A-Za-z0-9_-]{43}$/.test(g1.keyB64url) || !/^[0-9a-f]{32}$/.test(g1.id)) return false;
+    if (g1.keyB64url === g2.keyB64url || g1.id === g2.id) return false;
+    if (g1.key.length !== 32) return false;
+    return (await srS.secretIdOfKey(g2.keyB64url)) === g2.id;
+  })());
+  // 7. jr5e KAT 正例（位元組一致＋open＋JWK 公鑰點）
+  await A('[33] jr5e KAT 正例：sealEnvelope(凍結 a_pub/eph_priv/iv/aad) === 凍結 blob 位元組一致（164 字元/119B）＋openEnvelope(凍結 blob, a_priv) === 明文＋jwkPubRaw(eph_priv) === eph_pub_raw_hex（65B 0x04 頭）', (async () => {
+    const blob = await srE.sealEnvelope(KAT_SR_E.plaintext, KAT_SR_E.a_pub_jwk, KAT_SR_E.eph_priv_jwk, u8hex33(KAT_SR_E.iv_hex), KAT_SR_E.aad);
+    if (blob !== KAT_SR_E.blob || blob.length !== KAT_SR_E.wire_chars) return false;
+    if ((await srE.openEnvelope(KAT_SR_E.blob, KAT_SR_E.a_priv_jwk, KAT_SR_E.aad)) !== KAT_SR_E.plaintext) return false;
+    const ephRaw = srE.jwkPubRaw(KAT_SR_E.eph_priv_jwk);
+    if (ephRaw === null || hex33(ephRaw) !== KAT_SR_E.eph_pub_raw_hex || ephRaw[0] !== 0x04) return false;
+    // 凍結 blob 解碼面對帳（eph_pub/ct/tag 字面齒：blob 切分 65‖12‖ct‖16＝字面）
+    const rawB = srU.b64urlDecode(KAT_SR_E.blob.slice(5));
+    if (rawB.length !== KAT_SR_E.blob_bytes) return false;
+    if (hex33(rawB.subarray(0, 65)) !== KAT_SR_E.eph_pub_raw_hex) return false;
+    if (hex33(rawB.subarray(77, rawB.length - 16)) !== KAT_SR_E.ct_hex || hex33(rawB.subarray(rawB.length - 16)) !== KAT_SR_E.gcm_tag_hex) return false;
+    return true;
+  })());
+  // 8. jr5e 同鍵跨腿（M-3 對位形：deriveBits 腿 vs 兩步形）＋中間值
+  await A('[33] jr5e 同鍵跨腿（M-3 對位形）：閘腿 deriveBits 形（ECDH usages[deriveKey,deriveBits]→HKDF usages[deriveBits]→deriveBits 256→importKey raw）seal === core 兩步形輸出 === 凍結 blob；中間值 ikm===ikm_hex、HKDF bits===aes_key_hex（凍結）', (async () => {
+    const enc33 = new TextEncoder();
+    const aadB = enc33.encode(KAT_SR_E.aad);
+    const ephPub = u8hex33(KAT_SR_E.eph_pub_raw_hex);
+    const aPubRaw = srE.jwkPubRaw(KAT_SR_E.a_pub_jwk);
+    if (aPubRaw === null) return false;
+    const aPubKey = await crypto.subtle.importKey('raw', aPubRaw as BufferSource, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+    const ephPrivKey = await crypto.subtle.importKey('jwk', KAT_SR_E.eph_priv_jwk as JsonWebKey, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveKey', 'deriveBits']);
+    const ikm = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: aPubKey }, ephPrivKey, 256));
+    if (hex33(ikm) !== KAT_SR_E.ikm_hex) return false;
+    const hk = await crypto.subtle.deriveKey({ name: 'ECDH', public: aPubKey }, ephPrivKey, { name: 'HKDF', hash: 'SHA-256', salt: ephPub as BufferSource, info: aadB as BufferSource }, false, ['deriveBits']);
+    const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: ephPub as BufferSource, info: aadB as BufferSource }, hk, 256));
+    if (hex33(bits) !== KAT_SR_E.aes_key_hex) return false;
+    const aesKey = await crypto.subtle.importKey('raw', bits as BufferSource, { name: 'AES-GCM' }, false, ['encrypt']);
+    const ivE33 = u8hex33(KAT_SR_E.iv_hex);
+    const ctTag = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivE33 as BufferSource, additionalData: aadB as BufferSource }, aesKey, enc33.encode(KAT_SR_E.plaintext) as BufferSource));
+    const blobBits = new Uint8Array(65 + 12 + ctTag.length);
+    blobBits.set(ephPub, 0); blobBits.set(ivE33, 65); blobBits.set(ctTag, 77);
+    const b64u33 = (b: Uint8Array): string => btoa(String.fromCharCode(...(b as unknown as number[]))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if ('jr5e.' + b64u33(blobBits) !== KAT_SR_E.blob) return false;
+    const coreBlob = await srE.sealEnvelope(KAT_SR_E.plaintext, KAT_SR_E.a_pub_jwk, KAT_SR_E.eph_priv_jwk, ivE33, KAT_SR_E.aad);
+    return coreBlob === KAT_SR_E.blob;
+  })());
+  // 9. jr5e 竄改負向量（R1 設計凍結 N1-N4）
+  await A('[33] jr5e KAT 負例（竄改，R1 設計凍結）：N1 tag 翻/N2 跨 slot AAD 封/N3 封對他 pub/N4 eph_pub 損毀（off-curve）→ 全 null 不拋（off-curve＝importKey DataError 面）', (async () => {
+    for (const w of [KAT_SR_E.negatives.n1_tag_byte_flip, KAT_SR_E.negatives.n2_cross_slot_aad, KAT_SR_E.negatives.n3_sealed_to_other_pub, KAT_SR_E.negatives.n4_corrupt_eph_pub]) {
+      try { if ((await srE.openEnvelope(w, KAT_SR_E.a_priv_jwk, KAT_SR_E.aad)) !== null) return false; } catch { return false; }
+    }
+    return true;
+  })());
+  // 10. jr5e 面負向量（aad/私鑰/前綴/b64/截斷/空）
+  await A('[33] jr5e KAT 負例（面）：錯 aad 解（同 blob 換 slot 域）/錯 a_priv（他隨機對）/前綴毀/b64 壞字元/截斷 <94B/空串 → 全 null 不拋', (async () => {
+    const other = await srE.generateEnvelopeKeyPair();
+    const cases: Array<[string, string, boolean]> = [
+      [KAT_SR_E.blob, 'jr5e:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', false],
+      [KAT_SR_E.blob, KAT_SR_E.aad, true],
+      ['jr5x.' + KAT_SR_E.blob.slice(5), KAT_SR_E.aad, false],
+      ['jr5e.!' + KAT_SR_E.blob.slice(6), KAT_SR_E.aad, false],
+      ['jr5e.' + KAT_SR_E.blob.slice(5, 80), KAT_SR_E.aad, false],
+      ['jr5e.', KAT_SR_E.aad, false],
+    ];
+    for (const [w, aad, useOther] of cases) {
+      const priv = useOther ? other.privJwk : KAT_SR_E.a_priv_jwk;
+      try { if ((await srE.openEnvelope(w, priv, aad)) !== null) return false; } catch { return false; }
+    }
+    return true;
+  })());
+  // 11. JWK 形面
+  await A('[33] jr5e JWK 形面：jwkPubRaw 正形＝65B 0x04 頭（a_pub 與 eph_pub 皆 x/y 推導同值）＋pub（無 d）合法；負形（crv P-384/x 短形/b64url 壞/kty RS/非物件）→ null', (() => {
+    const aPubRaw = srE.jwkPubRaw(KAT_SR_E.a_pub_jwk);
+    const ephPubRaw = srE.jwkPubRaw(KAT_SR_E.eph_priv_jwk);
+    if (aPubRaw === null || ephPubRaw === null) return false;
+    if (aPubRaw.length !== 65 || aPubRaw[0] !== 0x04 || ephPubRaw[0] !== 0x04) return false;
+    if (hex33(ephPubRaw) !== KAT_SR_E.eph_pub_raw_hex) return false;
+    const bad33: unknown[] = [
+      { kty: 'EC', crv: 'P-384', x: KAT_SR_E.a_pub_jwk.x, y: KAT_SR_E.a_pub_jwk.y },
+      { kty: 'EC', crv: 'P-256', x: KAT_SR_E.a_pub_jwk.x.slice(0, 41), y: KAT_SR_E.a_pub_jwk.y },
+      { kty: 'EC', crv: 'P-256', x: '!!!not-b64url!!!', y: KAT_SR_E.a_pub_jwk.y },
+      { kty: 'RSA', crv: 'P-256', x: KAT_SR_E.a_pub_jwk.x, y: KAT_SR_E.a_pub_jwk.y },
+      'not-an-object',
+    ];
+    return bad33.every((b) => srE.jwkPubRaw(b) === null);
+  })());
+  // 12. generateEnvelopeKeyPair roundtrip
+  await A('[33] generateEnvelopeKeyPair：priv 有 d、pub 無 d；隨機對 seal→open roundtrip（己對解回、他隨機對 null）；隨機 iv（兩封 wire 異）', (async () => {
+    const p1 = await srE.generateEnvelopeKeyPair();
+    const p2 = await srE.generateEnvelopeKeyPair();
+    if (!p1.privJwk.d || p1.pubJwk.d !== undefined) return false;
+    const ivA = new Uint8Array(12); crypto.getRandomValues(ivA);
+    const ivB = new Uint8Array(12); crypto.getRandomValues(ivB);
+    const pt = 'R3a-random-pair-roundtrip-值';
+    const bA = await srE.sealEnvelope(pt, p1.pubJwk, p2.privJwk, ivA, 'jr5x:test-slot');
+    const bB = await srE.sealEnvelope(pt, p1.pubJwk, p2.privJwk, ivB, 'jr5x:test-slot');
+    if (bA === bB) return false;
+    if ((await srE.openEnvelope(bA, p1.privJwk, 'jr5x:test-slot')) !== pt) return false;
+    return (await srE.openEnvelope(bB, p2.privJwk, 'jr5x:test-slot')) === null;
+  })());
+  // 13. AAD 參數化（brief L126：域常數＝部署形，換域零 core 改動）
+  await A('[33] AAD 參數化（brief L126）：非預設域 aad（I 線 inbox 域例）seal→open roundtrip 成立（同 aad）＋跨 aad null——函式體未硬編 "jr5e:" 域（域常數僅部署形例，換域零 core 改動）', (async () => {
+    const p = await srE.generateEnvelopeKeyPair();
+    const iv = new Uint8Array(12); crypto.getRandomValues(iv);
+    const aadX = 'jr5x:inbox-slot-demo';
+    const pt = 'I-line-domain-demo-值';
+    const blob = await srE.sealEnvelope(pt, p.pubJwk, p.privJwk, iv, aadX);
+    if ((await srE.openEnvelope(blob, p.privJwk, aadX)) !== pt) return false;
+    return (await srE.openEnvelope(blob, p.privJwk, 'jr5e:inbox-slot-demo')) === null;
+  })());
+}
 }
 
 // ── 段級帳面（誠實帳——skip 段恆列帳「未跑非通過」；全跑態逐段案數對 secCases 帳面）──

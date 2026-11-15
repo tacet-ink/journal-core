@@ -1,0 +1,7 @@
+{
+  "name": "@tacet-ink/journal-mcp",
+  "version": "0.11.0",
+  "private": true,
+  "description": "tacet.ink MCP stdio 工具（0.11.0 占位空殼——實作歸 R3c 卡；加密只 import core）",
+  "type": "module"
+}

@@ -1,6 +1,6 @@
 {
   "name": "@tacet-ink/journal-core",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Zero-knowledge journal core — e2e crypto, passphrase-only auth, transport, ratelimit. The server never sees plaintext.",
   "homepage": "https://tacet.ink",
   "repository": {
@@ -10,6 +10,9 @@
   "bugs": {
     "url": "https://github.com/tacet-ink/journal-core/issues"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "module",
   "keywords": [
     "journal",
@@ -88,6 +91,14 @@
     "./server/ladder": {
       "types": "./dist/server/ladder.d.ts",
       "default": "./dist/server/ladder.js"
+    },
+    "./secret/jr5s": {
+      "types": "./dist/secret/jr5s.d.ts",
+      "default": "./dist/secret/jr5s.js"
+    },
+    "./secret/jr5e": {
+      "types": "./dist/secret/jr5e.d.ts",
+      "default": "./dist/secret/jr5e.js"
     }
   },
   "files": [
