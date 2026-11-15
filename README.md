@@ -120,10 +120,12 @@ npm run verify   # 738 assertions, all green, run against the real modules (no m
 不再隨包（驗證閘與向量產生器為 repo 樹面，走源碼 clone 動線）；稽核／閱讀路徑＝GitHub 瀏覽 `src/`＋
 [docs/format-spec.md](./docs/format-spec.md) 規格＋[docs/vectors/](./docs/vectors/) 向量（`docs/` 仍隨包）。
 
-monorepo 鋪底（0.11.0 起）：npm workspaces `packages/*`——`packages/cli`／`packages/mcp` 為
-**占位空殼**（package.json＋README 指針、`private: true`、零實作——實作歸 R3b/R3c 卡；加密一律
-`import` 本包，自帶加密實作禁）。**發佈 tag 規約**（2026-10-24 裁定）：多包 tag 形
-`<名>-v<version>`（如 `journal-cli-v0.1.0`）；包名禁 `v` 開頭（防 tag 撞名）；root 包維持 `v*` 單包形。
+monorepo 鋪底（0.11.0 起）：npm workspaces `packages/*`——`packages/cli`（R3b 起：索取祕密
+本機 CLI `tacet-secret request／verify／submit`——N3 先驗證再交付、參照白名單、送出預設關、
+值永不回模型上下文；`private: true` 不上 npm）／`packages/mcp`（R3c 占位空殼——零實作，
+實作歸 R3c 卡）。加密一律 `import` 本包，自帶加密實作禁。
+**發佈 tag 規約**（2026-10-24 裁定）：多包 tag 形 `<名>-v<version>`（如 `journal-cli-v0.1.0`）；
+包名禁 `v` 開頭（防 tag 撞名）；root 包維持 `v*` 單包形。
 
 ## 前綴契約（家族表：19 列／18 個資料前綴＋閘對照組 jr1g.）
 
