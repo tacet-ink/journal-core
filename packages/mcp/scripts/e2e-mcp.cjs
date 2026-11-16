@@ -6,7 +6,8 @@
  * 沙箱紀律（2026-11-16 probe 重驗：子程序→loopback ephemeral port 被 egress 吞，
  * 同 R3b 2026-11-15 形）→ 分層：
  *   A 網路面（in-process）：直載 dist/session.js 餵 JSON-RPC 行（同 process fetch 到 stub）——
- *     modern MRTR 全鏈（fresh→InputRequiredResult→accept/decline/偽造 state/digest 不符）、
+ *     modern MRTR 全鏈（fresh→InputRequiredResult→accept/decline/偽造 state/digest 不符；
+ *     fresh 雙載體：spec 形 url:{} 臂＋寬鬆 url:true 鏈）、
  *     N3 毒化、白名單毒化（out 越界＋env 越界）、annual 參照、verify 四方帳（雙 MATCH／
  *     MISMATCH／死 base fail-closed）、值零明文 census、legacy era（initialize→貼連結主路徑）
  *   B stdio 面（child 離線）：spawn node dist/server.js（stdio pipe JSON-RPC）——
@@ -169,6 +170,30 @@ async function innerMain() {
     tokenA = String(bundle.retrieve_link).match(/&t=([^&#]+)/)?.[1] ?? null;
     privD = JSON.parse(Buffer.from(String(bundle.retrieve_link).split('#k=')[1], 'base64url').toString('utf8')).d;
     outA = bundleFile;
+  }
+
+  // ---- A2s spec 形 caps 臂（2026-07-28 schema:769-773：elicitation.url＝JSONObject，{}＝支援）----
+  {
+    stub.reqLog.length = 0;
+    const r = await modernReq(
+      sA,
+      'tools/call',
+      { name: 'request', arguments: { base, sums: SUMS_FILE } },
+      { elicitation: { url: {} } },
+    );
+    const ir = r?.result;
+    transcript.push(JSON.stringify(r));
+    check(
+      ir?.resultType === 'input_required' &&
+        ir?.inputRequests?.fill?.method === 'elicitation/create' &&
+        ir.inputRequests.fill.params.mode === 'url' &&
+        typeof ir.inputRequests.fill.params.url === 'string' &&
+        typeof ir.requestState === 'string' &&
+        String(ir.requestState).split('.').length === 2,
+      'A2s spec 形 {elicitation:{url:{}}} fresh → InputRequiredResult（spec 形客戶端觸發 MRTR 面）',
+      ir,
+    );
+    check(stub.countPaths((p) => p === '/api/sreq') === 1, 'A2s spec 形臂恰一 POST /api/sreq');
   }
 
   // ---- A3 accept 重試 ----

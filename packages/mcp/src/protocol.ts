@@ -61,9 +61,12 @@ export class ProtocolError extends Error {
   }
 }
 
+/** 能力旗標：spec 形＝JSONObject 存在式（schema 2026-07-28:769-773；「空物件即代表支援」）；寬鬆 boolean 形兩吃 */
+export type CapFlag = boolean | Record<string, unknown>;
+
 /** 客戶端能力（per-request _meta 面；空物件＝無任何選用能力） */
 export interface ClientCapabilities {
-  elicitation?: { form?: boolean; url?: boolean };
+  elicitation?: { form?: CapFlag; url?: CapFlag };
   [key: string]: unknown;
 }
 

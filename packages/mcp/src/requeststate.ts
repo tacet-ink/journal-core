@@ -11,6 +11,11 @@
  * 編碼：b64url(payloadJSON) + '.' + b64url(hmacHexBytes)
  * 判定序：format → mac（完整性門在前；未認證的 payload 不比對其餘欄）→ digest
  *   → principal → expired。
+ *   位元組面聲明（review r1 NIT）：非 RFC 2104/4231 相容——core sha256Hex 走
+ *   TextEncoder/UTF-8，key/pad ≥0x80 位元經 latin1→utf8 逐位元組注入重編碼（一手 RFC
+ *   對照 probe 證實：32B 0x0b key＋'Hi There' 之 outer 前綴 3dfac596… ≠ node 內建
+ *   HMAC 198a607e…）。本 face＝opaque 自決完整性面（單一消費者、client 原樣回帶、
+ *   自證）——不宣稱位元組互操作。
  */
 import fs from 'node:fs';
 import os from 'node:os';

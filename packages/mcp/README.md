@@ -67,7 +67,7 @@ elicitation 同意面（客戶端向人問 accept/decline；本 server 不模擬
   `_meta['io.modelcontextprotocol/serverInfo']`（SHOULD）；
   不支持版本→`-32022`（data 帶 `supported`）。
 - **legacy＝2025-11-25**（`initialize` 選定，scoped 到本 stdio 過程）：
-  `initialize`（版本协商，legacy 集外版本回 latest legacy）→`notifications/initialized`
+  `initialize`（版本協商，legacy 集外版本回 latest legacy）→`notifications/initialized`
   →`tools/list`→`tools/call`；結果無 `resultType`（legacy client 把缺席當 complete）。
 - stdio 紀律：newline-delimited JSON；**server MUST NOT 寫 request 到 stdout**
   （server→client 互動面＝`InputRequiredResult`）；stderr 只 log；stdin EOF 退出。

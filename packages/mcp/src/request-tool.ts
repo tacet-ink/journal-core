@@ -3,10 +3,11 @@
  *
  * 語義與 R3b CLI request 一致（import 同一批原語：n3Gate/refs/state/request）；
  * MCP 只加兩層：協議面（session.ts）＋交付決策（本檔 chooseDelivery）：
- *   - MRTR 增強面（2026-07-28）：modern era＋client 宣稱 elicitation.url=true →
- *     回 InputRequiredResult（inputRequests.fill＝elicitation/create url mode＋
- *     requestState）；client 帶 inputResponses＋requestState 重試 → accept/decline
- *     各自收口（decline 降級貼連結；本 server 無 submit——accept 也只交連結＋bundle 路徑）。
+ *   - MRTR 增強面（2026-07-28）：modern era＋client 宣稱 elicitation.url（spec 形
+ *     JSONObject：{} 即支援／寬鬆 true 兩吃，存在式判定）→ 回 InputRequiredResult
+ *     （inputRequests.fill＝elicitation/create url mode＋requestState）；client 帶
+ *     inputResponses＋requestState 重試 → accept/decline 各自收口（decline 降級貼連結；
+ *     本 server 無 submit——accept 也只交連結＋bundle 路徑）。
  *   - 貼連結主路徑（降級／legacy）：直接回 CallToolResult（fill 連結＋bundle 已寫入）。
  *
  * 完成通知面已退場（2026-07-28 規格移除 R1 問 13 第 3 項）——本檔零殘字面（閘 [4] census）。
@@ -31,14 +32,18 @@ export type Era = 'modern' | 'legacy';
 
 export type DeliveryChoice = 'mrtr' | 'paste-link';
 
-/** 交付決策：MRTR 增強面僅在 modern era＋client 宣稱 elicitation.url 時成立；其餘全降級貼連結（主路徑） */
+/**
+ * 交付決策：MRTR 增強面僅在 modern era＋client 宣稱 elicitation.url 時成立；其餘全降級貼連結（主路徑）。
+ * url 能力判定＝存在式：spec 形 JSONObject（{} 即支援；schema 2026-07-28:769-773）與寬鬆
+ * true 兩吃；false／缺席／非物件不觸發（review r1 R1：舊形 url===true 對 spec 形客戶端恆 false）。
+ */
 export function chooseDelivery(
   era: Era,
   caps: ClientCapabilities | null | undefined,
 ): DeliveryChoice {
-  return era === 'modern' && !!caps && !!caps.elicitation && caps.elicitation.url === true
-    ? 'mrtr'
-    : 'paste-link';
+  const u = caps?.elicitation?.url;
+  const urlDeclared = u === true || (typeof u === 'object' && u !== null && !Array.isArray(u));
+  return era === 'modern' && urlDeclared ? 'mrtr' : 'paste-link';
 }
 
 export interface RetryInfo {

@@ -7,7 +7,9 @@
  * 段帳（執行帳＝secOpen 進段即記；缺段＝靜默驗失，尾段對帳咬）：
  *   [1] 協議面（5）：discover 形／tools 列表 modern（零 submit）／bare request -32600／
  *       缺 clientCapabilities -32602／不支持版本 -32022
- *   [2] 交付決策（4）：modern+url→MRTR／modern+form-only→貼連結／modern 無能力→貼連結／legacy→貼連結
+ *   [2] 交付決策（6）：modern+spec形 url:{}→MRTR／modern+寬鬆 url:true→MRTR／
+ *       modern+spec形 form-only:{}→貼連結／modern+寬鬆 form:true→貼連結／
+ *       modern 無能力→貼連結／legacy→貼連結
  *   [3] requestState（5）：sign/verify 回環／MAC 偽造→mac／過期→expired／
  *       principal 不符→principal／digest 不符→digest
  *   [4] 舊流程殘字面 census=0（4）：elicitationId／elicitation/complete／-32042／
@@ -53,7 +55,7 @@ let check: CheckFn = (cond, label, detail) => {
   }
 };
 
-const SEC_CASES: Record<number, number> = { 1: 5, 2: 4, 3: 5, 4: 4, 5: 3, 6: 2, 7: 6 };
+const SEC_CASES: Record<number, number> = { 1: 5, 2: 6, 3: 5, 4: 4, 5: 3, 6: 2, 7: 6 };
 const secRan: Record<number, number> = {};
 function secOpen(sec: number, title: string): void {
   curSec = sec;
@@ -161,18 +163,26 @@ async function main(): Promise<void> {
     );
   }
 
-  // —— [2] 交付決策（4）——
+  // —— [2] 交付決策（6）——
   secOpen(2, '交付決策（貼連結主路徑／MRTR 增強面）');
   check(
+    chooseDelivery('modern', { elicitation: { url: {} } }) === 'mrtr',
+    '2a modern＋spec 形 elicitation.url＝{}（JSONObject 存在式；schema 2026-07-28:769-773）→ MRTR 增強面',
+  );
+  check(
     chooseDelivery('modern', { elicitation: { url: true } }) === 'mrtr',
-    '2a modern＋elicitation.url → MRTR 增強面',
+    '2b modern＋寬鬆 elicitation.url＝true → MRTR 增強面（寬鬆面兩吃）',
+  );
+  check(
+    chooseDelivery('modern', { elicitation: { form: {} } }) === 'paste-link',
+    '2c modern＋spec 形 form-only＝{} → 貼連結主路徑（降級；url 未宣稱）',
   );
   check(
     chooseDelivery('modern', { elicitation: { form: true } }) === 'paste-link',
-    '2b modern＋form-only → 貼連結主路徑（降級）',
+    '2d modern＋寬鬆 form-only＝true → 貼連結主路徑（降級）',
   );
-  check(chooseDelivery('modern', {}) === 'paste-link', '2c modern 無能力 → 貼連結主路徑');
-  check(chooseDelivery('legacy', null) === 'paste-link', '2d legacy → 貼連結主路徑（無 MRTR）');
+  check(chooseDelivery('modern', {}) === 'paste-link', '2e modern 無能力 → 貼連結主路徑');
+  check(chooseDelivery('legacy', null) === 'paste-link', '2f legacy → 貼連結主路徑（無 MRTR）');
 
   // —— [3] requestState（5）——
   secOpen(3, 'requestState 完整性');
