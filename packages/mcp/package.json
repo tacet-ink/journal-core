@@ -2,6 +2,33 @@
   "name": "@tacet-ink/journal-mcp",
   "version": "0.11.0",
   "private": true,
-  "description": "tacet.ink MCP stdio 工具（0.11.0 占位空殼——實作歸 R3c 卡；加密只 import core）",
-  "type": "module"
+  "description": "tacet.ink 索取祕密 MCP stdio server（R3c t_a79f8280）：request（貼連結主路徑＋2026-07-28 MRTR 增強面）／verify（四方帳）——加密只 import journal-core，零遠端 MCP",
+  "type": "module",
+  "bin": {
+    "tacet-mcp": "./dist/server.js"
+  },
+  "mcpName": "tacet-secret",
+  "files": [
+    "dist",
+    "README.md",
+    ".claude-plugin",
+    ".mcp.json",
+    "skills"
+  ],
+  "engines": {
+    "node": ">=24.7.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "node --experimental-strip-types scripts/verify-mcp.ts",
+    "e2e": "node scripts/e2e-mcp.cjs"
+  },
+  "dependencies": {
+    "@tacet-ink/journal-core": "file:../..",
+    "@tacet-ink/journal-cli": "file:../cli"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0"
+  }
 }
