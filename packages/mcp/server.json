@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.tacet-ink/tacet-secret",
+  "description": "Ask for passwords/API keys/tokens without pasting values into chat. Zero-knowledge, stdio only.",
+  "repository": {
+    "url": "https://github.com/tacet-ink/journal-core",
+    "source": "github"
+  },
+  "version": "0.11.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@tacet-ink/journal-mcp",
+      "version": "0.11.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

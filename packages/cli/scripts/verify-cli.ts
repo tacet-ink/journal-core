@@ -12,9 +12,10 @@
  *       fresh HOME 首跑 stateDir 自建 700（umask 077；不崩潰、不 orphan slot）
  *   [4] 確認閘（4）：allowNonTty 測試縫／非 TTY 子程序 rc3 零 API（預設關）／
  *       錯答 rc5 零 API／正答 rc0 conf_code＋fill 一次
- *   [5] CLI 面（10）：dist 在場／--self-test rc0／無參數 rc2／未知子命令 rc2／bad ttl rc2／
+ *   [5] CLI 面（11）：dist 在場／--self-test rc0／無參數 rc2／未知子命令 rc2／bad ttl rc2／
  *       I3 排除面（零 deliver 子命令）／零自帶加密面（src 零 node:crypto 零原語 API）／
- *       package 面（private+bin）／子命令 --help 網路前攔截 rc0／位置參數 strict parse rc2
+ *       package 面（R5：private 不在場＋bin＋license MIT＋files 含 LICENSE）／
+ *       依賴面（零 file: spec——registry 可解析）／子命令 --help 網路前攔截 rc0／位置參數 strict parse rc2
  *   [6] README 帳（6）：誠實界線三條逐條在場／不點名律（零競品名）／tag 規約面／送出預設關面
  *   [7] 毒化齒（6，designated-RED；3 齒 × pristine-GREEN＋毒化專用 RED）：
  *       n3 比對摘除→「放行」／refs 白名單守衛摘除→越界「放行」／submit 非 TTY 拒摘除→rc3 翻 rc5。
@@ -55,7 +56,7 @@ function check(cond: boolean, label: string): void {
 }
 
 // —— 段帳 ——
-const SEC_CASES: Record<number, number> = { 1: 9, 2: 7, 3: 5, 4: 4, 5: 10, 6: 6, 7: 6 };
+const SEC_CASES: Record<number, number> = { 1: 9, 2: 7, 3: 5, 4: 4, 5: 11, 6: 6, 7: 6 };
 const secRan: Record<number, number> = {};
 function secOpen(sec: number, title: string): void {
   secRan[sec] = 0;
@@ -289,7 +290,7 @@ async function main(): Promise<void> {
     '4d 正答→rc0 conf_code＋fill 恰一',
   );
 
-  // ============ [5] CLI 面（10）============
+  // ============ [5] CLI 面（11）============
   secOpen(5, 'CLI 面');
   check(fs.existsSync(distCli), '5a dist 在場（先 build）');
   const sp5a = fs.existsSync(distCli)
@@ -313,7 +314,15 @@ async function main(): Promise<void> {
   const cryptoHit = /node:crypto/.test(srcText) || /createCipheriv|createDecipheriv|scryptSync|scrypt\(|pbkdf2Sync|argon2/.test(srcText);
   check(!cryptoHit, '5f 零自帶加密面（src 零 node:crypto 零原語 API——加密只 import core）');
   const pkg = JSON.parse(fs.readFileSync(path.join(PKG, 'package.json'), 'utf8'));
-  check(pkg.private === true && !!pkg.bin && !!pkg.bin['tacet-secret'], '5g package 面（private 不上 npm＋bin tacet-secret）');
+  check(
+    pkg.private !== true && !!pkg.bin && !!pkg.bin['tacet-secret'] && pkg.license === 'MIT' && Array.isArray(pkg.files) && pkg.files.includes('LICENSE'),
+    '5g package 面（R5 上架 t_7bf0cf9a：private 不在場＋bin tacet-secret＋license MIT＋files 含 LICENSE）',
+  );
+  const fileSpec = Object.entries(pkg.dependencies ?? {}).filter(([, v]) => String(v).startsWith('file:'));
+  check(
+    fileSpec.length === 0 && /^\^0\.\d+\.\d+$/.test(String(pkg.dependencies?.['@tacet-ink/journal-core'] ?? '')),
+    '5g2 依賴面（零 file: spec——registry 安裝形可解析；core＝^0.x.y）',
+  );
   // 5h 子命令 --help 網路前攔截（MAJOR 附 MINOR-2：舊形 request --help 真執行 N3→slot／落包 orphan 族）
   const sp5h = spawnSync(process.execPath, [distCli, 'request', '--base', UNREACHABLE, '--help'], {
     encoding: 'utf8',

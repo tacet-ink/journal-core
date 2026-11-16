@@ -38,12 +38,14 @@ KAT 單一真相＝`scripts/verify-core-crypto.ts` 頂層 `KAT_SR_S`／`KAT_SR_E
 **Monorepo** — npm workspaces `packages/*` 鋪底：`packages/cli`／`packages/mcp` 占位空殼
 （package.json＋README 指針、`private: true`、零實作——實作歸 R3b/R3c 卡）；**發佈 tag 規約**
 （2026-10-24 裁定）寫進 README：多包 tag 形 `<名>-v<version>`、包名禁 `v` 開頭、root 包維持 `v*`。
-publish 動作歸部署窗/上架階段——本版只 local（dist-tags 帳未動）。
+publish 動作於 R5 上架階段（t_7bf0cf9a）完成——三包 tag 觸發 publish.yml 多包 arm，見下
+**上架（R5）** 塊。
 
 **Docs** — `docs/format-spec.md`：布局表＋2（`content-stamp`／`ecdh-envelope`）、家族表＋2、
 §4.15／§4.16 逐條契約、§7.1 fields 名＋`eph_pub`、§7.2＋`jr5s_kat`／`jr5e_kat` 列、b64url 編碼例外註記。
 
-**packages/cli（R3b，t_8b19f126）** — 索取祕密本機 CLI `tacet-secret`（`private: true` 不上 npm；
+**packages/cli（R3b，t_8b19f126）** — 索取祕密本機 CLI `tacet-secret`（骨架期 `private: true`
+不上 npm；R5 上架階段摘 private 上 npm，見下**上架（R5）**塊；
 加密一律 `import` 本包，零自帶加密）：`request`（主路徑——N3 抓 /sreq→sha256→比對公開 repo
 SHA256SUMS，不符／任一抓取失敗／entry 缺席＝停、告知、不給連結；填寫連結公鑰 fragment 可交人，
 取件連結私鑰＋token 只落 `<stateDir>/<slot_id>.retrieve.json`（600/700），stdout 零值只「已寫入」）
@@ -53,11 +55,27 @@ TTY＝印摘要＋輸入 slot id 確認；ephemeral 一用一換＋write-once �
 `<home>/.tacet-secret`＋`TACET_SECRET_WHITELIST`＋狀態目錄 whitelist 檔；env 名面
 `TACET_SECRET_ENV_WHITELIST`、預設 `TACET_SECRET_` 前綴；realpath 後分隔符界前綴匹配）；
 exit code 表 0–5。
-**Gates** — `packages/cli/scripts/verify-cli.ts`（單位閘 41 斷言，in-gate 毒化齒 3）＋
-`scripts/e2e-cli.cjs`（hermetic devstack-stub＋真 PTY，64 斷言）；CI verify.yml＋3 步
+**Gates** — `packages/cli/scripts/verify-cli.ts`（單位閘 48 斷言，in-gate 毒化齒 3；
+R5 上架 t_7bf0cf9a：5g 重錨上架面＋5g2 依賴面零 file: spec）＋
+`scripts/e2e-cli.cjs`（hermetic devstack-stub＋真 PTY，76 斷言）；CI verify.yml＋3 步
 （CLI typecheck+build／verify／e2e）。
 **誠實界線（README 必載）** — 工具只驗自己抓到那份（不擋針對性攻擊）；頂層頁無 SRI；信任錨＝
 公開 repo 所在的 GitHub。差異化＝類別描述形（不點名競品）；I3 投遞工具排除（I 線停車）。
+
+**上架（R5 t_7bf0cf9a）** — 0.11.0 上架執行（AI 曝光研究裁定 2(a)；chris 11-15 14:08「跑」）：
+`packages/cli`／`packages/mcp` 摘 `private: true` 上 npm；兩包終檢 `license`/`homepage`/`repository`/
+`bugs` 欄＋`files` 帶 LICENSE；依賴 spec `file:../..`→`^0.11.0`（workspace 本地連結行為不變、
+registry 安裝形可解析）。`packages/mcp` `mcpName` 改為官方 MCP Registry 名
+`io.github.tacet-ink/tacet-secret`（registry 契約：mcpName＝server 名＝`server.json` `name`、
+`io.github.<org>/` 前綴——骨架期裸名 `tacet-secret` 不合法）＋`packages/mcp/server.json` 實落
+（schema 2025-12-11、npm 包形、stdio only）。`publish.yml` 增 `<名>-v*` 多包 arm
+（journal-cli／journal-mcp；tag 尾段 vs package version 對帳、`npm publish -w <pkg> --provenance`；
+root `v*` arm 行為零變）。`SKILL.md` frontmatter＋`name`（skills.sh 分佈形要求；Claude 面照綠）。
+`verify-cli.ts` 5g 重錨上架面（private 不在場＋license MIT＋files 含 LICENSE）＋
+5g2 新增依賴面（零 `file:` spec——registry 安裝形可解析）；斷言 47→48。
+RELEASE 動線＋tag 檢對帳＝[docs/RELEASE.md](./docs/RELEASE.md)；chris 親行節（mcp-publisher
+login/publish、Claude directory 提交、三方帳號、npmjs 建包＋trusted publisher、awesome-mcp-servers
+PR、one-time-secret topics）＝[R5-HANDOFF.md](./R5-HANDOFF.md)。
 
 ## [0.10.0] — 2026-11-12
 

@@ -1,15 +1,25 @@
 {
   "name": "@tacet-ink/journal-cli",
   "version": "0.11.0",
-  "private": true,
   "description": "tacet.ink 索取祕密本機 CLI（R3b t_8b19f126）：request／verify／submit——加密只 import journal-core，值永不回模型上下文",
+  "license": "MIT",
+  "homepage": "https://tacet.ink",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/tacet-ink/journal-core.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/tacet-ink/journal-core/issues"
+  },
   "type": "module",
   "bin": {
     "tacet-secret": "./dist/cli.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=24.7.0"
@@ -21,7 +31,7 @@
     "e2e": "node scripts/e2e-cli.cjs"
   },
   "dependencies": {
-    "@tacet-ink/journal-core": "file:../.."
+    "@tacet-ink/journal-core": "^0.11.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0"
