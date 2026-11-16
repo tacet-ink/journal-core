@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+      - 'journal-cli-v*'
+      - 'journal-mcp-v*'
   workflow_dispatch:
 
 permissions:
@@ -31,39 +33,108 @@ jobs:
         #（t_87ef62dd 裁定；publish 面有 typecheck+verify 先行＝腳本面零在場即安全）。
         run: npm ci --ignore-scripts
 
-      - name: Typecheck
+      - name: Resolve publish target (tag -> workspace)
+        # tag 規約（2026-10-24 裁定；README「發佈 tag 規約」＋docs/RELEASE.md）：
+        # root 維持 `v*` 單包形；多包形 `<名>-v<version>`，包名禁 `v` 開頭（防 tag
+        # 撞名）——名＝workspace 短名（journal-cli／journal-mcp）。tag ref 已先過
+        # on.push.tags 三式過濾；此步再 fail-fast 一次＝ref 形與 arm 形雙保險
+        #（workflow_dispatch 無 tag＝ref_type 非 tag，落「無 tag」步，不走此步解構）。
+        id: target
+        run: |
+          TAG="${GITHUB_REF_NAME:-}"
+          case "$TAG" in
+            journal-cli-v*)
+              echo "pkg_dir=packages/cli" >> "$GITHUB_OUTPUT"
+              echo "pkg_name=@tacet-ink/journal-cli" >> "$GITHUB_OUTPUT"
+              echo "pkg_version=${TAG#journal-cli-v}" >> "$GITHUB_OUTPUT"
+              ;;
+            journal-mcp-v*)
+              echo "pkg_dir=packages/mcp" >> "$GITHUB_OUTPUT"
+              echo "pkg_name=@tacet-ink/journal-mcp" >> "$GITHUB_OUTPUT"
+              echo "pkg_version=${TAG#journal-mcp-v}" >> "$GITHUB_OUTPUT"
+              ;;
+            v*)
+              echo "pkg_dir=." >> "$GITHUB_OUTPUT"
+              echo "pkg_name=@tacet-ink/journal-core" >> "$GITHUB_OUTPUT"
+              echo "pkg_version=${TAG#v}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::unresolvable publish tag '${TAG}'（期望 v*／journal-cli-v*／journal-mcp-v*）"
+              exit 1
+              ;;
+          esac
+
+      - name: Typecheck (root)
+        if: steps.target.outputs.pkg_dir == '.'
         run: npm run typecheck
 
-      - name: Verify crypto primitives
+      - name: Verify crypto primitives (root)
+        if: steps.target.outputs.pkg_dir == '.'
         run: npm run verify
 
-      - name: Build dist (tsc emit — ESM + .d.ts)
-        # exports 恆指 dist（0.3.0 起）：dist 不入版控，出車前必建。npm publish 的
-        # prepublishOnly 亦會重建（手動出車防線）；此步顯式前置＝建置失敗在 publish 前顯形。
+      - name: Build root dist (tsc emit — ESM + .d.ts)
+        # exports 恆指 dist（0.3.0 起）：dist 不入版控，出車前必建。root arm 的
+        # npm publish prepublishOnly 亦會重建（手動出車防線）；此步顯式前置＝建置
+        # 失敗在 publish 前顯形。cli/mcp arm 同需 root dist 在前（兩包 typecheck/
+        # build 消費 core 子路徑 .d.ts——workspace 連結下 exports 指 dist）＝root
+        # build 三 arm 一律先跑。
         run: |
           npm run build
           node -e "import('./dist/index.js').then(m=>{const n=Object.keys(m).length;console.log('dist exports:',n);if(!n)process.exit(1)})"
 
+      - name: CLI typecheck + build + verify
+        if: steps.target.outputs.pkg_dir == 'packages/cli'
+        run: |
+          npm run typecheck -w @tacet-ink/journal-cli
+          npm run build -w @tacet-ink/journal-cli
+          npm run verify -w @tacet-ink/journal-cli
+
+      - name: Build CLI dist (MCP dependency face)
+        # mcp 經 `@tacet-ink/journal-cli/dist/*` 子路徑 import cli（workspace
+        # 內部契約；npm 面靠 files 白名單帶 dist——見 packages/cli/package.json）：
+        # mcp arm 先建 cli dist（tsc 同跑 cli typecheck），再建 mcp。
+        if: steps.target.outputs.pkg_dir == 'packages/mcp'
+        run: npm run build -w @tacet-ink/journal-cli
+
+      - name: MCP typecheck + build + verify
+        if: steps.target.outputs.pkg_dir == 'packages/mcp'
+        run: |
+          npm run typecheck -w @tacet-ink/journal-mcp
+          npm run build -w @tacet-ink/journal-mcp
+          npm run verify -w @tacet-ink/journal-mcp
+
       - name: Check tag matches package version
-        # workflow_dispatch（branch ref）無 v-tag：直接 fail-fast 標記「須推 v* tag」，
+        # workflow_dispatch（branch ref）無 tag：直接 fail-fast 標記「須推 tag」，
         # 不誤踩「tag != package version」檢查錯訊。
         if: github.ref_type != 'tag'
         run: |
-          echo "::error::publish runs on tag refs only (GITHUB_REF_TYPE=$GITHUB_REF_TYPE); push a v* tag."
+          echo "::error::publish runs on tag refs only (GITHUB_REF_TYPE=$GITHUB_REF_TYPE); push v*／journal-cli-v*／journal-mcp-v*."
           exit 1
 
       - name: Check tag matches package version (tag ref)
+        # tag 尾段（`-v`／`v` 後）＝該 workspace package.json version——三 arm 同一
+        # 對帳式（R5 t_7bf0cf9a：原 root 專用 `${GITHUB_REF_NAME#v}` 一般化）。
         if: github.ref_type == 'tag'
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          PKG="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::tag v$TAG != package.json $PKG"
+          PKG_DIR="${{ steps.target.outputs.pkg_dir }}"
+          WANT="${{ steps.target.outputs.pkg_version }}"
+          ACTUAL="$(node -p "require('./${PKG_DIR}/package.json').version")"
+          if [ "$ACTUAL" != "$WANT" ]; then
+            echo "::error::tag version $WANT != $PKG_DIR/package.json $ACTUAL"
             exit 1
           fi
 
       - name: Publish with provenance (OIDC trusted publishing)
-        run: npm publish --access public --provenance
         # 無 NPM_TOKEN：npm CLI 自動偵測 Actions OIDC 環境換短效 token。
-        # 前置（npmjs.com）：package settings → Trusted Publisher → GitHub Actions，
-        # 填 user/repo/workflow filename(publish.yml)/environment(npm)。
+        # 前置（npmjs.com）：每包各自 settings → Trusted Publisher → GitHub Actions，
+        # 填 user/repo/workflow filename(publish.yml)/environment(npm)——0.11.0 上架
+        # （R5 t_7bf0cf9a）起 journal-cli／journal-mcp 為新包，須各建包＋各設 Trusted
+        # Publisher（對帳與動線見 docs/RELEASE.md）。
+        run: |
+          PKG_DIR="${{ steps.target.outputs.pkg_dir }}"
+          PKG_NAME="${{ steps.target.outputs.pkg_name }}"
+          if [ "$PKG_DIR" = "." ]; then
+            npm publish --access public --provenance
+          else
+            npm publish -w "$PKG_NAME" --access public --provenance
+          fi

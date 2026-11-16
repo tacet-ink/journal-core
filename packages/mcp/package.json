@@ -1,16 +1,26 @@
 {
   "name": "@tacet-ink/journal-mcp",
   "version": "0.11.0",
-  "private": true,
   "description": "tacet.ink 索取祕密 MCP stdio server（R3c t_a79f8280）：request（貼連結主路徑＋2026-07-28 MRTR 增強面）／verify（四方帳）——加密只 import journal-core，零遠端 MCP",
+  "license": "MIT",
+  "homepage": "https://tacet.ink",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/tacet-ink/journal-core.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/tacet-ink/journal-core/issues"
+  },
   "type": "module",
   "bin": {
     "tacet-mcp": "./dist/server.js"
   },
-  "mcpName": "tacet-secret",
+  "mcpName": "io.github.tacet-ink/tacet-secret",
   "files": [
     "dist",
     "README.md",
+    "LICENSE",
     ".claude-plugin",
     ".mcp.json",
     "skills"
@@ -25,8 +35,8 @@
     "e2e": "node scripts/e2e-mcp.cjs"
   },
   "dependencies": {
-    "@tacet-ink/journal-core": "file:../..",
-    "@tacet-ink/journal-cli": "file:../cli"
+    "@tacet-ink/journal-core": "^0.11.0",
+    "@tacet-ink/journal-cli": "^0.11.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0"

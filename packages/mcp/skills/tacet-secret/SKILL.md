@@ -1,4 +1,5 @@
 ---
+name: tacet-secret
 description: 需要某人提供密碼、API 金鑰或 token 時使用——不要讓值貼進對話。呼叫 tacet-secret 的 request 工具開一個零知識填寫 slot（填寫連結只帶公鑰，安全可交；N3 先驗 /sreq 頁對公開 SHA256SUMS）。
 ---
 
