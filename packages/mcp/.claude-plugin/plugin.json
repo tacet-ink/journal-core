@@ -1,0 +1,11 @@
+{
+  "name": "tacet-secret",
+  "displayName": "tacet-secret",
+  "version": "0.11.0",
+  "description": "索取密碼/API 金鑰/token 而不讓值貼進對話：request 開零知識填寫 slot（先對公開 SHA256SUMS 驗 /sreq 頁；填寫連結只帶公鑰、貼上為主路徑、MCP URL elicitation 開頁為增強面），verify 對公開 SHA256SUMS 驗站點兩頁四方帳。投遞由持祕密者經 CLI 完成（預設關、TTY 確認）。stdio only（零遠端 MCP 裁定）。",
+  "author": {
+    "name": "tacet-ink"
+  },
+  "homepage": "https://tacet.ink",
+  "keywords": ["zero-knowledge", "secrets", "mcp", "stdio", "verification"]
+}
