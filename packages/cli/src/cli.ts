@@ -6,10 +6,13 @@
  *   request  — 主路徑：開 slot＋N3 先驗證＋把填寫連結交給人（取件連結只落檔）
  *   verify   — 人可自跑：/secret＋/sreq 對公開 repo SHA256SUMS（四方帳）
  *   submit   — 預設關：人在 TTY 確認才投遞（非 TTY 零 API）
+ *   verify-site — 任何人可自跑：公開部署紀錄最新一筆 manifest 對 live 站逐檔 sha256＋CSP
  *   --self-test — core 0.11.0 向量自檢（可選）
  *
  * exit code：0 ok；1 執行失敗（N3 不符／API 錯／verify MISMATCH）；2 用法錯；
  *            3 submit 非 TTY 拒；4 參照／白名單拒；5 確認中止。
+ *   verify-site 例外（自訂面）：0 全符；1 不符（含帳鏈破／更正紀錄／帳面形不合法）；
+ *            2 網路／取得錯——用法錯沿用全域 2。
  *
  * 值紀律：命令行只進參照（env:NAME／file:PATH）與公開連結；stdout 永不含 token
  * 原值／私鑰 JWK／明文內容——輸出面只「已寫入 <path>」。
@@ -20,6 +23,7 @@ import { TTL_CHOICES, runRequest, type TtlChoice } from './request.ts';
 import { runSelfTest } from './selftest.ts';
 import { runSubmit } from './submit.ts';
 import { runVerify } from './verify.ts';
+import { DEFAULT_LOG_URL, runVerifySite } from './site.ts';
 
 export const EXIT_OK = 0;
 export const EXIT_RUNTIME = 1;
@@ -43,11 +47,19 @@ const USAGE = `tacet-secret — tacet.ink 索取祕密本機 CLI（加密全部�
                        [--base URL] [--confirm-input <slot_id>] [--allow-non-tty]
       預設關：非 TTY 直接拒（exit 3，零 API）；TTY 需輸入 slot 編號確認。
 
+  tacet-secret verify-site [--url URL] [--log URL] [--json]
+      公開部署紀錄（deploy-log 帳本最後一行）的 manifest 對 live 站逐檔比對 sha256
+      ＋/privacy CSP 標頭；redirect 不跟隨、不重試（重跑命令即重試）、零寫入。
+      exit：0 全符｜1 不符（檔／CSP／帳鏈破／更正紀錄／帳面形不合法）｜2 網路/取得錯
+      （帳本／manifest／live 取不到、CSP 探測面失敗）；用法錯亦 2。
+
   tacet-secret --self-test
       core 0.11.0 向量自檢（jr5e/jr5s KAT＋負向量；走真模組，零鏡像）。
 
-預設：--base https://tacet.ink；--sums＝公開 repo main/SHA256SUMS（raw.githubusercontent）。
-exit code：0 ok｜1 執行失敗｜2 用法錯｜3 非 TTY 拒｜4 參照/白名單拒｜5 確認中止。`;
+預設：--base https://tacet.ink；--sums＝公開 repo main/SHA256SUMS（raw.githubusercontent）；
+      verify-site --url https://tacet.ink；--log＝公開 deploy-log repo main/deploy-log.jsonl（raw）。
+exit code：0 ok｜1 執行失敗｜2 用法錯｜3 非 TTY 拒｜4 參照/白名單拒｜5 確認中止
+          （verify-site 自訂面見上）。`;
 
 interface ParsedOpts {
   base?: string;
@@ -59,6 +71,8 @@ interface ParsedOpts {
   json?: boolean;
   confirmInput?: string;
   allowNonTty?: boolean;
+  url?: string;
+  log?: string;
   positional: string[];
 }
 
@@ -104,6 +118,16 @@ export function parseArgs(args: string[]): ParsedOpts | null {
       if (!t) return null;
       o.confirmInput = t[0];
       i = t[1] - 1;
+    } else if (a === '--url') {
+      const t = take(i, a);
+      if (!t) return null;
+      o.url = t[0];
+      i = t[1] - 1;
+    } else if (a === '--log') {
+      const t = take(i, a);
+      if (!t) return null;
+      o.log = t[0];
+      i = t[1] - 1;
     } else if (a === '--annual') {
       o.annual = true;
     } else if (a === '--json') {
@@ -133,6 +157,19 @@ function checkBase(base: string | undefined): string {
   }
 }
 
+/** verify-site 的 --url/--log 形檢（http/https；--url 不收 query/fragment——候選路徑接在其後）。 */
+function checkSiteUrl(flag: string, v: string, pathBase: boolean): string | null {
+  try {
+    const u = new URL(v);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('proto');
+    if (pathBase && (u.search !== '' || u.hash !== '')) throw new Error('query');
+    return v;
+  } catch {
+    process.stderr.write(`${flag} 形錯（需 http/https${pathBase ? '，不含 ?query/#fragment' : ''}）：${v}\n`);
+    return null;
+  }
+}
+
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
   if (args.length === 0 || args[0] === '--help') {
@@ -159,10 +196,32 @@ async function main(): Promise<number> {
     process.stdout.write(USAGE + '\n');
     return EXIT_OK;
   }
-  // strict parse：request/verify 不收位置參數（submit 的兩位置參數在其分支內驗）——零網路前拒
-  if ((args[0] === 'request' || args[0] === 'verify') && o.positional.length !== 0) {
+  // strict parse：request/verify/verify-site 不收位置參數（submit 的兩位置參數在其分支內驗）——零網路前拒
+  if ((args[0] === 'request' || args[0] === 'verify' || args[0] === 'verify-site') && o.positional.length !== 0) {
     process.stderr.write(`${args[0]} 不收位置參數（tacet-secret --help）\n`);
     return EXIT_USAGE;
+  }
+  // 旗標適用面：--url/--log 只屬 verify-site（其餘子命令維持「未知旗標」舊面 rc2）；
+  // verify-site 只收 --url/--log/--json——零網路前拒
+  if (args[0] !== 'verify-site' && (o.url !== undefined || o.log !== undefined)) {
+    process.stderr.write('--url/--log 只適用 verify-site（tacet-secret --help）\n');
+    return EXIT_USAGE;
+  }
+  if (args[0] === 'verify-site') {
+    const foreign =
+      o.base !== undefined || o.sums !== undefined || o.ttl !== undefined || o.annual || o.annualToken !== undefined ||
+      o.out !== undefined || o.confirmInput !== undefined || o.allowNonTty;
+    if (foreign) {
+      process.stderr.write('verify-site 只收 --url/--log/--json（tacet-secret --help）\n');
+      return EXIT_USAGE;
+    }
+    const url = checkSiteUrl('--url', o.url ?? DEFAULT_BASE_URL, true);
+    const log = checkSiteUrl('--log', o.log ?? DEFAULT_LOG_URL, false);
+    if (url === null || log === null) return EXIT_USAGE;
+    const r = await runVerifySite({ url, log, json: !!o.json });
+    for (const line of r.lines) process.stdout.write(line + '\n');
+    if (o.json) process.stdout.write(JSON.stringify(r.jsonOut, null, 2) + '\n');
+    return r.exit;
   }
   const base = checkBase(o.base);
   const sums = o.sums ?? DEFAULT_SUMS_URL;

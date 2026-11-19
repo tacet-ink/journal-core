@@ -21,8 +21,14 @@
  *       n3 比對摘除→「放行」／refs 白名單守衛摘除→越界「放行」／submit 非 TTY 拒摘除→rc3 翻 rc5。
  *       每齒：pristine 必綠臂先行→變異→不變式檢查專用結束碼＋標記（crash≠變異破——
  *       兩臂皆 rc=1 無法分辨，故 RED 判據＝專用碼＋標記）→還原→hash 核對還原。
+ *   [8] verify-site（18，t_b035fe9b；fixture 電池 scripts/lib/site-fixture.ts，帳本 root／live root 分路）：
+ *       正向（CSP＋二進位＋BOM＋redirect-skip）rc0 計數／live 一 byte 毒化 rc1 列表恰該檔／
+ *       manifest 位元組毒化 rc1 帳鏈破零探測／末行 correction rc1 零探測／--log 不達 rc2／--url 不達 rc2／
+ *       垃圾行 rc1 帳面形不合法／單檔 404（規範化 3xx 非 skip）rc1／CSP 缺席 rc1／CSP 探測 503 rc2／
+ *       單檔 503 rc2／--help rc0／未知旗標 rc2／位置參數 rc2／--json 子程序出場解析／
+ *       毒化齒 T（帳鏈核對摘除→毒化 manifest 翻 rc0；pristine-GREEN＋專用 RED 14）／README 節
  *
- * hermetic：全段零外網（hermetic SreqStub＋127.0.0.1:1 不可達面）；HOME 指向 temp 目錄；
+ * hermetic：全段零外網（hermetic SreqStub／site-fixture＋127.0.0.1:1 不可達面）；HOME 指向 temp 目錄；
  * 啟動時清空環境 TACET_SECRET_*（防 ambient 污染白名單段）。
  */
 
@@ -30,7 +36,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sha256Hex } from '@tacet-ink/journal-core/server/hash';
 import { generateEnvelopeKeyPair } from '@tacet-ink/journal-core/secret/jr5e';
@@ -56,7 +62,7 @@ function check(cond: boolean, label: string): void {
 }
 
 // —— 段帳 ——
-const SEC_CASES: Record<number, number> = { 1: 9, 2: 7, 3: 5, 4: 4, 5: 11, 6: 6, 7: 6 };
+const SEC_CASES: Record<number, number> = { 1: 9, 2: 7, 3: 5, 4: 4, 5: 11, 6: 6, 7: 6, 8: 18 };
 const secRan: Record<number, number> = {};
 function secOpen(sec: number, title: string): void {
   secRan[sec] = 0;
@@ -372,6 +378,7 @@ async function main(): Promise<void> {
     checkSrc: string,
     redMarker: string,
     redCode: number,
+    sec = 7,
   ): Promise<void> {
     const orig = fs.readFileSync(file, 'utf8');
     if (!orig.includes(from)) throw new Error(`tooth ${id}: 變異錨缺席（src 已漂移）`);
@@ -388,7 +395,7 @@ async function main(): Promise<void> {
     const out0 = `${sp0.stdout ?? ''}\n${sp0.stderr ?? ''}`;
     check(
       sp0.status === 0,
-      `7${id}a pristine GREEN（未變異 src 下不變式檢查過；rc=${sp0.status}${sp0.status !== 0 ? '；' + out0.slice(0, 200) : ''}）`,
+      `${sec}${id}a pristine GREEN（未變異 src 下不變式檢查過；rc=${sp0.status}${sp0.status !== 0 ? '；' + out0.slice(0, 200) : ''}）`,
     );
     fs.writeFileSync(file, orig.replace(from, to));
     const sp = runCheck();
@@ -397,7 +404,7 @@ async function main(): Promise<void> {
     const outP = `${sp.stdout ?? ''}\n${sp.stderr ?? ''}`;
     check(
       sp.status === redCode && outP.includes(redMarker) && restored,
-      `7${id}b 毒化專用 RED（守衛摘除→rc=${sp.status} 期望 ${redCode}＋${redMarker}；還原核對=${restored}${sp.status !== redCode ? '；' + outP.slice(0, 200) : ''}）`,
+      `${sec}${id}b 毒化專用 RED（守衛摘除→rc=${sp.status} 期望 ${redCode}＋${redMarker}；還原核對=${restored}${sp.status !== redCode ? '；' + outP.slice(0, 200) : ''}）`,
     );
   }
 
@@ -492,6 +499,152 @@ process.exit(0);
     'TOOTH3-RED',
     13,
   );
+
+  // ============ [8] verify-site（18；fixture 電池，hermetic 零外網）============
+  secOpen(8, 'verify-site');
+  const SITE_FIXTURE = path.join(PKG, 'scripts', 'lib', 'site-fixture.ts');
+  const { startSiteFixture } = await import(pathToFileURL(SITE_FIXTURE).href);
+  const { runVerifySite } = await import('../src/site.ts');
+  const fx = await startSiteFixture();
+  type VS = { exit: number; lines: string[]; jsonOut: Record<string, unknown> };
+  const vs = (live: string, log: string): Promise<VS> => runVerifySite({ url: live, log, json: true });
+  const tailOf = (r: VS) => r.lines[r.lines.length - 1] ?? '';
+  const misPaths = (r: VS) => JSON.stringify(((r.jsonOut.mismatches as { path: string }[]) ?? []).map((x) => x.path));
+
+  const r8a = await vs(fx.liveUrl('good'), fx.logUrl('ok'));
+  check(
+    r8a.exit === 0 && tailOf(r8a) === 'VERIFY-SITE-OK (8 compared / 1 redirect-skip / seq 2)' && JSON.stringify(r8a.jsonOut.redirect_skip) === '["landing.html"]',
+    `8a 正向（CSP＋二進位＋BOM＋redirect-skip）rc0＋VERIFY-SITE-OK 計數（rc=${r8a.exit}；${tailOf(r8a)}）`,
+  );
+  const r8b = await vs(fx.liveUrl('poison-byte'), fx.logUrl('ok'));
+  check(
+    r8b.exit === 1 && tailOf(r8b).startsWith('VERIFY-SITE-MISMATCH (1 檔') && misPaths(r8b) === '["media/pic.png"]',
+    `8b live 一 byte 毒化（二進位檔）→rc1＋列表恰 [media/pic.png]（rc=${r8b.exit}；${misPaths(r8b)}）`,
+  );
+  let hits8 = fx.liveHits();
+  const r8c = await vs(fx.liveUrl('tampered'), fx.logUrl('poison-manifest'));
+  check(
+    r8c.exit === 1 && tailOf(r8c).startsWith('VERIFY-SITE-MISMATCH (帳鏈破') && fx.liveHits() === hits8,
+    `8c manifest 位元組毒化（帳行 hash 不動）→rc1 帳鏈破＋零 live 探測（rc=${r8c.exit}；${tailOf(r8c)}）`,
+  );
+  hits8 = fx.liveHits();
+  const r8d = await vs(fx.liveUrl('good'), fx.logUrl('correction'));
+  check(
+    r8d.exit === 1 &&
+      tailOf(r8d).startsWith('VERIFY-SITE-CORRECTION (seq=3 references_seq=2') &&
+      r8d.lines.some((l) => l.includes('✗ about.html')) &&
+      fx.liveHits() === hits8,
+    `8d 帳本末行 correction→rc1＋VERIFY-SITE-CORRECTION＋mismatches 列出＋零 live 探測（rc=${r8d.exit}）`,
+  );
+  const r8e = await vs(fx.liveUrl('good'), `${UNREACHABLE}/deploy-log.jsonl`);
+  check(r8e.exit === 2 && tailOf(r8e).startsWith('VERIFY-SITE-NETWORK (帳本取得失敗'), `8e --log 不達→rc2 NETWORK（rc=${r8e.exit}）`);
+  const r8f = await vs(UNREACHABLE, fx.logUrl('ok'));
+  check(r8f.exit === 2 && tailOf(r8f).startsWith('VERIFY-SITE-NETWORK (8 檔取得錯'), `8f --url 不達（有效帳本）→rc2 NETWORK（rc=${r8f.exit}）`);
+  const r8g = await vs(fx.liveUrl('good'), fx.logUrl('garbage'));
+  check(
+    r8g.exit === 1 && tailOf(r8g) === 'VERIFY-SITE-MISMATCH (帳面形不合法：第 3 行非 JSON)',
+    `8g 帳本 200 但垃圾行→rc1 帳面形不合法（rc=${r8g.exit}；${tailOf(r8g)}）`,
+  );
+  const r8h = await vs(fx.liveUrl('missing-about'), fx.logUrl('ok'));
+  const m8h = (r8h.jsonOut.mismatches as Record<string, unknown>[]) ?? [];
+  check(
+    r8h.exit === 1 && misPaths(r8h) === '["about.html"]' && m8h[0]?.http_status === 404,
+    `8h live 單檔 404（.html 候選 308 回候選集內＝規範化，非 skip）→rc1 列表恰 [about.html] http=404（rc=${r8h.exit}）`,
+  );
+  const r8i = await vs(fx.liveUrl('csp-absent'), fx.logUrl('ok'));
+  check(
+    r8i.exit === 1 && misPaths(r8i) === '["csp_header"]' && tailOf(r8i) === 'VERIFY-SITE-MISMATCH (CSP 不符)',
+    `8i CSP live 缺席（manifest 有）→rc1 列 csp_header（rc=${r8i.exit}）`,
+  );
+  const r8j = await vs(fx.liveUrl('csp-503'), fx.logUrl('ok'));
+  check(
+    r8j.exit === 2 && tailOf(r8j).startsWith('VERIFY-SITE-NETWORK') && /CSP 探測面失敗：HTTP 503/.test(tailOf(r8j)),
+    `8j CSP 探測 /privacy 503→rc2 fail-closed（rc=${r8j.exit}）`,
+  );
+  const r8k = await vs(fx.liveUrl('file-503'), fx.logUrl('ok'));
+  check(r8k.exit === 2 && tailOf(r8k) === 'VERIFY-SITE-NETWORK (1 檔取得錯)', `8k live 單檔 503→rc2 取得錯（非 skip、非過；rc=${r8k.exit}）`);
+
+  // usage 三面（子程序；零網路前拒——不可達面＋stdout 零 VERIFY-SITE 標記）
+  const sp8l = spawnSync(process.execPath, [distCli, 'verify-site', '--url', UNREACHABLE, '--help'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, HOME: TMP_HOME } });
+  check(
+    sp8l.status === 0 && /用法:/.test(sp8l.stdout ?? '') && /tacet-secret verify-site/.test(sp8l.stdout ?? '') && !/VERIFY-SITE-/.test(sp8l.stdout ?? ''),
+    `8l verify-site --help rc0＋usage（網路前攔截；實際 rc=${sp8l.status}）`,
+  );
+  const sp8m = spawnSync(process.execPath, [distCli, 'verify-site', '--frob'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, HOME: TMP_HOME } });
+  check(
+    sp8m.status === 2 && /參數錯/.test(sp8m.stderr ?? '') && !/VERIFY-SITE-/.test(sp8m.stdout ?? ''),
+    `8m verify-site 未知旗標 rc2（零網路前拒；實際 rc=${sp8m.status}）`,
+  );
+  const sp8n = spawnSync(process.execPath, [distCli, 'verify-site', 'stray-arg', '--log', `${UNREACHABLE}/x.jsonl`], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, HOME: TMP_HOME } });
+  check(
+    sp8n.status === 2 && /不收位置參數/.test(sp8n.stderr ?? '') && !/VERIFY-SITE-/.test(sp8n.stdout ?? ''),
+    `8n verify-site 位置參數 rc2（strict parse 零網路前拒；實際 rc=${sp8n.status}）`,
+  );
+  // 8o --json：dist 子程序對 fixture（非同步 spawn——spawnSync 會卡住本程序事件迴圈＝fixture 無法回應）
+  const sp8o = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
+    const child = spawn(process.execPath, [distCli, 'verify-site', '--url', fx.liveUrl('good'), '--log', fx.logUrl('ok'), '--json'], {
+      env: { ...process.env, HOME: TMP_HOME },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let so = '';
+    let se = '';
+    const killer = setTimeout(() => child.kill('SIGKILL'), 60_000);
+    child.stdout.on('data', (d) => (so += d));
+    child.stderr.on('data', (d) => (se += d));
+    child.on('close', (code) => {
+      clearTimeout(killer);
+      resolve({ status: code, stdout: so, stderr: se });
+    });
+  });
+  let j8o: Record<string, unknown> | null = null;
+  try {
+    j8o = JSON.parse(sp8o.stdout.slice(sp8o.stdout.indexOf('\n{') + 1));
+  } catch {
+    j8o = null;
+  }
+  check(
+    sp8o.status === 0 &&
+      sp8o.stdout.includes('VERIFY-SITE-OK (8 compared / 1 redirect-skip / seq 2)') &&
+      !!j8o && j8o.ok === true && j8o.verdict === 'ok' && j8o.compared === 8 && JSON.stringify(j8o.redirect_skip) === '["landing.html"]' &&
+      (j8o.ledger as Record<string, unknown> | null)?.seq === 2,
+    `8o --json 子程序出場解析一筆（verdict ok／compared 8／redirect_skip／ledger.seq；實際 rc=${sp8o.status}${sp8o.status !== 0 ? '；' + (sp8o.stdout + sp8o.stderr).slice(-200) : ''}）`,
+  );
+
+  // 毒化齒 T：帳鏈核對摘除→毒化 manifest（攻擊者同換站與 manifest）不再翻紅
+  await tooth(
+    'T',
+    SRC('site.ts'),
+    'if (mSha !== row.manifest_sha256) {',
+    'if (false && mSha !== row.manifest_sha256) {',
+    `const { startSiteFixture } = await import(${JSON.stringify(pathToFileURL(SITE_FIXTURE).href)});
+const { runVerifySite } = await import(${JSON.stringify(pathToFileURL(SRC('site.ts')).href)});
+const fx = await startSiteFixture();
+const r = await runVerifySite({ url: fx.liveUrl('tampered'), log: fx.logUrl('poison-manifest'), json: false });
+await fx.close();
+const out = r.lines.join(' | ');
+if (r.exit === 0) { console.error('TOOTH4-RED 不變式破（帳鏈核對摘除→毒化 manifest 放行 rc=0）'); process.exit(14); }
+if (r.exit !== 1 || !out.includes('帳鏈破')) { console.error('TOOTH4-CRASH 非預期（rc=' + r.exit + '）' + out.slice(-300)); process.exit(6); }
+console.log('TOOTH4-OK（毒化 manifest→帳鏈破 rc1）');
+process.exit(0);
+`,
+    'TOOTH4-RED',
+    14,
+    8,
+  );
+
+  // README：verify-site 節＋exit 0/1/2 三行＋零競品名
+  const siteSec = (readme.split('## 部署驗證（verify-site）')[1] ?? '').split('\n## ')[0];
+  check(
+    siteSec.length > 0 &&
+      /^\| 0 \| 全符/m.test(siteSec) &&
+      /^\| 1 \| 不符/m.test(siteSec) &&
+      /^\| 2 \| 網路／取得錯/m.test(siteSec) &&
+      /tacet-secret verify-site/.test(readme) &&
+      !/agent-secret/.test(readme) &&
+      !/Vaulted/.test(readme),
+    '8p README verify-site 節在場＋exit 0/1/2 三行＋零競品名',
+  );
+  await fx.close();
 
   // ============ 帳面收口 ============
   await stub.close();

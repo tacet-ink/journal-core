@@ -34,6 +34,8 @@ const DEFAULT_MAX_BYTES = 5 * 1024 * 1024; // /sreq 實測 62KB 級；5MB cap �
 export interface FetchOpts {
   timeoutMs?: number;
   maxBytes?: number;
+  /** 附加請求標頭（verify-site 帶部署端 canary 同字 UA；缺席＝既有行為不變） */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -56,7 +58,7 @@ export async function fetchBytes(url: string, opts: FetchOpts = {}): Promise<Uin
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let res: Response;
   try {
-    res = await fetch(u, { redirect: 'follow', signal: ctl.signal });
+    res = await fetch(u, { redirect: 'follow', signal: ctl.signal, headers: opts.headers });
   } catch (e) {
     const isAbort = e instanceof Error && e.name === 'AbortError';
     throw new FetchError(

@@ -1,6 +1,6 @@
 {
   "name": "@tacet-ink/journal-cli",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "tacet.ink 索取祕密本機 CLI（R3b t_8b19f126）：request／verify／submit——加密只 import journal-core，值永不回模型上下文",
   "license": "MIT",
   "homepage": "https://tacet.ink",

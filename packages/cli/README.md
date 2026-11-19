@@ -8,13 +8,14 @@ R3b（t_8b19f126）：把 tacet.ink「索取祕密」流程搬進終端機——
 
 ## 這是什麼
 
-三個子命令，一條紀律：
+三個子命令，一條紀律（另附 `verify-site`：部署紀錄對 live 站的自驗面，見〈部署驗證（verify-site）〉）：
 
 | 子命令 | 做什麼 | 誰跑 |
 | --- | --- | --- |
 | `request` | **主路徑**：N3 先驗證→建 slot→把**填寫連結**（公鑰面）交人；**取件連結**（私鑰＋token）只寫入本機檔案 | agent 跑 |
 | `verify` | 同時驗 `/secret` 與 `/sreq` 對公開 repo `SHA256SUMS`，印四方帳 | 人可自跑 |
 | `submit` | 把內容填進 slot——**預設關**：人在 TTY 輸入 slot 編號確認才動 | 人跑（或 CI 明式） |
+| `verify-site` | 公開部署紀錄最新一筆的 manifest 對 live 站逐檔比對 sha256＋CSP | 任何人可自跑 |
 
 **值永不回模型上下文**（設計 L128-129）：
 
@@ -62,6 +63,9 @@ tacet-secret verify
 # 投遞（預設關）：人在終端機跑，CLI 會要求輸入 slot 編號確認
 tacet-secret submit '<填寫連結>' file:$HOME/.tacet-secret/payload.txt
 
+# 部署驗證：live 站逐檔對公開部署紀錄最新一筆（任何人可自跑；exit 0/1/2 見下節）
+tacet-secret verify-site
+
 # 可選自檢（core 0.11.0 向量：jr5e/jr5s KAT＋負向量，走真模組）
 tacet-secret --self-test
 ```
@@ -76,7 +80,9 @@ tacet-secret --self-test
 | `--out file:PATH\|PATH` | request | 取件包輸出路徑（白名單守衛；預設 `~/.tacet-secret/<slot_id>.retrieve.json`；不覆蓋既有檔） |
 | `--base URL` | request/verify/submit | 站 base（預設 `https://tacet.ink`；本機/dev 可指向 stub） |
 | `--sums URL\|PATH` | request/verify | SHA256SUMS 真值源（預設＝公開 repo `main/SHA256SUMS` raw；亦收本地路徑） |
-| `--json` | request/verify | stdout 附加機器可讀 JSON（元資料面；仍零機密值） |
+| `--json` | request/verify/verify-site | stdout 附加機器可讀 JSON（元資料面；仍零機密值） |
+| `--url URL` | verify-site | live 站 base（預設 `https://tacet.ink`） |
+| `--log URL` | verify-site | 部署紀錄帳本 raw URL（預設＝公開 deploy-log repo `main/deploy-log.jsonl`） |
 | `--confirm-input <slot_id>` | submit | CI/測試面：以參數代確認（須配 `--allow-non-tty`） |
 | `--allow-non-tty` | submit | 跳過 TTY 要求（仍須 `--confirm-input` 明式值） |
 
@@ -90,6 +96,8 @@ tacet-secret --self-test
 | 3 | submit 非 TTY 拒（未送出任何東西） |
 | 4 | 參照／白名單拒（含 `--out` 越界或已存在） |
 | 5 | submit 確認中止（輸入非 slot id） |
+
+`verify-site` 用自己的 0/1/2 面（見〈部署驗證（verify-site）〉）；用法錯同上表為 2。
 
 ## 安全設計
 
@@ -137,6 +145,68 @@ tacet-secret --self-test
 `request` 成功後，取件連結（含 A 私鑰 fragment `#k=` 與取件 token `&t=`）只寫入
 白名單路徑的 JSON 檔（`~/.tacet-secret/<slot_id>.retrieve.json`，chmod 600，
 state 目錄 700，不覆蓋既有檔）。stdout 只有「已寫入 \<path\>」。
+
+## 部署驗證（verify-site）
+
+`verify-site` 讓任何人自己核對：**live 站此刻送出的每個檔案，是否就是營運者在公開部署紀錄裡記下的
+最新一版**。零寫入、零遙測——只發 GET（UA 與部署端 canary 同字），不寫任何檔案。
+
+```sh
+tacet-secret verify-site                                         # 預設：https://tacet.ink＋公開帳本
+tacet-secret verify-site --url https://tacet.ink --json          # 附機器可讀 JSON
+tacet-secret verify-site --log https://<鏡像>/deploy-log.jsonl   # 帳本鏡像（manifest 相對它解析）
+```
+
+| 旗標 | 說明 |
+| --- | --- |
+| `--url URL` | live 站 base（預設 `https://tacet.ink`；http/https，不含 query／fragment） |
+| `--log URL` | 帳本 raw URL（預設 `https://raw.githubusercontent.com/tacet-ink/deploy-log/main/deploy-log.jsonl`；http/https） |
+| `--json` | stdout 附加機器可讀 JSON（verdict／mismatches／redirect_skip／network_errors／chain_errors） |
+
+它做什麼：
+
+1. 抓帳本 `deploy-log.jsonl`（schema `tacet-deploy-log/v1`，append-only；部署「先記後上」）→
+   全帳形檢（seq 1..n 連續、schema、type、manifest 路徑形）→ **最後一行＝最新一筆**。
+2. 最新一筆是 `type=correction`（營運者自己記錄了「現場不符」）→ 印更正摘要（observed_at／
+   references_seq／mismatches）、**不探測 live**、exit 1——最新已知狀態就是不符。
+3. `deploy`／`baseline`：抓該行 `manifest`（相對帳本 URL 解析）→ manifest 位元組 sha256 必等於
+   帳行 `manifest_sha256`（帳鏈）；帳行快速核對值（`rb_hash`／`index_html`／`csp_header` 等）必與
+   manifest 內值一致。
+4. 逐檔：`manifest.files` 剔除 `_headers`／`_redirects`；候選網址序 `[路徑, 去 .html,
+   去 index.html（留尾斜線）, 再去尾斜線]`；不跟隨轉址逐一 GET，首個「200 且 sha256 相符」即過。
+5. CSP：GET `<url>/privacy`，取最後一筆 `content-security-policy` 值 trim 後 sha256，對 manifest 的
+   `csp_header.value_sha256`（manifest 記「無」則 live 也必須無；一有一無＝不符）。
+
+輸出最後一行恆為四標記之一：`VERIFY-SITE-OK (<n> compared / <k> redirect-skip / seq <s>)`
+（compared 含 CSP 一項，與部署端 canary 同計）、`VERIFY-SITE-MISMATCH (…)`（前列逐檔 `✗` 行）、
+`VERIFY-SITE-CORRECTION (…)`、`VERIFY-SITE-NETWORK (…)`。
+
+exit code（本子命令自訂面）：
+
+| code | 意義 |
+| --- | --- |
+| 0 | 全符：帳鏈完整，live 逐檔與 CSP 皆與最新一筆 manifest 相符 |
+| 1 | 不符：檔案或 CSP 不符／帳鏈破／最新一筆是更正紀錄／帳面形不合法（帳本或 manifest 取得 200 但不可解析、schema 不符、空帳） |
+| 2 | 網路／取得錯：帳本或 manifest 取不到、live 回 401/403/5xx／逾時／連線拒、CSP 探測面（/privacy）失敗；用法錯（未知旗標／位置參數／網址形錯）亦為 2 |
+
+不符與取得錯並存時以 1 為準（不符是已確證的發現；取得錯照列）。
+
+### 誠實界限（verify-site）
+
+- **帳本由營運者寫入**：本命令證明的是「live 站＝營運者公開記下的那一版」，不證明那一版本身無害。
+  帳本與站屬同一營運者——擋的是記錄之外的替換（託管／CDN 被竄、未入帳的部署），不擋營運者
+  自己入帳並部署的版本（那屬原始碼審查與可重現建置的範圍）。
+- **工具只驗自己抓到的那份**（同 N3 界線）：伺服器若只對特定使用者送不同內容，本命令察覺不到。
+- **不重試**：每個候選網址一發；CDN 暫時性錯誤直接 exit 2。重跑一次命令即為重試。
+- **redirect 以 3xx 探測揭露**：不跟隨轉址；全部候選都沒有 200、且有 3xx 轉往該檔候選集之外
+  （如 `/landing.html` → `/`）的檔案記為 `redirect-skip`——逐筆列出、不判紅。部署端 canary（M-1）
+  只對 `_redirects` 帶碼來源記 skip；本命令拿不到 `_redirects`（平台檔不在網路上），改以 3xx 探測，
+  **寬於 M-1 帳面核對**——skip 數異常時請人工檢視。轉往同一檔其他候選的 3xx（平台把 `x.html`
+  轉到 `x` 的網址規範化）不算轉址來源：那個檔仍須在候選裡找到 200，漂亮網址 404＝不符、5xx＝取得錯。
+- **`_headers`／`_redirects` 平台設定檔不比對**：它們不以檔案形式出現在網路上；`_headers` 裡的
+  CSP 改由下一條覆蓋。
+- **CSP 經 /privacy**：只比 `/privacy` 回應的最後一筆 `content-security-policy` 標頭；其他路徑的
+  標頭不在比對範圍內。
 
 ## 誠實界線（必讀）
 
@@ -192,11 +262,13 @@ src/net.ts      fetch 助（timeout/size cap；零重試零快取）
 src/refs.ts     env:/file: 參照＋白名單守衛
 src/request.ts  request 子命令（主路徑）
 src/verify.ts   verify 子命令（四方帳）
+src/site.ts     verify-site 子命令（公開部署紀錄→live 逐檔比對＋CSP）
 src/submit.ts   submit 子命令（人確認閘＋投遞）
 src/state.ts    取件連結包（600/700；不覆蓋）
 src/selftest.ts --self-test（core 0.11.0 向量，零鏡像）
 scripts/verify-cli.ts   單元閘
 scripts/e2e-cli.cjs     hermetic 過程層 e2e
 scripts/lib/devstack-stub.cjs  /sreq 站 stub
+scripts/lib/site-fixture.ts    verify-site hermetic 電池（帳本 root／live root 分路）
 scripts/lib/pty-run.py  真 PTY 載具（mail-box 答列）
 ```
