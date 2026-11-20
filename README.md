@@ -550,3 +550,7 @@ that is the price of server-side zero knowledge.
 
 MIT. Security contact: security@tacet.ink. Version history: [CHANGELOG.md](./CHANGELOG.md).
 Security reporting process: [SECURITY.md](./SECURITY.md).
+
+## Trademark
+
+"默·Tacet" and the Tacet name and logo are not licensed under MIT; forks and derivatives must not present themselves as Tacet.
