@@ -10,4 +10,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 
 export interface Env {
   DB: D1Database;
+  /** 限流鍵 salt（0.11.1，optional）：缺省或空串＝回落碼內常數＝僅域分離、防 IP 暴力字典弱——配 secret 才是 pepper。
+   * 輪換＝限流鍵域換代→跨窗計數失憶一次（可接受）。 */
+  RATE_KEY_SALT?: string;
 }

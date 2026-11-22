@@ -5,6 +5,24 @@
 日期取各版 release commit 的實際日期：0.1.3 起有 tag（v0.1.3…），取 tag 指向 commit 的日期；
 0.1.0–0.1.2 無 tag（publish-on-tag 慣例 v0.1.3 才確立），取該版版號 bump commit 的日期。
 
+## [0.11.1] — 2026-11-22
+
+**Added** — `rateKeyV1(normalized)`（root 匯出；`./server/ratelimit` 子路徑同帶）：限流鍵雜湊原語
+`'tr1:' + hex(SHA-256(salt ‖ 'tacet-rate-v1:' ‖ normalized))`（async，WebCrypto `sha256Hex` 同源）；
+salt＝`env.RATE_KEY_SALT`（`Env` 新增 optional 欄，零破壞；缺省或空串＝回落碼內常數
+`RATE_KEY_DEFAULT_SALT`）。**缺省態雜湊僅作域分離、非祕密 pepper——IP 空間小，持表者可暴力字典還原**；
+配置 `RATE_KEY_SALT` 才擋字典。`'global'` literal 原樣回傳（非 IP 衍生）。
+
+**Changed** — `bumpRate` 落表鍵（與 fallbackInMemory 記憶體退避鍵）改 `tr1:` 雜湊形：雜湊在正規化之後、
+細層 /64 與粗層 /48·/24 各自雜湊（粒度語意不變）；`'unknown'`／空串／無法解析形照雜湊入表（可見面律保持）。
+DB 內不再存可讀 IP；`normalizeRateIp`／`normalizeRateIpCoarse` 輸出照舊可讀正規形（公開原語契約不變）；
+`globalLoginBump` 零動（`'global'` 固定鍵）。消費者升級後既有窗列不再被命中、由既有 GC 窗自然汰換——
+零 migration、schema 零動、零行為變（429 閾值／窗口語意照舊）；salt 輪換＝鍵域換代、跨窗計數失憶一次。
+
+**Gates** — verify [12] 新增 5 斷言（rateKeyV1 決定論＋凍結值／coarse≠fine 雜湊恆異／`'global'`
+passthrough／bumpRate salt 有無鍵差異＋空串回落／stored 鍵形 `tr1:`＋`'unknown'` 照雜湊入表）；既有 [12]／[30]
+查列鍵改 rateKeyV1 雜湊形（淨 +0）。閘帳 738→743。
+
 ## [0.11.0] — 2026-11-15
 
 **Feature** — secret 家族收進 core（R3a agent 工具套件鋪底；t_c4ecb987）：

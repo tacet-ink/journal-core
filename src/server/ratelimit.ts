@@ -34,6 +34,14 @@
  * 呼叫端須建表＋GC 承載）——每呼叫 +1 全站計數、回窗內真值；本層只做計數面，
  * 告警通道（閾值觸發 webhook/log 行）由呼叫端承載（無現成通道則 log JSON 一行）。
  *
+ * 限流鍵雜湊化（0.11.1，t_aca35c02）：normalizeRateIp／normalizeRateIpCoarse 正規化後的鍵於 bumpRate
+ * 單點經 rateKeyV1Salt 雜湊為 `tr1:`＋hex(SHA-256(salt ‖ 'tacet-rate-v1:' ‖ normalized)) 再落表——表內與
+ * per-isolate 記憶體退避鍵皆不存可讀 IP（細/粗兩層各自雜湊，粒度語意不變；計數/閾值/窗口零行為變）。
+ * salt＝env.RATE_KEY_SALT（optional）；缺省或空串＝回落 RATE_KEY_DEFAULT_SALT（碼內公開常數）——
+ * **缺省態雜湊僅作域分離、非祕密 pepper：IP 空間小（IPv4 約 2^32），持表者可離線暴力字典還原**；
+ * 配置 RATE_KEY_SALT（secret）才擋字典。`'global'` 固定鍵 literal 原樣（非 IP 衍生）。
+ * 升級後 DB 既有可讀鍵列不再被命中，由呼叫端既有 GC 窗自然汰換（零 migration）。
+ *
  * 呼叫端須自建表（無 GC 機制：舊 IP 列不清，表隨活躍 IP 數緩慢增長——
  * 每列 ~40 bytes，量級可忽略；GC 由呼叫端承載（tacet maintenance 母型——schema.sql 表
  * 清單真相源＋固定形 SQL_RATE_GC_<表> 常數＋runRateTablesGc batch 接線））：
@@ -42,6 +50,7 @@
  */
 
 import type { Env } from './env.ts';
+import { sha256Hex } from './hash.ts';
 
 export interface RateWindow {
   table: string;
@@ -87,20 +96,45 @@ function memBump(key: string, windowMs: number, max: number, now: number): boole
   return isRateAllowed(count, max);
 }
 
+/** 限流鍵 salt 缺省值（0.11.1）：碼內公開常數＝僅域分離，非祕密——缺省態對 IP 暴力字典無防護（見檔頭）。 */
+export const RATE_KEY_DEFAULT_SALT = 'tacet-rate-default-salt';
+const DOMAIN_RATE_V1 = 'tacet-rate-v1:';
+
+/**
+ * 限流鍵雜湊核心（0.11.1）：`'global'` literal 原樣回傳（非 IP 衍生）；其餘（含 `'unknown'`／空串／
+ * 無法解析形）一律 `'tr1:'`＋hex(SHA-256(salt ‖ 'tacet-rate-v1:' ‖ normalized))＝68 字元（鍵照樣進表＝
+ * 可見面律保持）。salt 由呼叫端帶入（bumpRate 取 env.RATE_KEY_SALT，空/缺回落 RATE_KEY_DEFAULT_SALT）。
+ */
+export async function rateKeyV1Salt(normalized: string, salt: string): Promise<string> {
+  if (normalized === 'global') return normalized;
+  return 'tr1:' + await sha256Hex(salt + DOMAIN_RATE_V1 + normalized);
+}
+
+/** 限流鍵雜湊公開原語（0.11.1）：rateKeyV1Salt 以 RATE_KEY_DEFAULT_SALT 求值（缺省態＝僅域分離、防暴力字典弱）。 */
+export async function rateKeyV1(normalized: string): Promise<string> {
+  return rateKeyV1Salt(normalized, RATE_KEY_DEFAULT_SALT);
+}
+
 /**
  * 單窗計數（0.1.6 公開面走 index.ts checkRate；ip 已正規化）。
  * opts.fallbackInMemory（0.4.1 J7，opt-in）：D1 出錯或 RETURNING 異形時退 per-isolate
  * 記憶體計數（比完全放行嚴；auth 面才傳——limit 表故障≠全站登入狂、亦非全站 429）。
  * 未傳 opts＝原 fail-open 完全放行（其他端點零行為變鐵律）。
+ * 鍵（0.11.1）：入參 ip 仍＝正規化後鍵（normalizeRateIp／normalizeRateIpCoarse 產物）；**落表鍵與
+ * 記憶體退避鍵＝rateKeyV1Salt 的 tr1: 雜湊形**（salt＝env.RATE_KEY_SALT，空/缺回落缺省常數）。
  */
 export async function bumpRate(env: Env, w: RateWindow, ip: string, opts?: { fallbackInMemory?: boolean }): Promise<boolean> {
   assertSafeTable(w.table);
+  // fail-open 契約同向（2026-09-06 裁定）：env 異形（TS 違約輸入如 undefined）不許在 try 外炸出——
+  // `env &&` 極簡守讓鹽讀取靜默回落缺省常數；異形 env 之禍由 try 內 env.DB 故障路徑承載（fail-open／mem fallback 照常）。
+  const salt = env && env.RATE_KEY_SALT && env.RATE_KEY_SALT.length > 0 ? env.RATE_KEY_SALT : RATE_KEY_DEFAULT_SALT;
+  const key = await rateKeyV1Salt(ip, salt);
   const now = Date.now();
-  const mem = (): boolean => memBump(`${w.table}:${ip}`, w.windowMs, w.max, now);
+  const mem = (): boolean => memBump(`${w.table}:${key}`, w.windowMs, w.max, now);
   try {
     const { results } = await env.DB.prepare(
       SQL_RATE_BUMP.replaceAll('{table}', w.table)
-    ).bind(ip, now, now - w.windowMs).run();
+    ).bind(key, now, now - w.windowMs).run();
     const first = results[0] as { n?: unknown } | undefined;
     const n = first?.n;
     if (typeof n !== 'number' || !Number.isFinite(n)) {
@@ -149,6 +183,7 @@ function parseIpv6(s: string): number[] | null {
  * - IPv4-mapped（::/96 前綴＋映射尾組，RFC 4291 §2.5.5.2）→ 點分 IPv4 原鍵——mapped 位址就是 IPv4
  *   節點的表示法，回 /32 與原生同鍵（hex 尾組 twin `::ffff:c000:201` 同鍵 192.0.2.1；禁併入 ::/64 全域桶）。
  * - IPv4／`'unknown'`／空串／無法解析形：原樣返回（鍵照樣進表＝可見面，不靜默丟鍵）。
+ * - 雜湊在 bumpRate（0.11.1 rateKeyV1Salt），本函式輸出保持可讀正規形（公開原語契約不變）。
  * - embedded-IPv4 三家族刻意聚合進其所屬前綴的 /64（deliberate nondecision）：IPv4-compatible（RFC 4291 §2.5.5.1 已棄）::192.0.2.1 → ::/64、SIIT ::ffff:0:192.0.2.1 → ::/64、NAT64 64:ff9b::192.0.2.1 → 64:ff9b::/64——僅 IPv4-mapped（§2.5.5.2）還原點分 IPv4。
  */
 export function normalizeRateIp(ip: string): string {
@@ -175,6 +210,7 @@ export function checkRate(env: Env, w: RateWindow, ip: string, opts?: { fallback
  *   `192.0.2.0/24`——mapped 位址回 IPv4 粗桶，禁併入 `::/48` 全域桶（同 /64 層裁定）。
  * - IPv4 → 前三組 octet＋`0/24`：`192.0.2.33` → `192.0.2.0/24`。
  * - `'unknown'`／空串／無法解析形／octet 越界：原樣返回（與細層同律：鍵照樣進表＝可見面）。
+ * - 雜湊在 bumpRate（0.11.1 rateKeyV1Salt），本函式輸出保持可讀正規形（公開原語契約不變）。
  * - 粗層是**第二層非取代**：細層 /64 鍵（t_b30cbc5f 定案）與本層 /48|/24 鍵各入各表、
  *   各自計數——同 /48 輪換 50 個 /64 的分散攻擊（PoC F）被本層 60/min 帽收斂。
  */

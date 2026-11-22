@@ -146,6 +146,7 @@ export {
   normalizeRateIp,
   normalizeRateIpCoarse,
   globalLoginBump,
+  rateKeyV1,
   type RateWindow,
 } from './server/ratelimit.ts';
 export { corsResponse, CORS_HEADERS } from './server/cors.ts';

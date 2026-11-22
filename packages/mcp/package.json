@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@tacet-ink/journal-core": "^0.11.0",
-    "@tacet-ink/journal-cli": "^0.11.0"
+    "@tacet-ink/journal-cli": "^0.12.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0"
